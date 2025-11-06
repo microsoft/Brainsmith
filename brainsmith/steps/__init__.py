@@ -30,6 +30,8 @@ from brainsmith.steps.bert_custom_steps import (
 
 # Dataflow graph construction
 from brainsmith.steps.build_dataflow_graph import build_dataflow_graph
+# Specialization to HW backends
+from brainsmith.steps.build_hw_graph import build_hw_graph
 
 # Layout normalization
 from brainsmith.steps.normalize_layouts import normalize_dataflow_layouts_step
@@ -51,6 +53,7 @@ __all__ = [
     'bert_cleanup_step',
     'bert_streamlining_step',
     'build_dataflow_graph',
+    'build_hw_graph',
     'normalize_dataflow_layouts_step',
     'explore_kernel_params_step',
     'apply_parallelization_config_step',

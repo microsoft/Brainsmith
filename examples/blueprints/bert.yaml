@@ -13,28 +13,22 @@ design_space:
     - LayerNorm
     - finn:DuplicateStreams
     - ElementwiseBinaryOp
-    # - ElementwiseBinaryOperation
     - LegacyShuffle
     - Softmax
     - finn:Thresholding
     - finn:MVAU
 
   steps:
-    - "qonnx_to_finn"  # custom_step_qonnx2finn
+    - "qonnx_to_finn"
     # Topology optimization
     - "bert_streamlining"
-    # REQUIRED: Layout normalization for dataflow kernels
-    # Ensures all tensors are in NHWC (channel-last) format before kernel inference.
-    # All kernels listed above (LayerNorm, Softmax, etc.) assume NHWC layout.
-    - "normalize_dataflow_layouts"
-    # Core FINN steps
-    - "build_dataflow_graph" # Build complete dataflow graph (infrastructure + computational kernels)
-    # - "infer_kernels" # Brainsmith dynamic kernel inference (assumes NHWC)
-    - "create_dataflow_partition"
-    - "specialize_layers"
-    # - "brainsmith:target_fps_parallelization"
+    - "normalize_dataflow_layouts" # Normalize tensors to NHWC layout
+    # Core Brainsmith steps
+    - "build_dataflow_graph"  # ONNX --> Kernels
+    - "build_hw_graph"        # Kernels --> HW Backends
+    - "brainsmith:target_fps_parallelization"
     # - "apply_parallelization_config"
-    - "apply_folding_config"
+    # - "apply_folding_config"
     - "minimize_bit_width"
     - "generate_estimate_reports"
     - "hw_codegen"

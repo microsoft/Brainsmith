@@ -84,24 +84,23 @@ void var_stage(
 	hls::stream<varmean_t<TO>> &varmean_s
 ) {
 #pragma HLS pipeline II=1 style=flp 
-	static ap_uint<clog2(N) + 1> count = 0; 
+	static ap_uint<clog2(N) + 1> count = 0;
 	static TO pow_sum = TO(0.0f);
-	static TO var = TO(0.0f);
 	static TO mean = TO(0.0f);
 	static bool valid = false;
 #pragma HLS reset variable=count
 #pragma HLS reset variable=pow_sum
-#pragma HLS reset variable=var
 #pragma HLS reset variable=mean
 #pragma HLS reset variable=valid
 
 	if (count == N) {
-		count = 0; 
+		// Compute variance only at the end (division by constant N, optimized to multiply)
+		TO var = pow_sum / TO(N);  // Constant division - compiler optimizes to multiply
+		count = 0;
 		valid = false;
 		varmean_t<TO> x = { mean, var };
 		varmean_s.write(x);
-		pow_sum = 0.0f;
-		var = 0.0f;	
+		pow_sum = TO(0.0f);
 		return;
 	}
 
@@ -112,12 +111,11 @@ void var_stage(
 		hls::vector<TO, SIMD> pow_res;
 		for(unsigned i=0; i<SIMD; i++) {
 #pragma HLS UNROLL
-			pow_res[i] = hls::pow((in[i] - mean), 2.0f); 
+			pow_res[i] = hls::pow((in[i] - mean), 2.0f);
 		}
-		pow_sum += TreeReduction<TO,SIMD>::reduce(pow_res);  
+		pow_sum += TreeReduction<TO,SIMD>::reduce(pow_res);
 
 		count += SIMD;
-		var = pow_sum / TO(count);
 	}
 
 	if (!mean_s.empty() && !valid) {
@@ -156,9 +154,15 @@ void inv_sqrt_stage(
 	if (valid && !in_s.empty()) {
 		hls::vector<TO, SIMD> const in = in_s.read();
 		hls::vector<TO, SIMD> out;
+
+		// Compute reciprocal of standard deviation once (instead of dividing SIMD times)
+		// inv_std = 1 / sqrt(var + epsilon)
+		// Then: normalized = (x - mean) * inv_std  (multiply instead of divide)
+		TO inv_std = TO(1.0f) / hls::sqrt(vm.var + epsilon);
+
 		for (unsigned i=0; i<SIMD; i++) {
 #pragma HLS UNROLL
-			out[i] = (in[i] - vm.mean) / hls::sqrt(vm.var + epsilon);  
+			out[i] = (in[i] - vm.mean) * inv_std;  // Multiply by reciprocal
 		}
 		out_s.write(out);
 		count++;

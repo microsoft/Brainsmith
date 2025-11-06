@@ -32,7 +32,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
             name="output",
             block_tiling=[FULL_DIM],         # (1, 1, channels)
             stream_tiling=[("input", -1)],   # Output streams at same rate as input
-            datatype="input",                # Output datatype same as input
+            datatype=df.constant_datatype("FLOAT32"),                # Output datatype same as input
             required_layout="NHWC",          # Hardware produces NHWC layout
         )
     ],

@@ -1,23 +1,27 @@
-"""Minimal test configuration interface with fixture-based parameterization (v2.0).
+"""Test configuration and shared utilities for v2.3 frameworks.
 
-This module provides KernelTestConfig, a minimal abstract base class for kernel tests
-that uses pytest fixtures for parameterization instead of hardcoded values.
+This module provides:
+1. KernelTestConfig: Minimal abstract base class for fixture-based kernel tests (v2.0+)
+2. KernelTestBase_v2: Shared utilities for v2.3 frameworks (NEW in Phase 2)
 
-Design Philosophy (v2.0):
+Design Philosophy:
 - Pytest fixtures control parameterization (NOT test methods)
 - Tests define operations with symbolic shapes (concrete from fixtures)
-- ORT (ONNX Runtime) as golden reference (NOT NumPy)
-- Automatic Quant node insertion based on fixture datatypes
+- Direct DataType annotations (NO Quant nodes) in v2.3
 - Automatic test data generation with correct types
+- Shared utilities extracted for DualKernelTest_v2 reuse
 
-Key Changes from v1.0:
-- Removed get_qonnx_annotations() - replaced by input_datatypes fixture
-- Removed get_num_inputs/outputs() - inferred from model
-- Removed compute_golden_reference() - ORT on test_model automatically
-- Added make_test_model(input_shapes) - symbolic shapes from fixture
+Architecture (v2.3):
+    KernelTestConfig (abstract interface)
+        ↓
+    KernelTestBase_v2 (shared utilities) ← NEW
+        ↓
+    ┌───────────────────┬──────────────────┐
+    SingleKernelTest    DualKernelTest_v2
+    (fixture-based)     (attribute-based)
 
 Usage:
-    from tests.frameworks.kernel_test_base_v2 import KernelTestConfig
+    from tests.frameworks.kernel_test_base_v2 import KernelTestBase_v2
     from tests.frameworks.single_kernel_test_v2 import SingleKernelTest
 
     # Define fixtures in test file
@@ -43,7 +47,7 @@ Usage:
                 "input", TensorProto.FLOAT, input_shapes["input"]
             )
             # ... build graph
-            return model, ["input"]  # Quant inserted automatically
+            return model, ["input"]
 
         def get_kernel_inference_transform(self):
             return InferMyKernel
@@ -52,16 +56,23 @@ Result: 2 dtypes × 2 shapes = 4 test configurations automatically!
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple, Type
+from typing import Dict, List, Optional, Tuple, Type
 
 import numpy as np
+import pytest
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.transformation.base import Transformation
 
+# Import backend specialization utilities
+from tests.support.backend_utils import specialize_to_backend
+
+# Import validation utilities
+from tests.support.validator import GoldenValidator
+
 
 class KernelTestConfig(ABC):
-    """Minimal configuration interface for fixture-based kernel tests.
+    """Minimal configuration interface for fixture-based kernel tests (v2.0+).
 
     Subclasses implement:
     - make_test_model(input_shapes): Create model with symbolic shapes
@@ -77,9 +88,9 @@ class KernelTestConfig(ABC):
     - input_datatypes: Dict[str, DataType] (concrete types)
 
     Framework handles:
-    - Automatic Quant node insertion (based on input_datatypes)
+    - Automatic DataType annotations (v2.3: direct annotations, no Quant nodes)
     - Automatic test data generation (using Phase 1 utilities)
-    - Automatic golden reference (ORT on test_model)
+    - Automatic golden reference (QONNX execution on annotated model)
     """
 
     # ========================================================================
@@ -92,9 +103,8 @@ class KernelTestConfig(ABC):
     ) -> Tuple[ModelWrapper, List[str]]:
         """Create test model with concrete shapes from fixture.
 
-        This method defines the operations to test WITHOUT Quant nodes.
-        Framework automatically inserts Quant nodes before specified inputs
-        based on input_datatypes fixture.
+        This method defines the operations to test WITHOUT DataType annotations.
+        Framework automatically annotates tensors based on input_datatypes fixture.
 
         Args:
             input_shapes: Dict mapping input names to concrete shapes from fixture.
@@ -102,8 +112,8 @@ class KernelTestConfig(ABC):
 
         Returns:
             (model, input_names):
-                - model: ONNX model with operations (NO Quant nodes)
-                - input_names: List of input tensor names to insert Quant before
+                - model: ONNX model with operations (NO DataType annotations)
+                - input_names: List of input tensor names to annotate
 
         Example:
             def make_test_model(self, input_shapes):
@@ -128,13 +138,13 @@ class KernelTestConfig(ABC):
                 from qonnx.util.basic import qonnx_make_model
                 model = ModelWrapper(qonnx_make_model(graph))
 
-                # Framework inserts Quant before these inputs automatically
+                # Framework annotates these inputs automatically
                 return model, ["input", "param"]
 
         Note:
-            - Use TensorProto.FLOAT for all inputs (Quant nodes handle types)
+            - Use TensorProto.FLOAT for all inputs (annotations handle types)
             - Shapes are concrete (from fixture), not symbolic
-            - Do NOT insert Quant nodes manually
+            - Do NOT insert Quant nodes (v2.3 uses direct annotations)
             - Do NOT set QONNX DataType annotations (framework handles)
         """
         pass
@@ -165,285 +175,308 @@ class KernelTestConfig(ABC):
 
         Override to set dimension parameters (PE, SIMD, folding factors, etc.).
 
-        This is called AFTER kernel inference (InferKernels) transforms ONNX nodes
-        into base kernels, but BEFORE backend specialization. The node at this point
-        is a base kernel (e.g., AddStreams, MVAU) without backend-specific code.
-
-        Timing:
-        - Stage 1 → Stage 2: InferKernels transforms ONNX → Base kernel
-        - Stage 2: configure_kernel_node() sets dimension parameters ← YOU ARE HERE
-        - Stage 2 → Stage 3: SpecializeKernels transforms Base kernel → Backend
-        - Stage 3: configure_backend_node() sets backend parameters
-
-        IMPORTANT: If you change dimension parameters (PE, SIMD) on a KernelOp,
-        you MUST call op._ensure_ready(model) afterwards to reconfigure the
-        design space and design point.
-
         Args:
             op: Base kernel operator instance (e.g., AddStreams, MVAU)
             model: Model containing the operator
 
-        Example:
-            def configure_kernel_node(self, op, model):
-                from brainsmith.dataflow.kernel_op import KernelOp
-
-                # Set dimension parameters
-                op.set_nodeattr("PE", 8)
-                op.set_nodeattr("SIMD", 16)
-
-                # Reconfigure design point (KernelOp only)
-                if isinstance(op, KernelOp):
-                    op._ensure_ready(model)
-
-        Note:
-            - Called for ALL tests (Python, cppsim, rtlsim)
-            - Configuration is automatically preserved during backend specialization
-            - Default implementation does nothing (no configuration)
-
-        See Also:
-            configure_backend_node(): Stage 3 configuration (backend parameters)
+        Default:
+            No configuration (empty implementation)
         """
         pass
 
-    def configure_backend_node(
-        self,
-        op: HWCustomOp,
-        model: ModelWrapper
-    ) -> None:
+    def configure_backend_node(self, op: HWCustomOp, model: ModelWrapper) -> None:
         """Configure backend node after specialization (Stage 3, optional).
 
         Override to set backend-specific parameters (memory mode, RTL pragmas, etc.).
-
-        This is called AFTER SpecializeKernels/SpecializeLayers transforms the base
-        kernel (Stage 2) into a backend implementation (Stage 3). The backend node
-        has op_type like "KernelName_hls" or "KernelName_rtl" and inherits from
-        HLSBackend or RTLBackend.
-
-        Timing:
-        - Stage 2: configure_kernel_node() configures base kernel (PE, SIMD, etc.)
-        - Stage 2 → Stage 3: SpecializeKernels/SpecializeLayers transforms kernel
-        - Stage 3: configure_backend_node() configures backend (mem_mode, ram_style, etc.)
 
         Args:
             op: Backend operator instance (e.g., AddStreams_hls, LayerNorm_rtl)
             model: Model containing the operator
 
-        Example:
-            def configure_backend_node(self, op, model):
-                # HLS memory configuration
-                op.set_nodeattr("mem_mode", "internal_decoupled")
-                op.set_nodeattr("ram_style", "ultra")
-
-                # Resource type selection
-                op.set_nodeattr("resType", "dsp")
-
-                # RTL-specific pragmas (if applicable)
-                if hasattr(op, 'set_pipeline_pragma'):
-                    op.set_pipeline_pragma(True)
-
-        Note:
-            - Only called when running backend tests (cppsim/rtlsim)
-            - NOT called for Python execution tests (Stage 2 only)
-            - Stage 2 configuration (PE, SIMD) is automatically preserved
-            - Default implementation does nothing (no backend config)
-
-        See Also:
-            configure_kernel_node(): Stage 2 configuration (dimension parameters)
+        Default:
+            No configuration (empty implementation)
         """
         pass
 
     def get_test_seed(self) -> int:
         """Return random seed for test data generation (optional).
 
-        Provides deterministic random seed for reproducible test failures.
-        Override to customize seed per test class or configuration.
-
         Returns:
             Random seed integer (default: 42)
-
-        Example:
-            def get_test_seed(self):
-                return 12345  # Custom seed for this test
-
-        Note:
-            - Default seed is 42 for deterministic behavior
-            - Can be overridden by pytest --seed CLI option
-            - Same seed → Same random data → Reproducible failures
-            - Used by make_execution_context_* functions
-
-        CLI usage:
-            pytest --seed=12345    # Override seed for all tests
-            pytest                 # Use default (42) or per-test override
         """
         return 42
 
     def get_tolerance_python(self) -> Dict[str, float]:
         """Tolerance for Python execution vs golden reference.
 
-        Python execution is the most accurate (NumPy floating-point),
-        so tolerances can be very tight.
-
         Returns:
             Dict with 'rtol' and 'atol' keys for np.allclose()
 
         Default:
             rtol=1e-7, atol=1e-9 (very tight)
-
-        Override for kernels with lower numerical precision:
-            def get_tolerance_python(self):
-                return {"rtol": 1e-5, "atol": 1e-6}  # Approximate ops
         """
         return {"rtol": 1e-7, "atol": 1e-9}
 
     def get_tolerance_cppsim(self) -> Dict[str, float]:
         """Tolerance for C++ simulation vs golden reference.
 
-        HLS C++ simulation uses fixed-point arithmetic which introduces
-        rounding errors, so tolerances are looser than Python.
-
         Returns:
             Dict with 'rtol' and 'atol' keys for np.allclose()
 
         Default:
             rtol=1e-5, atol=1e-6 (moderate)
-
-        Override for very approximate operations:
-            def get_tolerance_cppsim(self):
-                return {"rtol": 1e-3, "atol": 1e-4}  # Softmax, etc.
         """
         return {"rtol": 1e-5, "atol": 1e-6}
 
     def get_tolerance_rtlsim(self) -> Dict[str, float]:
         """Tolerance for RTL simulation vs golden reference.
 
-        RTL simulation has same precision as cppsim (same fixed-point design),
-        so default to same tolerance.
-
         Returns:
             Dict with 'rtol' and 'atol' keys for np.allclose()
 
         Default:
             Same as cppsim
-
-        Override if RTL has different precision:
-            def get_tolerance_rtlsim(self):
-                return {"rtol": 1e-4, "atol": 1e-5}
         """
         return self.get_tolerance_cppsim()
 
-    def get_backend_fpgapart(self) -> str:
+    def get_backend_fpgapart(self) -> Optional[str]:
         """FPGA part for backend specialization (optional).
 
         Override to enable backend specialization (Stage 2 → Stage 3).
-        When specified, tests can specialize base kernels (e.g., AddStreams)
-        to backend variants (e.g., AddStreams_hls) for cppsim/rtlsim execution.
 
         Returns:
             str: FPGA part string (e.g., "xc7z020clg400-1")
             None: Backend specialization disabled (default)
-
-        Pipeline stages:
-            Stage 1: ONNX Node (Add, Mul, etc.)
-            Stage 2: Base Kernel (AddStreams, no backend)
-            Stage 3: Backend (AddStreams_hls, with HLSBackend) ← Enabled by this hook
-
-        Default:
-            None (backend specialization disabled)
-
-        Override to enable backend testing:
-            def get_backend_fpgapart(self):
-                return "xc7z020clg400-1"  # Enable HLS backend
-
-        Note:
-            When None, cppsim/rtlsim tests will be skipped (base kernels
-            don't have backend inheritance).
         """
         return None
 
-    def get_backend_variants(self) -> list:
+    def get_backend_variants(self) -> Optional[List[Type]]:
         """Backend variant classes for specialization in priority order.
 
         Returns:
             List of backend classes to try in priority order.
             Default: None (auto-detect HLS backend based on kernel op_type)
-
-        Override to specify explicit backend classes:
-            def get_backend_variants(self):
-                from brainsmith.kernels.elementwise_binary import ElementwiseBinaryOp_hls
-                return [ElementwiseBinaryOp_hls]
-
-        Override for priority ordering (e.g., prefer RTL, fallback to HLS):
-            def get_backend_variants(self):
-                from brainsmith.kernels.mvau import MVAU_rtl, MVAU_hls
-                return [MVAU_rtl, MVAU_hls]
-
-        Default:
-            None (automatically looks up HLS backend from registry)
         """
         return None
 
+
+class KernelTestBase_v2(KernelTestConfig):
+    """Shared utilities for v2.3 test frameworks.
+
+    This intermediate base class provides common utilities shared by both
+    SingleKernelTest and DualKernelTest_v2:
+
+    1. validate_against_golden(): GoldenValidator-based output validation
+    2. _auto_detect_backends(): Registry-based backend auto-detection
+    3. _specialize_to_backend_stage(): Stage 2→3 specialization with overrides
+
+    Inheritance Chain:
+        KernelTestConfig (abstract interface)
+            ↓ inherits
+        KernelTestBase_v2 (shared utilities) ← THIS CLASS
+            ↓ inherits
+        SingleKernelTest / DualKernelTest_v2 (framework-specific)
+    """
+
     # ========================================================================
-    # Optional Golden Reference Hooks (v2.1)
+    # Shared Utility 1: Golden Reference Validation
     # ========================================================================
 
-    def get_use_custom_golden_reference(self) -> bool:
-        """Use custom golden reference instead of QONNX execution (v2.1).
+    def validate_against_golden(
+        self,
+        actual_outputs: Dict[str, np.ndarray],
+        golden_outputs: Dict[str, np.ndarray],
+        backend_name: str,
+        tolerance: Dict[str, float],
+    ) -> None:
+        """Validate actual outputs match golden reference.
 
-        Override to provide custom golden reference implementation instead of
-        the default QONNX execution on quantized model.
+        Uses GoldenValidator (Phase 1) for consistent validation logic
+        across all test frameworks.
 
-        Returns:
-            bool: True to use compute_custom_golden_reference(), False for QONNX
-
-        Default:
-            False (use QONNX execution on quantized model - validates Quant nodes)
-
-        Override when:
-            - Operation not supported by QONNX execution
-            - Need specific golden reference behavior (e.g., floating-point only)
-            - Debugging quantization issues
-
-        Note:
-            When True, you MUST implement compute_custom_golden_reference().
-        """
-        return False
-
-    def compute_custom_golden_reference(
-        self, model: ModelWrapper, inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
-        """Provide custom golden reference implementation (v2.1).
-
-        Only called when get_use_custom_golden_reference() returns True.
+        Shared by:
+        - SingleKernelTest: 3 execution tests (Python/cppsim/rtlsim)
+        - DualKernelTest_v2: 6 execution tests (manual+auto × Python/cppsim/rtlsim)
 
         Args:
-            model: ModelWrapper WITH Quant nodes inserted
-            inputs: Dict of input tensors (with raw_* names after Quant insertion)
-
-        Returns:
-            Dict of output tensors
+            actual_outputs: Outputs from backend execution
+                           Dict mapping tensor names → numpy arrays
+            golden_outputs: Expected outputs from golden reference
+                           Dict mapping tensor names → numpy arrays
+            backend_name: Name of backend for error messages
+                         Examples: "Python execution", "HLS cppsim", "RTL rtlsim"
+            tolerance: Dict with 'rtol' and 'atol' keys
+                      Example: {"rtol": 1e-5, "atol": 1e-6}
 
         Raises:
-            NotImplementedError: Must override when using custom golden reference
+            AssertionError: If outputs don't match within tolerance
 
-        Example:
-            def compute_custom_golden_reference(self, model, inputs):
-                # Use ORT on float model (debugging)
-                float_model, _ = self.make_test_model(self._current_input_shapes)
+        Example (SingleKernelTest):
+            >>> def test_python_execution_vs_golden(self, test_inputs, golden_outputs):
+            ...     op, model = self.run_inference_pipeline(...)
+            ...     executor = PythonExecutor()
+            ...     actual_outputs = executor.execute(op, model, test_inputs)
+            ...     tolerance = self.get_tolerance_python()
+            ...     self.validate_against_golden(actual_outputs, golden_outputs,
+            ...                                   "Python execution", tolerance)
 
-                # Convert raw_* inputs back to original names
-                ort_inputs = {}
-                for name, data in inputs.items():
-                    if name.startswith("raw_"):
-                        ort_inputs[name[4:]] = data  # Remove "raw_" prefix
-                    else:
-                        ort_inputs[name] = data
-
-                # Execute with ONNX Runtime
-                import onnxruntime as rt
-                sess = rt.InferenceSession(float_model.model.SerializeToString())
-                return sess.run(None, ort_inputs)
+        Example (DualKernelTest_v2):
+            >>> def test_manual_cppsim_vs_golden(self):
+            ...     manual_op, manual_model = self.run_manual_pipeline(to_backend=True)
+            ...     actual_outputs = cppsim_executor.execute(...)
+            ...     tolerance = self.get_tolerance_cppsim()
+            ...     self.validate_against_golden(actual_outputs, golden_outputs,
+            ...                                   "Manual cppsim", tolerance)
         """
-        raise NotImplementedError(
-            "Must implement compute_custom_golden_reference() when "
-            "get_use_custom_golden_reference() returns True"
+        validator = GoldenValidator()
+        validator.validate(
+            actual_outputs=actual_outputs,
+            golden_outputs=golden_outputs,
+            backend_name=backend_name,
+            rtol=tolerance["rtol"],
+            atol=tolerance["atol"],
         )
+
+    # ========================================================================
+    # Shared Utility 2: Backend Auto-Detection
+    # ========================================================================
+
+    def _auto_detect_backends(self, op: HWCustomOp) -> List[Type]:
+        """Auto-detect backend variants from Brainsmith registry.
+
+        Called when get_backend_variants() returns None (default).
+        Looks up HLS backends registered for the kernel's op_type.
+
+        Shared by:
+        - SingleKernelTest: Auto-detect for single implementation
+        - DualKernelTest_v2: Auto-detect for auto pipeline (Brainsmith)
+
+        Args:
+            op: HWCustomOp instance to find backends for
+
+        Returns:
+            List of backend classes
+
+        Raises:
+            pytest.skip: If no backends found
+
+        Note:
+            This uses Brainsmith's registry. For FINN backends in DualKernelTest,
+            use get_manual_backend_variants() to specify explicitly.
+
+        Example (SingleKernelTest):
+            >>> # Auto-detect backend for AddStreams
+            >>> op, model = self.run_inference_pipeline(...)  # Stage 2
+            >>> backend_variants = self._auto_detect_backends(op)
+            >>> # Returns: [AddStreams_hls]
+
+        Example (DualKernelTest_v2 auto pipeline):
+            >>> # Auto-detect Brainsmith backend
+            >>> auto_op, auto_model = self.run_auto_pipeline()
+            >>> backend_variants = self._auto_detect_backends(auto_op)
+            >>> # Used automatically by _specialize_to_backend_stage()
+        """
+        from brainsmith.registry import get_backend, list_backends_for_kernel
+
+        backend_names = list_backends_for_kernel(op.onnx_node.op_type, language="hls")
+        if not backend_names:
+            pytest.skip(f"No HLS backend found for {op.onnx_node.op_type}")
+
+        return [get_backend(name) for name in backend_names]
+
+    # ========================================================================
+    # Shared Utility 3: Backend Specialization (Stage 2 → Stage 3)
+    # ========================================================================
+
+    def _specialize_to_backend_stage(
+        self,
+        op: HWCustomOp,
+        model: ModelWrapper,
+        backend_variants_override: Optional[List[Type]] = None,
+    ) -> Tuple[HWCustomOp, ModelWrapper]:
+        """Execute Stage 2 → Stage 3 backend specialization.
+
+        Common logic for transforming base kernel (Stage 2) to backend (Stage 3):
+        1. Check fpgapart configured (skip test if None)
+        2. Get backend variants (use override, get_backend_variants(), or auto-detect)
+        3. Specialize via specialize_to_backend()
+        4. Call configure_backend_node() hook
+
+        Used by:
+        - SingleKernelTest.run_inference_pipeline(to_backend=True)
+        - DualKernelTest_v2.run_manual_pipeline(to_backend=True)
+        - DualKernelTest_v2.run_auto_pipeline(to_backend=True)
+
+        Args:
+            op: Base kernel operator instance (Stage 2)
+                Example: AddStreams (no backend)
+            model: Model containing the base kernel
+            backend_variants_override: Optional backend list (for manual pipeline)
+                                      If None, uses priority:
+                                      1. get_backend_variants() (if overridden)
+                                      2. _auto_detect_backends() (registry lookup)
+
+        Returns:
+            (specialized_op, specialized_model): Backend operator and model (Stage 3)
+            Example: (AddStreams_hls, model_with_backend)
+
+        Raises:
+            pytest.skip: If backend not configured (get_backend_fpgapart() returns None)
+
+        Example (SingleKernelTest):
+            >>> # Stage 2 → Stage 3 (auto-detect backend)
+            >>> def run_inference_pipeline(self, ..., to_backend=False):
+            ...     # Stage 1 → Stage 2
+            ...     op, model = runner.run(...)
+            ...     # Stage 2 → Stage 3
+            ...     if to_backend:
+            ...         op, model = self._specialize_to_backend_stage(op, model)
+            ...     return op, model
+
+        Example (DualKernelTest_v2 manual pipeline):
+            >>> # Stage 2 → Stage 3 (FINN backend override)
+            >>> def run_manual_pipeline(self, to_backend=False):
+            ...     # Stage 1 → Stage 2
+            ...     manual_op, manual_model = runner.run(...)
+            ...     # Stage 2 → Stage 3 (override with FINN backend)
+            ...     if to_backend:
+            ...         manual_op, manual_model = self._specialize_to_backend_stage(
+            ...             manual_op, manual_model,
+            ...             backend_variants_override=self.get_manual_backend_variants()
+            ...         )
+            ...     return manual_op, manual_model
+
+        Example (DualKernelTest_v2 auto pipeline):
+            >>> # Stage 2 → Stage 3 (auto-detect Brainsmith backend)
+            >>> def run_auto_pipeline(self, to_backend=False):
+            ...     # Stage 1 → Stage 2
+            ...     auto_op, auto_model = runner.run(...)
+            ...     # Stage 2 → Stage 3 (auto-detect)
+            ...     if to_backend:
+            ...         auto_op, auto_model = self._specialize_to_backend_stage(
+            ...             auto_op, auto_model
+            ...         )
+            ...     return auto_op, auto_model
+        """
+        fpgapart = self.get_backend_fpgapart()
+        if fpgapart is None:
+            pytest.skip(
+                "Backend specialization not configured. "
+                "Override get_backend_fpgapart() to enable backend testing."
+            )
+
+        # Determine backend variants (priority: override > get_backend_variants > auto-detect)
+        backend_variants = backend_variants_override
+        if backend_variants is None:
+            backend_variants = self.get_backend_variants()
+        if backend_variants is None:
+            backend_variants = self._auto_detect_backends(op)
+
+        # Specialize to backend (Stage 2 → Stage 3)
+        op, model = specialize_to_backend(op, model, fpgapart, backend_variants)
+
+        # Stage 3 configuration hook (backend-specific parameters)
+        # Example: op.set_nodeattr("mem_mode", "internal_decoupled")
+        self.configure_backend_node(op, model)
+
+        return op, model

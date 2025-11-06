@@ -8,13 +8,27 @@ Design Philosophy (v2.3):
 - Tests define operations once, fixtures parameterize automatically
 - **Stage 1 golden reference** - computed ONCE from ONNX model with annotations (v2.2)
 - **Direct DataType annotations** - NO Quant nodes inserted (v2.3)
+- **Shared utilities** - Inherits from KernelTestBase_v2 (NEW in Phase 2)
 - Automatic test data generation (pre-quantized, using Phase 1 utilities)
+
+Inheritance Chain (v2.3):
+    KernelTestConfig (abstract interface)
+        ↓
+    KernelTestBase_v2 (shared utilities)
+        ↓
+    SingleKernelTest (fixture-based testing) ← THIS CLASS
+
+Inherited from KernelTestBase_v2:
+- validate_against_golden() - GoldenValidator-based output validation
+- _auto_detect_backends() - Registry-based backend lookup
+- _specialize_to_backend_stage() - Stage 2→3 specialization with overrides
 
 Key Improvements (v2.3):
 - **Direct annotations replace Quant nodes** - Simpler architecture, same semantics
 - **Fixes rtlsim** - No Quant nodes to synthesize (v2.3)
 - **Simpler graph structure** - Metadata (annotations) separate from operations (Quant nodes)
 - **Pre-quantized test data** - Generated directly in target DataType range
+- **Shared utilities** - Zero code duplication with DualKernelTest_v2
 
 Key Improvements (v2.2):
 - **Golden reference computed from Stage 1 ONLY** - No more Stage 2/3 confusion
@@ -85,21 +99,17 @@ from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
-# Import base config
-from tests.frameworks.kernel_test_base_v2 import KernelTestConfig
-
-# Import backend specialization utilities
-from tests.support.backend_utils import specialize_to_backend
+# Import base utilities
+from tests.frameworks.kernel_test_base_v2 import KernelTestBase_v2
 
 # Import test executors
 from tests.support.executors import CppSimExecutor, PythonExecutor, RTLSimExecutor
 
 # Import Phase 1 utilities
 from tests.support.pipeline import PipelineRunner
-from tests.support.validator import GoldenValidator
 
 
-class SingleKernelTest(KernelTestConfig):
+class SingleKernelTest(KernelTestBase_v2):
     """Test one kernel with fixture-based parameterization.
 
     Subclasses implement (2 methods only!):
@@ -327,76 +337,10 @@ class SingleKernelTest(KernelTestConfig):
 
         # Stage 2 → Stage 3: Base Kernel → Backend (optional)
         if to_backend:
-            fpgapart = self.get_backend_fpgapart()
-            if fpgapart is None:
-                pytest.skip(
-                    "Backend specialization not configured. "
-                    "Override get_backend_fpgapart() to enable backend testing."
-                )
-
-            backend_variants = self.get_backend_variants()
-            if backend_variants is None:
-                # Auto-detect from registry
-                backend_variants = self._auto_detect_backends(op)
-
-            op, model = specialize_to_backend(op, model, fpgapart, backend_variants)
-
-            # Stage 3 configuration (backend-specific parameters)
-            self.configure_backend_node(op, model)
+            op, model = self._specialize_to_backend_stage(op, model)
 
         return op, model
 
-    def _auto_detect_backends(self, op):
-        """Auto-detect backend variants from Brainsmith registry.
-
-        Args:
-            op: HWCustomOp instance to find backends for
-
-        Returns:
-            List of backend classes
-
-        Raises:
-            pytest.skip: If no backends found
-        """
-        from brainsmith.registry import get_backend, list_backends_for_kernel
-
-        backend_names = list_backends_for_kernel(op.onnx_node.op_type, language="hls")
-        if not backend_names:
-            pytest.skip(f"No HLS backend found for {op.onnx_node.op_type}")
-        return [get_backend(name) for name in backend_names]
-
-    # ========================================================================
-    # Validation
-    # ========================================================================
-
-    def validate_against_golden(
-        self,
-        actual_outputs: Dict[str, np.ndarray],
-        golden_outputs: Dict[str, np.ndarray],
-        backend_name: str,
-        tolerance: Dict[str, float],
-    ) -> None:
-        """Validate actual outputs match golden reference.
-
-        Uses GoldenValidator (Phase 1) for consistent validation logic.
-
-        Args:
-            actual_outputs: Outputs from backend execution
-            golden_outputs: Expected outputs from golden reference
-            backend_name: Name of backend for error messages
-            tolerance: Dict with 'rtol' and 'atol' keys
-
-        Raises:
-            AssertionError: If outputs don't match within tolerance
-        """
-        validator = GoldenValidator()
-        validator.validate(
-            actual_outputs=actual_outputs,
-            golden_outputs=golden_outputs,
-            backend_name=backend_name,
-            rtol=tolerance["rtol"],
-            atol=tolerance["atol"],
-        )
 
     # ========================================================================
     # Pytest Fixtures - Stage 1 golden reference (v2.2)
