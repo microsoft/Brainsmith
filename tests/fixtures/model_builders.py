@@ -305,11 +305,11 @@ class OnnxModelBuilder:
         # Determine TensorProto type based on mode
         if self._use_actual_tensorproto_types:
             # Stage 1: Use actual TensorProto types for correct semantics
-            from tests.support.onnx_utils import datatype_to_actual_tensorproto
+            from tests.fixtures.model_annotation import datatype_to_actual_tensorproto
             tensorproto_type = datatype_to_actual_tensorproto(self._datatype)
         else:
             # Stage 2: Use FINN convention (FLOAT containers)
-            from tests.support.onnx_utils import tensorproto_for_datatype
+            from tests.fixtures.model_annotation import tensorproto_for_datatype
             tensorproto_type = tensorproto_for_datatype(self._datatype)
 
         # Create input value infos (non-static only)

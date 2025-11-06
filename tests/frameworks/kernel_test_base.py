@@ -178,7 +178,7 @@ class KernelTestConfig(ABC):
             - Ensures correct semantics (e.g., INT8÷INT8 uses integer division)
             - Stage 2 (QONNX) still uses FLOAT containers for hardware execution
         """
-        from tests.support.onnx_utils import datatype_to_actual_tensorproto
+        from tests.fixtures.model_annotation import datatype_to_actual_tensorproto
         annotations = self.get_qonnx_annotations()
         return {
             name: datatype_to_actual_tensorproto(dtype)

@@ -34,7 +34,8 @@ from tests.support.constants import (
     SIGNED_TEST_DATA_MIN,
     SIGNED_TEST_DATA_MAX,
 )
-from tests.support.onnx_utils import generate_onnx_test_data, get_onnx_tensor_type
+from tests.fixtures.test_data import generate_onnx_test_data
+from tests.support.onnx_utils import get_onnx_tensor_type
 
 
 def make_execution_context_onnx(

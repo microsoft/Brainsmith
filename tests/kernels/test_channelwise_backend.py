@@ -101,7 +101,7 @@ class ChannelwiseParityBase(DualKernelTest):
         Returns:
             (model, node_name): Pure ONNX model and operation node name
         """
-        from tests.support.onnx_utils import datatype_to_actual_tensorproto
+        from tests.fixtures.model_annotation import datatype_to_actual_tensorproto
 
         # Configuration
         batch = 1

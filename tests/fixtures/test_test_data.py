@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from qonnx.core.datatype import DataType
 
-from tests.support.data_generation import generate_test_data
+from tests.fixtures.test_data import generate_test_data
 
 
 class TestGenerateTestData:

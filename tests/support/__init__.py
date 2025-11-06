@@ -61,9 +61,6 @@ from .pipeline import PipelineRunner
 # Test data generation
 from .context import make_execution_context
 
-# Tensor mapping
-from .tensor_mapping import map_onnx_to_golden_names
-
 # Constants (export all)
 from .constants import *
 
@@ -99,7 +96,4 @@ __all__ = [
     # Validation
     "GoldenValidator",
     "TolerancePresets",
-
-    # Utilities
-    "map_onnx_to_golden_names",
 ]

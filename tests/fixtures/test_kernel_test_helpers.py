@@ -14,7 +14,7 @@ from onnx import TensorProto
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
-from tests.fixtures.kernel_test_helpers import (
+from tests.fixtures.model_builders import (
     OnnxModelBuilder,
     make_binary_op_model,
     make_parametric_op_model,

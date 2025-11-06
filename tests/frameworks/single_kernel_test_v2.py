@@ -164,7 +164,7 @@ class SingleKernelTest(KernelTestBase_v2):
         model, input_names = self.make_test_model(input_shapes)
 
         # Step 2: Annotate inputs with QONNX DataTypes (direct annotation, no Quant nodes)
-        from tests.support.datatype_annotation import annotate_model_datatypes
+        from tests.fixtures.model_annotation import annotate_model_datatypes
 
         input_annotations = {name: input_datatypes[name] for name in input_names if name in input_datatypes}
         if input_annotations:
@@ -206,7 +206,7 @@ class SingleKernelTest(KernelTestBase_v2):
         Returns:
             Dict mapping input names to test data arrays (pre-quantized)
         """
-        from tests.support.data_generation import generate_test_data
+        from tests.fixtures.test_data import generate_test_data
 
         inputs = {}
         _, input_names = self.make_test_model(input_shapes)

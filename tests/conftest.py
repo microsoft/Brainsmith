@@ -28,7 +28,7 @@ from tests.fixtures.blueprints import *
 # Import kernel test helpers for easy access in all kernel tests
 # Use these for unit testing kernels (schema, inference, transformation)
 # For parity testing (comparing implementations), use tests/parity/ParityTestBase
-from tests.fixtures.kernel_test_helpers import (
+from tests.fixtures.model_builders import (
     OnnxModelBuilder,
     make_binary_op_model,
     make_parametric_op_model,

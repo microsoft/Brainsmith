@@ -11,8 +11,8 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import qonnx_make_model
 
-from tests.support.data_generation import generate_test_data
-from tests.support.quant_insertion import insert_input_quant_nodes
+from tests.fixtures.test_data import generate_test_data
+from tests.fixtures.model_annotation import insert_input_quant_nodes
 
 
 class TestQuantInsertion:
