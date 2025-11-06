@@ -319,13 +319,18 @@ class DualKernelTest_v2(KernelTestBase_v2):
     # Pipeline Execution (uses Phase 1 PipelineRunner + inherited specialization)
     # ========================================================================
 
-    def run_manual_pipeline(self, to_backend: bool = False) -> Tuple[HWCustomOp, ModelWrapper]:
+    def run_manual_pipeline(
+        self,
+        kernel_test_config: 'KernelTestConfig',
+        to_backend: bool = False
+    ) -> Tuple[HWCustomOp, ModelWrapper]:
         """Run manual (FINN) pipeline: ONNX → Base Kernel → Backend (optional).
 
         Uses PipelineRunner (Phase 1) for pipeline logic and inherited
         _specialize_to_backend_stage() for backend specialization (Phase 2).
 
         Args:
+            kernel_test_config: Unified test configuration (v3.0, required)
             to_backend: If True, specialize to backend (Stage 3).
                        If False, return base kernel (Stage 2).
                        Default: False
@@ -361,29 +366,44 @@ class DualKernelTest_v2(KernelTestBase_v2):
             # The runner will find the HW node automatically, so we pass None
             return model, None
 
+        def configure_stage_2(op, m):
+            # Apply imperative configuration (backward compatible)
+            self.configure_parameters(op, m, stage=2)
+            # Apply declarative configuration from fixture (v2.5)
+            self.auto_configure_from_fixture(op, m, stage=2, config=kernel_test_config)
+
         op, model = runner.run(
             model_factory=model_factory,
             transform=self.get_manual_transform(),
-            configure_fn=lambda op, model: self.configure_kernel_node(op, model),
+            configure_fn=configure_stage_2,
             qonnx_annotations=self._get_input_datatypes(),
         )
 
         # Stage 2 → Stage 3: Base Kernel → Backend (use inherited method)
         if to_backend:
             op, model = self._specialize_to_backend_stage(
-                op, model,
+                op, model, kernel_test_config,
                 backend_variants_override=self.get_manual_backend_variants()
             )
+            # Configure backend-specific parameters
+            self.configure_parameters(op, model, stage=3)
+            # Apply declarative configuration from fixture (v2.5)
+            self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
 
         return op, model
 
-    def run_auto_pipeline(self, to_backend: bool = False) -> Tuple[HWCustomOp, ModelWrapper]:
+    def run_auto_pipeline(
+        self,
+        kernel_test_config: 'KernelTestConfig',
+        to_backend: bool = False
+    ) -> Tuple[HWCustomOp, ModelWrapper]:
         """Run auto (Brainsmith) pipeline: ONNX → Base Kernel → Backend (optional).
 
         Uses PipelineRunner (Phase 1) for pipeline logic and inherited
         _specialize_to_backend_stage() for backend specialization (Phase 2).
 
         Args:
+            kernel_test_config: Unified test configuration (v3.0, required)
             to_backend: If True, specialize to backend (Stage 3).
                        If False, return base kernel (Stage 2).
                        Default: False
@@ -419,16 +439,26 @@ class DualKernelTest_v2(KernelTestBase_v2):
             # The runner will find the HW node automatically, so we pass None
             return model, None
 
+        def configure_stage_2(op, m):
+            # Apply imperative configuration (backward compatible)
+            self.configure_parameters(op, m, stage=2)
+            # Apply declarative configuration from fixture (v2.5)
+            self.auto_configure_from_fixture(op, m, stage=2, config=kernel_test_config)
+
         op, model = runner.run(
             model_factory=model_factory,
             transform=self.get_auto_transform(),
-            configure_fn=lambda op, model: self.configure_kernel_node(op, model),
+            configure_fn=configure_stage_2,
             qonnx_annotations=self._get_input_datatypes(),
         )
 
         # Stage 2 → Stage 3: Base Kernel → Backend (use inherited method)
         if to_backend:
-            op, model = self._specialize_to_backend_stage(op, model)
+            op, model = self._specialize_to_backend_stage(op, model, kernel_test_config)
+            # Configure backend-specific parameters
+            self.configure_parameters(op, model, stage=3)
+            # Apply declarative configuration from fixture (v2.5)
+            self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
 
         return op, model
 
@@ -471,10 +501,10 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.dual_kernel
-    def test_normal_shapes_parity(self):
+    def test_normal_shapes_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test normal input/output shapes match between implementations."""
-        manual_op, _ = self.run_manual_pipeline()
-        auto_op, _ = self.run_auto_pipeline()
+        manual_op, _ = self.run_manual_pipeline(kernel_test_config)
+        auto_op, _ = self.run_auto_pipeline(kernel_test_config)
 
         # Input shapes
         for i in range(self.get_num_inputs()):
@@ -491,10 +521,10 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.dual_kernel
-    def test_folded_shapes_parity(self):
+    def test_folded_shapes_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test folded input/output shapes match between implementations."""
-        manual_op, _ = self.run_manual_pipeline()
-        auto_op, _ = self.run_auto_pipeline()
+        manual_op, _ = self.run_manual_pipeline(kernel_test_config)
+        auto_op, _ = self.run_auto_pipeline(kernel_test_config)
 
         # Input shapes
         for i in range(self.get_num_inputs()):
@@ -511,10 +541,10 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.dual_kernel
-    def test_stream_widths_parity(self):
+    def test_stream_widths_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test input/output stream widths match between implementations."""
-        manual_op, _ = self.run_manual_pipeline()
-        auto_op, _ = self.run_auto_pipeline()
+        manual_op, _ = self.run_manual_pipeline(kernel_test_config)
+        auto_op, _ = self.run_auto_pipeline(kernel_test_config)
 
         # Input stream widths
         for i in range(self.get_num_inputs()):
@@ -531,10 +561,10 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.dual_kernel
-    def test_stream_widths_padded_parity(self):
+    def test_stream_widths_padded_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test padded stream widths match (AXI alignment)."""
-        manual_op, _ = self.run_manual_pipeline()
-        auto_op, _ = self.run_auto_pipeline()
+        manual_op, _ = self.run_manual_pipeline(kernel_test_config)
+        auto_op, _ = self.run_auto_pipeline(kernel_test_config)
 
         # Input stream widths padded
         for i in range(self.get_num_inputs()):
@@ -561,10 +591,10 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.dual_kernel
-    def test_datatypes_parity(self):
+    def test_datatypes_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test input/output datatypes match between implementations."""
-        manual_op, _ = self.run_manual_pipeline()
-        auto_op, _ = self.run_auto_pipeline()
+        manual_op, _ = self.run_manual_pipeline(kernel_test_config)
+        auto_op, _ = self.run_auto_pipeline(kernel_test_config)
 
         # Input datatypes
         for i in range(self.get_num_inputs()):
@@ -581,7 +611,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.dual_kernel
-    def test_datatype_inference_parity(self):
+    def test_datatype_inference_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test datatype inference produces matching results.
 
         Note: This test compares datatypes only, not tensor names.
@@ -589,8 +619,8 @@ class DualKernelTest_v2(KernelTestBase_v2):
         infer_node_datatype(), so we compare datatypes by position, not name.
         """
         # Setup ops with fresh models
-        manual_op, manual_model = self.run_manual_pipeline()
-        auto_op, auto_model = self.run_auto_pipeline()
+        manual_op, manual_model = self.run_manual_pipeline(kernel_test_config)
+        auto_op, auto_model = self.run_auto_pipeline(kernel_test_config)
 
         # Run datatype inference
         manual_model_out = manual_op.infer_node_datatype(manual_model)
@@ -638,14 +668,14 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.dual_kernel
-    def test_make_shape_compatible_op_parity(self):
+    def test_make_shape_compatible_op_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test shape-compatible ops preserve output structure.
 
         Note: make_shape_compatible_op() returns an ONNX NodeProto (per FINN API),
         not a wrapped HWCustomOp. This is used for shape inference.
         """
-        manual_op, manual_model = self.run_manual_pipeline()
-        auto_op, auto_model = self.run_auto_pipeline()
+        manual_op, manual_model = self.run_manual_pipeline(kernel_test_config)
+        auto_op, auto_model = self.run_auto_pipeline(kernel_test_config)
 
         # Returns ONNX NodeProto for shape inference
         manual_compat_node = manual_op.make_shape_compatible_op(manual_model)
@@ -677,10 +707,10 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.hw_estimation
     @pytest.mark.dual_kernel
-    def test_expected_cycles_parity(self):
+    def test_expected_cycles_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test expected cycle counts match between implementations."""
-        manual_op, _ = self.run_manual_pipeline()
-        auto_op, _ = self.run_auto_pipeline()
+        manual_op, _ = self.run_manual_pipeline(kernel_test_config)
+        auto_op, _ = self.run_auto_pipeline(kernel_test_config)
 
         manual_cycles = manual_op.get_exp_cycles()
         auto_cycles = auto_op.get_exp_cycles()
@@ -690,10 +720,10 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.hw_estimation
     @pytest.mark.dual_kernel
-    def test_number_output_values_parity(self):
+    def test_number_output_values_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test number of output values match (for FIFO sizing)."""
-        manual_op, _ = self.run_manual_pipeline()
-        auto_op, _ = self.run_auto_pipeline()
+        manual_op, _ = self.run_manual_pipeline(kernel_test_config)
+        auto_op, _ = self.run_auto_pipeline(kernel_test_config)
 
         manual_count = manual_op.get_number_output_values()
         auto_count = auto_op.get_number_output_values()
@@ -703,10 +733,10 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.hw_estimation
     @pytest.mark.dual_kernel
-    def test_resource_estimates_parity(self):
+    def test_resource_estimates_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test resource estimates match between implementations."""
-        manual_op, _ = self.run_manual_pipeline()
-        auto_op, _ = self.run_auto_pipeline()
+        manual_op, _ = self.run_manual_pipeline(kernel_test_config)
+        auto_op, _ = self.run_auto_pipeline(kernel_test_config)
 
         # LUT estimation
         if hasattr(manual_op, "lut_estimation") and hasattr(auto_op, "lut_estimation"):
@@ -750,10 +780,10 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.hw_estimation
     @pytest.mark.dual_kernel
-    def test_efficiency_metrics_parity(self):
+    def test_efficiency_metrics_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test BRAM/URAM efficiency estimates match."""
-        manual_op, _ = self.run_manual_pipeline()
-        auto_op, _ = self.run_auto_pipeline()
+        manual_op, _ = self.run_manual_pipeline(kernel_test_config)
+        auto_op, _ = self.run_auto_pipeline(kernel_test_config)
 
         # BRAM efficiency
         if hasattr(manual_op, "bram_efficiency_estimation") and hasattr(auto_op, "bram_efficiency_estimation"):
@@ -776,10 +806,10 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.parity
     @pytest.mark.hw_estimation
     @pytest.mark.dual_kernel
-    def test_operation_counts_parity(self):
+    def test_operation_counts_parity(self, kernel_test_config: "KernelTestConfig"):
         """Test operation and parameter counts match."""
-        manual_op, _ = self.run_manual_pipeline()
-        auto_op, _ = self.run_auto_pipeline()
+        manual_op, _ = self.run_manual_pipeline(kernel_test_config)
+        auto_op, _ = self.run_auto_pipeline(kernel_test_config)
 
         if hasattr(manual_op, "get_op_and_param_counts") and hasattr(auto_op, "get_op_and_param_counts"):
             manual_counts = manual_op.get_op_and_param_counts()
@@ -793,9 +823,9 @@ class DualKernelTest_v2(KernelTestBase_v2):
 
     @pytest.mark.golden
     @pytest.mark.dual_kernel
-    def test_manual_python_vs_golden(self):
+    def test_manual_python_vs_golden(self, kernel_test_config: "KernelTestConfig"):
         """Test manual (FINN) Python execution matches golden reference."""
-        manual_op, manual_model = self.run_manual_pipeline()
+        manual_op, manual_model = self.run_manual_pipeline(kernel_test_config)
 
         # Generate test inputs
         np.random.seed(42)
@@ -809,16 +839,16 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(manual_op, manual_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_python()
+        tolerance = self.get_tolerance_python(kernel_test_config)
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Manual Python execution", tolerance
         )
 
     @pytest.mark.golden
     @pytest.mark.dual_kernel
-    def test_auto_python_vs_golden(self):
+    def test_auto_python_vs_golden(self, kernel_test_config: "KernelTestConfig"):
         """Test auto (Brainsmith) Python execution matches golden reference."""
-        auto_op, auto_model = self.run_auto_pipeline()
+        auto_op, auto_model = self.run_auto_pipeline(kernel_test_config)
 
         # Generate test inputs
         np.random.seed(42)
@@ -832,7 +862,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(auto_op, auto_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_python()
+        tolerance = self.get_tolerance_python(kernel_test_config)
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Auto Python execution", tolerance
         )
@@ -841,9 +871,9 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.cppsim
     @pytest.mark.slow
     @pytest.mark.dual_kernel
-    def test_manual_cppsim_vs_golden(self):
+    def test_manual_cppsim_vs_golden(self, kernel_test_config: "KernelTestConfig"):
         """Test manual (FINN) cppsim execution matches golden reference."""
-        manual_op, manual_model = self.run_manual_pipeline(to_backend=True)
+        manual_op, manual_model = self.run_manual_pipeline(kernel_test_config, to_backend=True)
 
         # Generate test inputs
         np.random.seed(42)
@@ -857,7 +887,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(manual_op, manual_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_cppsim()
+        tolerance = self.get_tolerance_cppsim(kernel_test_config)
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Manual HLS cppsim", tolerance
         )
@@ -866,9 +896,9 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.cppsim
     @pytest.mark.slow
     @pytest.mark.dual_kernel
-    def test_auto_cppsim_vs_golden(self):
+    def test_auto_cppsim_vs_golden(self, kernel_test_config: "KernelTestConfig"):
         """Test auto (Brainsmith) cppsim execution matches golden reference."""
-        auto_op, auto_model = self.run_auto_pipeline(to_backend=True)
+        auto_op, auto_model = self.run_auto_pipeline(kernel_test_config, to_backend=True)
 
         # Generate test inputs
         np.random.seed(42)
@@ -882,7 +912,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(auto_op, auto_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_cppsim()
+        tolerance = self.get_tolerance_cppsim(kernel_test_config)
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Auto HLS cppsim", tolerance
         )
@@ -891,9 +921,9 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.rtlsim
     @pytest.mark.slow
     @pytest.mark.dual_kernel
-    def test_manual_rtlsim_vs_golden(self):
+    def test_manual_rtlsim_vs_golden(self, kernel_test_config: "KernelTestConfig"):
         """Test manual (FINN) rtlsim execution matches golden reference."""
-        manual_op, manual_model = self.run_manual_pipeline(to_backend=True)
+        manual_op, manual_model = self.run_manual_pipeline(kernel_test_config, to_backend=True)
 
         # Generate test inputs
         np.random.seed(42)
@@ -907,7 +937,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(manual_op, manual_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_rtlsim()
+        tolerance = self.get_tolerance_rtlsim(kernel_test_config)
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Manual RTL rtlsim", tolerance
         )
@@ -916,9 +946,9 @@ class DualKernelTest_v2(KernelTestBase_v2):
     @pytest.mark.rtlsim
     @pytest.mark.slow
     @pytest.mark.dual_kernel
-    def test_auto_rtlsim_vs_golden(self):
+    def test_auto_rtlsim_vs_golden(self, kernel_test_config: "KernelTestConfig"):
         """Test auto (Brainsmith) rtlsim execution matches golden reference."""
-        auto_op, auto_model = self.run_auto_pipeline(to_backend=True)
+        auto_op, auto_model = self.run_auto_pipeline(kernel_test_config, to_backend=True)
 
         # Generate test inputs
         np.random.seed(42)
@@ -932,7 +962,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(auto_op, auto_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_rtlsim()
+        tolerance = self.get_tolerance_rtlsim(kernel_test_config)
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Auto RTL rtlsim", tolerance
         )

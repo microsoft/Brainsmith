@@ -11,6 +11,7 @@ Command mappings are used by cli.py's LazyGroup for lazy loading.
 # Format: 'command_name': (relative_module, attribute_name, category)
 _COMMAND_REGISTRY = {
     "registry": (".registry", "registry", "admin"),
+    "regsitry": (".registry", "registry", "admin"),  # Typo alias for *someone* ;)
     "project": (".project", "project", "admin"),
     "setup": (".setup", "setup", "admin"),
     "dfc": (".dfc", "dfc", "operational"),

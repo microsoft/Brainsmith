@@ -1,22 +1,11 @@
 # Installation
 
-This guide will help you set up Brainsmith for development.
-
-## Prerequisites
-
-Before installing Brainsmith, ensure you have the following:
-
-- **Ubuntu 22.04+** (primary development/testing platform)
-- **Vivado Design Suite 2024.2** (migration to 2025.1 in process)
-- **Python 3.10+** and [Poetry](https://python-poetry.org/docs/#installation)
-- **[Optional]** [direnv](https://direnv.net/) for automatic environment activation
-- **[Optional]** Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+!!! note "Prerequisites"
+    - **Ubuntu 22.04+** (primary development/testing platform)
+    - **[Vivado Design Suite](https://www.xilinx.com/support/download.html) 2024.2** (migration to 2025.1 in process)
+    - **[Optional]** [direnv](https://direnv.net/) for automatic environment activation
 
 ## Installation Options
-
-Choose between local Poetry-based development or Docker-based development.
-
-### Option A: Local Development with Poetry
 
 #### 1. Clone the Repository
 
@@ -24,6 +13,12 @@ Choose between local Poetry-based development or Docker-based development.
 git clone https://github.com/microsoft/brainsmith.git ./brainsmith
 cd brainsmith
 ```
+
+### 2 (Option A): Local Development with Poetry
+
+!!! note "Prerequisites"
+    Python 3.11+ and [Poetry](https://python-poetry.org/docs/#installation) installed
+
 
 #### 2. Run Automated Setup
 
@@ -68,6 +63,9 @@ cd .  # Triggers direnv to load .brainsmith/env.sh
 ```
 
 **Option 2: Manual activation**
+
+- Requires Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+
 
 Must be run from the brainsmith root directory:
 

@@ -143,7 +143,7 @@ class SingleKernelTest(KernelTestBase_v2):
     # ========================================================================
 
     def _prepare_model_with_annotations(
-        self, input_shapes: Dict[str, Tuple[int, ...]], input_datatypes: Dict[str, DataType]
+        self, kernel_test_config: "KernelTestConfig"
     ) -> Tuple[ModelWrapper, str]:
         """Create model with QONNX DataType annotations (NO Quant nodes).
 
@@ -154,18 +154,19 @@ class SingleKernelTest(KernelTestBase_v2):
         This produces identical InferDataTypes results with simpler graph structure.
 
         Args:
-            input_shapes: Dict from fixture, e.g., {"input": (1, 64)}
-            input_datatypes: Dict from fixture, e.g., {"input": DataType["INT8"]}
+            kernel_test_config: Unified test configuration (v3.0, required)
+                Contains input_shapes, input_dtypes, operation, etc.
 
         Returns:
             (model, target_node): Model with DataType annotations and target node name
         """
         # Step 1: Get simple model from test
-        model, input_names = self.make_test_model(input_shapes)
+        model, input_names = self.make_test_model(kernel_test_config)
 
         # Step 2: Annotate inputs with QONNX DataTypes (direct annotation, no Quant nodes)
         from tests.fixtures.model_annotation import annotate_model_datatypes
 
+        input_datatypes = kernel_test_config.input_dtypes
         input_annotations = {name: input_datatypes[name] for name in input_names if name in input_datatypes}
         if input_annotations:
             annotate_model_datatypes(model, input_annotations, warn_unsupported=True)
@@ -189,8 +190,7 @@ class SingleKernelTest(KernelTestBase_v2):
 
     def _generate_test_inputs(
         self,
-        input_shapes: Dict[str, Tuple[int, ...]],
-        input_datatypes: Dict[str, DataType],
+        kernel_test_config: "KernelTestConfig",
     ) -> Dict[str, np.ndarray]:
         """Generate test data with correct shapes and datatypes.
 
@@ -200,8 +200,8 @@ class SingleKernelTest(KernelTestBase_v2):
         Since we use direct annotations (no Quant nodes), input names remain unchanged.
 
         Args:
-            input_shapes: Dict from fixture
-            input_datatypes: Dict from fixture
+            kernel_test_config: Unified test configuration (v3.0, required)
+                Contains input_shapes, input_dtypes, etc.
 
         Returns:
             Dict mapping input names to test data arrays (pre-quantized)
@@ -209,7 +209,10 @@ class SingleKernelTest(KernelTestBase_v2):
         from tests.fixtures.test_data import generate_test_data
 
         inputs = {}
-        _, input_names = self.make_test_model(input_shapes)
+        _, input_names = self.make_test_model(kernel_test_config)
+
+        input_shapes = kernel_test_config.input_shapes
+        input_datatypes = kernel_test_config.input_dtypes
 
         for name in input_names:
             if name not in input_datatypes:
@@ -298,8 +301,7 @@ class SingleKernelTest(KernelTestBase_v2):
 
     def run_inference_pipeline(
         self,
-        input_shapes: Dict[str, Tuple[int, ...]],
-        input_datatypes: Dict[str, DataType],
+        kernel_test_config: 'KernelTestConfig',
         to_backend: bool = False,
     ) -> Tuple[HWCustomOp, ModelWrapper]:
         """Run inference pipeline to Stage 2 (base kernel) or Stage 3 (backend).
@@ -310,8 +312,9 @@ class SingleKernelTest(KernelTestBase_v2):
             Stage 3: Backend (AddStreams_hls, with HLSBackend) ← to_backend=True
 
         Args:
-            input_shapes: Dict from fixture
-            input_datatypes: Dict from fixture
+            kernel_test_config: Unified test configuration (v3.0, required)
+                Contains input_shapes, input_dtypes, operation, etc.
+                Provides declarative DSE configuration via auto_configure_from_fixture()
             to_backend: If True, specialize to backend (Stage 3).
                        If False, return base kernel (Stage 2).
 
@@ -325,22 +328,69 @@ class SingleKernelTest(KernelTestBase_v2):
             pytest.skip: If to_backend=True but backend not configured
         """
         # Prepare model with QONNX annotations
-        model, target_node = self._prepare_model_with_annotations(input_shapes, input_datatypes)
+        model, target_node = self._prepare_model_with_annotations(kernel_test_config)
 
         # Stage 1 → Stage 2: ONNX → Base Kernel
         runner = PipelineRunner()
+
+        def configure_stage_2(op, m):
+            # Apply imperative configuration (backward compatible)
+            self.configure_parameters(op, m, stage=2)
+            # Apply declarative configuration from fixture (v3.0)
+            self.auto_configure_from_fixture(op, m, stage=2, config=kernel_test_config)
+
         op, model = runner.run(
             model_factory=lambda: (model, target_node),
             transform=self.get_kernel_inference_transform(),
-            configure_fn=lambda op, m: self.configure_kernel_node(op, m),
+            configure_fn=configure_stage_2,
         )
 
         # Stage 2 → Stage 3: Base Kernel → Backend (optional)
         if to_backend:
-            op, model = self._specialize_to_backend_stage(op, model)
+            op, model = self._specialize_to_backend_stage(op, model, kernel_test_config)
+            # Configure backend-specific parameters
+            self.configure_parameters(op, model, stage=3)
+            # Apply declarative configuration from fixture (v3.0)
+            self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
 
         return op, model
 
+
+    # ========================================================================
+    # Pytest Fixtures - v3.0 Extraction (Fixture Composition)
+    # ========================================================================
+
+    @pytest.fixture
+    def input_shapes(self, kernel_test_config: "KernelTestConfig"):
+        """Extract input_shapes from unified config (v3.0).
+
+        This extraction fixture enables pytest fixture composition pattern,
+        allowing tests to request input_shapes while framework provides them
+        from kernel_test_config.
+
+        Args:
+            kernel_test_config: Unified test configuration (auto-injected by pytest)
+
+        Returns:
+            Dict mapping input names to shapes
+        """
+        return kernel_test_config.input_shapes
+
+    @pytest.fixture
+    def input_datatypes(self, kernel_test_config: "KernelTestConfig"):
+        """Extract input_datatypes from unified config (v3.0).
+
+        This extraction fixture enables pytest fixture composition pattern,
+        allowing tests to request input_datatypes while framework provides them
+        from kernel_test_config.
+
+        Args:
+            kernel_test_config: Unified test configuration (auto-injected by pytest)
+
+        Returns:
+            Dict mapping input names to DataTypes
+        """
+        return kernel_test_config.input_dtypes
 
     # ========================================================================
     # Pytest Fixtures - Stage 1 golden reference (v2.2)
@@ -349,8 +399,7 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.fixture(scope="function")
     def stage1_model(
         self,
-        input_shapes: Dict[str, Tuple[int, ...]],
-        input_datatypes: Dict[str, DataType]
+        kernel_test_config: "KernelTestConfig"
     ) -> ModelWrapper:
         """Stage 1 model with QONNX annotations (before kernel inference).
 
@@ -359,13 +408,12 @@ class SingleKernelTest(KernelTestBase_v2):
         compute golden reference from.
 
         Args:
-            input_shapes: From fixture
-            input_datatypes: From fixture
+            kernel_test_config: Unified test configuration (auto-injected by pytest)
 
         Returns:
             Stage 1 model (ONNX + annotations, no kernel inference, no Quant nodes)
         """
-        model, _ = self._prepare_model_with_annotations(input_shapes, input_datatypes)
+        model, _ = self._prepare_model_with_annotations(kernel_test_config)
 
         # Run shape/datatype inference (required for QONNX execution)
         from qonnx.transformation.infer_shapes import InferShapes
@@ -379,19 +427,18 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.fixture(scope="function")
     def test_inputs(
         self,
-        input_shapes: Dict[str, Tuple[int, ...]],
-        input_datatypes: Dict[str, DataType]
+        kernel_test_config: "KernelTestConfig"
     ) -> Dict[str, np.ndarray]:
-        """Generate test inputs with deterministic seed.
+        """Generate test inputs with deterministic seed (v3.0).
 
         Args:
-            input_shapes: From fixture
-            input_datatypes: From fixture
+            kernel_test_config: Unified test configuration (auto-injected by pytest)
+                Contains input_shapes, input_dtypes for test data generation
 
         Returns:
-            Dict mapping raw_* input names to test data arrays
+            Dict mapping input names to test data arrays (pre-quantized)
         """
-        return self._generate_test_inputs(input_shapes, input_datatypes)
+        return self._generate_test_inputs(kernel_test_config)
 
     @pytest.fixture(scope="function")
     def golden_outputs(
@@ -420,13 +467,12 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.mark.pipeline
     @pytest.mark.single_kernel
     def test_pipeline_creates_hw_node(
-        self, input_shapes: Dict[str, Tuple[int, ...]], input_datatypes: Dict[str, DataType]
+        self, kernel_test_config: "KernelTestConfig"
     ):
         """Validate that kernel inference creates hardware node.
 
         Args:
-            input_shapes: From fixture (parameterizes shapes)
-            input_datatypes: From fixture (parameterizes dtypes)
+            kernel_test_config: Unified test configuration (v3.0, required)
 
         Pipeline:
         1. Create ONNX node with Quant nodes
@@ -434,7 +480,7 @@ class SingleKernelTest(KernelTestBase_v2):
         3. Verify HW node was created
         4. Verify it's a HWCustomOp instance
         """
-        op, model = self.run_inference_pipeline(input_shapes, input_datatypes)
+        op, model = self.run_inference_pipeline(kernel_test_config)
 
         # Verify op is HWCustomOp
         assert isinstance(
@@ -453,18 +499,21 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.mark.pipeline
     @pytest.mark.single_kernel
     def test_shapes_preserved_through_pipeline(
-        self, input_shapes: Dict[str, Tuple[int, ...]], input_datatypes: Dict[str, DataType]
+        self, kernel_test_config: "KernelTestConfig"
     ):
         """Validate tensor shapes remain correct through inference pipeline.
 
         Args:
-            input_shapes: From fixture
-            input_datatypes: From fixture
+            kernel_test_config: Unified test configuration (v3.0, required)
         """
-        op, model = self.run_inference_pipeline(input_shapes, input_datatypes)
+        op, model = self.run_inference_pipeline(kernel_test_config)
+
+        # Extract config data for validation
+        input_shapes = kernel_test_config.input_shapes
+        input_datatypes = kernel_test_config.input_dtypes
 
         # Get input names from test
-        _, input_names = self.make_test_model(input_shapes)
+        _, input_names = self.make_test_model(kernel_test_config)
 
         # Validate input shapes (check actual inputs after Quant)
         for input_name in input_names:
@@ -497,18 +546,20 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.mark.pipeline
     @pytest.mark.single_kernel
     def test_datatypes_preserved_through_pipeline(
-        self, input_shapes: Dict[str, Tuple[int, ...]], input_datatypes: Dict[str, DataType]
+        self, kernel_test_config: "KernelTestConfig"
     ):
         """Validate tensor datatypes remain correct through inference pipeline.
 
         Args:
-            input_shapes: From fixture
-            input_datatypes: From fixture
+            kernel_test_config: Unified test configuration (v3.0, required)
         """
-        op, model = self.run_inference_pipeline(input_shapes, input_datatypes)
+        op, model = self.run_inference_pipeline(kernel_test_config)
+
+        # Extract config data for validation
+        input_datatypes = kernel_test_config.input_dtypes
 
         # Get input names from test
-        _, input_names = self.make_test_model(input_shapes)
+        _, input_names = self.make_test_model(kernel_test_config)
 
         # Validate input datatypes (check Quant outputs)
         for input_name in input_names:
@@ -543,16 +594,14 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.mark.single_kernel
     def test_python_execution_vs_golden(
         self,
-        input_shapes: Dict[str, Tuple[int, ...]],
-        input_datatypes: Dict[str, DataType],
+        kernel_test_config: "KernelTestConfig",
         test_inputs: Dict[str, np.ndarray],
         golden_outputs: Dict[str, np.ndarray]
     ):
         """Test Python execution (execute_node) matches QONNX golden reference.
 
         Args:
-            input_shapes: From fixture (parameterizes shapes)
-            input_datatypes: From fixture (parameterizes dtypes)
+            kernel_test_config: Unified test configuration (v3.0, required)
             test_inputs: From fixture (generated test data)
             golden_outputs: From fixture (Stage 1 golden reference)
 
@@ -562,14 +611,14 @@ class SingleKernelTest(KernelTestBase_v2):
         3. Results match Stage 1 QONNX golden reference (quantized) within tolerance
         """
         # Run pipeline to Stage 2 (base kernel)
-        op, model = self.run_inference_pipeline(input_shapes, input_datatypes)
+        op, model = self.run_inference_pipeline(kernel_test_config)
 
         # Execute via Python backend (uses Stage 2 model)
         executor = PythonExecutor()
         actual_outputs = executor.execute(op, model, test_inputs)
 
         # Validate against golden (from Stage 1 fixture)
-        tolerance = self.get_tolerance_python()
+        tolerance = self.get_tolerance_python(kernel_test_config)
         self.validate_against_golden(actual_outputs, golden_outputs, "Python execution", tolerance)
 
     @pytest.mark.pipeline
@@ -579,16 +628,14 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.mark.single_kernel
     def test_cppsim_execution_vs_golden(
         self,
-        input_shapes: Dict[str, Tuple[int, ...]],
-        input_datatypes: Dict[str, DataType],
+        kernel_test_config: "KernelTestConfig",
         test_inputs: Dict[str, np.ndarray],
         golden_outputs: Dict[str, np.ndarray]
     ):
         """Test HLS C++ simulation matches QONNX golden reference.
 
         Args:
-            input_shapes: From fixture
-            input_datatypes: From fixture
+            kernel_test_config: Unified test configuration (v3.0, required)
             test_inputs: From fixture (generated test data)
             golden_outputs: From fixture (Stage 1 golden reference)
 
@@ -609,14 +656,14 @@ class SingleKernelTest(KernelTestBase_v2):
             - If VITIS_PATH not set (handled by CppSimExecutor)
         """
         # Run pipeline to Stage 3 (backend)
-        op, model = self.run_inference_pipeline(input_shapes, input_datatypes, to_backend=True)
+        op, model = self.run_inference_pipeline(kernel_test_config, to_backend=True)
 
         # Execute via cppsim (uses Stage 3 backend model)
         executor = CppSimExecutor()
         actual_outputs = executor.execute(op, model, test_inputs)
 
         # Validate against golden (from Stage 1 fixture)
-        tolerance = self.get_tolerance_cppsim()
+        tolerance = self.get_tolerance_cppsim(kernel_test_config)
         self.validate_against_golden(actual_outputs, golden_outputs, "HLS simulation (cppsim)", tolerance)
 
     @pytest.mark.pipeline
@@ -626,16 +673,14 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.mark.single_kernel
     def test_rtlsim_execution_vs_golden(
         self,
-        input_shapes: Dict[str, Tuple[int, ...]],
-        input_datatypes: Dict[str, DataType],
+        kernel_test_config: "KernelTestConfig",
         test_inputs: Dict[str, np.ndarray],
         golden_outputs: Dict[str, np.ndarray]
     ):
         """Test RTL simulation matches QONNX golden reference.
 
         Args:
-            input_shapes: From fixture
-            input_datatypes: From fixture
+            kernel_test_config: Unified test configuration (v3.0, required)
             test_inputs: From fixture (generated test data)
             golden_outputs: From fixture (Stage 1 golden reference)
 
@@ -659,13 +704,13 @@ class SingleKernelTest(KernelTestBase_v2):
             - If Vivado not found (handled by RTLSimExecutor)
         """
         # Run pipeline to Stage 3 (backend)
-        op, model = self.run_inference_pipeline(input_shapes, input_datatypes, to_backend=True)
+        op, model = self.run_inference_pipeline(kernel_test_config, to_backend=True)
 
         # Execute via rtlsim (uses Stage 3 backend model)
         executor = RTLSimExecutor()
         actual_outputs = executor.execute(op, model, test_inputs)
 
         # Validate against golden (from Stage 1 fixture)
-        tolerance = self.get_tolerance_rtlsim()
+        tolerance = self.get_tolerance_rtlsim(kernel_test_config)
         self.validate_against_golden(actual_outputs, golden_outputs, "RTL simulation (rtlsim)", tolerance)
 
