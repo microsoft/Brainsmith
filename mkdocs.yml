@@ -1,7 +1,9 @@
 site_name: Brainsmith
 site_description: From PyTorch to RTL - FPGA Accelerator Compiler for AI
 site_author: Microsoft
-site_url: https://microsoft.github.io/brainsmith/
+# TEMPORARY: Set to root for VS Code port forwarding during dev
+# site_url: https://microsoft.github.io/brainsmith/
+site_url: http://127.0.0.1:8000/
 
 repo_name: microsoft/brainsmith
 repo_url: https://github.com/microsoft/brainsmith
@@ -100,11 +102,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Overview: getting-started/index.md
-    - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quickstart.md
-    - Configuration: getting-started/configuration.md
+  - Getting Started: getting-started.md
   - Developer Guide:
     - Overview: developer-guide/index.md
     - 1. Foundations:
@@ -145,7 +143,6 @@ nav:
       - Thresholding: kernels/thresholding.md
     - Experimental:
       - RotaryEmbedding: kernels/rotaryembedding.md
-      - Shuffle: kernels/shuffle.md
   - API Reference:
     - Overview: api/index.md
     - Design Space Exploration: api/dse.md

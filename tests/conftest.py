@@ -204,7 +204,7 @@ def isolated_env(tmp_path, monkeypatch):
     Creates:
     - tmp_path/test_project/.brainsmith/
     - tmp_path/test_project/plugins/
-    - Real config.yaml
+    - Real brainsmith.yaml
     - BSMITH_PROJECT_DIR env var
 
     No mocking. Real settings system. Real component discovery.
@@ -223,7 +223,7 @@ def isolated_env(tmp_path, monkeypatch):
     plugins_dir.mkdir()
 
     # Write real config file
-    config_file = brainsmith_dir / "config.yaml"
+    config_file = project_dir / "brainsmith.yaml"
     config_file.write_text("""
 cache_components: true
 component_sources: {}
@@ -249,7 +249,7 @@ def empty_env(tmp_path, monkeypatch):
 
     Creates:
     - tmp_path/test_project/.brainsmith/
-    - Real config.yaml (no component sources)
+    - Real brainsmith.yaml (no component sources)
     - BSMITH_PROJECT_DIR env var
 
     No mocking. For tests that only need core brainsmith components.
@@ -263,7 +263,7 @@ def empty_env(tmp_path, monkeypatch):
     brainsmith_dir.mkdir()
 
     # Empty config - no component sources
-    config_file = brainsmith_dir / "config.yaml"
+    config_file = project_dir / "brainsmith.yaml"
     config_file.write_text("""
 cache_components: false
 component_sources: {}

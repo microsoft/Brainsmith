@@ -21,7 +21,7 @@
 
 ## Quick Start
 
-**TL;DR**: Use `SingleKernelTest` or `DualKernelTest`. Everything else is utilities.
+**TL;DR**: Use `SingleKernelTest` for single implementation testing, or `KernelParityTest` for comparing two implementations (FINN vs Brainsmith). Everything else is utilities.
 
 ### Testing ONE Kernel Implementation
 
@@ -85,16 +85,101 @@ class TestMyKernelParity(DualKernelTest):
 - 5 HW estimation tests (cycles, resources)
 - 8 golden execution tests (manual/auto vs golden, both vs each other)
 
-### Enabling Backend Testing
-
-Add one method to enable cppsim/rtlsim tests:
+### Testing TWO Implementations (Kernel Parity v5.0) - RECOMMENDED
 
 ```python
-class TestMyKernel(SingleKernelTest):
-    # ... required methods ...
+from tests.frameworks.kernel_parity_test import KernelParityTest
+from tests.frameworks.test_config import KernelTestConfig, ModelStructure
 
-    def get_backend_fpgapart(self):
-        return "xc7z020clg400-1"  # Enable backend specialization!
+class TestAddParity(KernelParityTest):
+    """Compare FINN ElementwiseAdd vs Brainsmith ElementwiseBinaryOp."""
+
+    @pytest.fixture(
+        params=[
+            KernelTestConfig(
+                test_id="add_int8",
+                model=ModelStructure(
+                    operation="Add",
+                    input_shapes={"input0": (1, 64), "input1": (1, 64)},
+                    input_dtypes={
+                        "input0": DataType["INT8"],
+                        "input1": DataType["INT8"]
+                    },
+                ),
+            )
+        ]
+    )
+    def kernel_test_config(self, request):
+        return request.param
+
+    def make_test_model(self, kernel_test_config):
+        # Create ONNX model
+        return model, ["input0", "input1"]
+
+    # Kernel A (FINN)
+    def infer_kernel_a(self, model, target_node):
+        model = model.transform(InferElementwiseBinaryOperation())
+        nodes = model.get_nodes_by_op_type("ElementwiseAdd")  # Search by op_type!
+        return getCustomOp(nodes[0]), model
+
+    def get_backend_variants_a(self):
+        return [ElementwiseAdd_hls]
+
+    # Kernel B (Brainsmith) - uses defaults
+    def get_kernel_inference_transform(self):
+        return lambda: InferKernels([ElementwiseBinaryOp])
+
+    def get_num_inputs(self):
+        return 2
+
+    def get_num_outputs(self):
+        return 1
+
+    def compute_golden_reference(self, inputs):
+        return {"output": inputs["input0"] + inputs["input1"]}
+```
+
+**Result:** 18 inherited tests automatically!
+- 6 golden execution tests (kernel_a/kernel_b × python/cppsim/rtlsim)
+- 7 core parity tests (shapes, widths, datatypes)
+- 5 HW estimation tests (cycles, resources, efficiency)
+
+**Key Features:**
+- Fixture-based parameterization (easier to test multiple configs)
+- Session-scoped caching (better performance)
+- Per-kernel backend selection (more flexible)
+- Expected failures are features (reveals real differences)
+
+**See:** `tests/frameworks/KERNEL_PARITY_TEST_GUIDE.md` for comprehensive documentation
+
+### Enabling Backend Testing
+
+Configure fpgapart in your test configuration:
+
+```python
+from tests.frameworks.test_config import KernelTestConfig, PlatformConfig
+
+@pytest.fixture(params=[
+    KernelTestConfig(
+        test_id="my_test_with_backend",
+        model=ModelStructure(...),
+        platform=PlatformConfig(fpgapart="xc7z020clg400-1")  # Enable backend!
+    )
+])
+def kernel_test_config(self, request):
+    return request.param
+```
+
+**Control test execution with pytest marks:**
+```bash
+# Run all tests (including backend if configured)
+pytest test_my_kernel.py -v
+
+# Skip backend tests
+pytest test_my_kernel.py -m "not cppsim and not rtlsim" -v
+
+# Run ONLY rtlsim tests
+pytest test_my_kernel.py -m "rtlsim" -v
 ```
 
 ---
@@ -138,6 +223,15 @@ DualKernelTest                      # Tests TWO implementations (20 inherited te
     ↓ composition (uses all the same utilities)
 PipelineRunner (manual pipeline)
 PipelineRunner (auto pipeline)
+GoldenValidator
+Executors
+
+KernelParityTest (v5.0)             # Tests TWO implementations (18 inherited tests) - RECOMMENDED
+    ↓ fixture-based architecture
+Session-scoped fixtures (caching)
+Method swapping (per-kernel backends)
+PipelineRunner (kernel_a pipeline)
+PipelineRunner (kernel_b pipeline)
 GoldenValidator
 Executors
 ```
@@ -455,7 +549,8 @@ pytest -v
 ### By Framework
 ```bash
 pytest -m "single_kernel" -v      # SingleKernelTest tests
-pytest -m "dual_kernel" -v        # DualKernelTest tests
+pytest -m "dual_kernel" -v        # DualKernelTest tests (legacy)
+pytest -m "kernel_parity" -v      # KernelParityTest tests (v5.0) - RECOMMENDED
 ```
 
 ### By Execution Mode
@@ -499,13 +594,18 @@ tests/
 ├── README.md                           # This file (authoritative documentation)
 │
 ├── frameworks/                         # Test Framework (START HERE)
-│   ├── kernel_test_base.py           # Minimal abstract base (3 required + 7 optional hooks)
-│   ├── single_kernel_test.py         # Single kernel testing (6 inherited tests)
-│   ├── dual_kernel_test.py           # Dual kernel parity (20 inherited tests)
+│   ├── kernel_test_base_v2.py        # Base class with v5.0 utilities
+│   ├── single_kernel_test_v2.py      # Single kernel testing (6 inherited tests)
+│   ├── dual_kernel_test.py           # Dual kernel parity (20 inherited tests) - legacy
+│   ├── kernel_parity_test.py         # Kernel parity v5.0 (18 inherited tests) - RECOMMENDED
+│   ├── KERNEL_PARITY_TEST_GUIDE.md   # Comprehensive KernelParityTest documentation
+│   ├── test_config.py                # Test configuration (KernelTestConfig, ModelStructure)
 │   ├── test_addstreams_validation.py # Framework validation tests
 │   └── test_addstreams_dual_backend.py # Backend integration validation
 │
 ├── kernels/                            # Kernel-Specific Tests
+│   ├── elementwise_binary/
+│   │   └── test_add_parity.py            # KernelParityTest example (FINN vs Brainsmith)
 │   ├── test_duplicate_streams_backend.py # DuplicateStreams example
 │   ├── test_elementwise_add_backend.py   # ElementwiseBinaryOp example
 │   └── test_mvau.py                      # MVAU tests
@@ -667,34 +767,70 @@ class TestMyKernelParity(DualKernelTest):
 ### Example 3: Backend Testing Enabled
 
 ```python
+from tests.frameworks.test_config import (
+    KernelTestConfig,
+    ModelStructure,
+    PlatformConfig,
+    DesignParameters,
+    ValidationConfig,
+)
+
 class TestMyKernelWithBackend(SingleKernelTest):
     """Test MyKernel with full backend pipeline (cppsim + rtlsim)."""
 
+    @pytest.fixture(params=[
+        KernelTestConfig(
+            test_id="my_kernel_backend",
+            model=ModelStructure(
+                operation="MyOp",
+                input_shapes={"input": (1, 64)},
+                input_dtypes={"input": DataType["INT8"]}
+            ),
+            design=DesignParameters(
+                input_streams={0: 8},  # PE=8
+                dimensions={"SIMD": 16}
+            ),
+            platform=PlatformConfig(fpgapart="xc7z020clg400-1"),  # Enable backend!
+            validation=ValidationConfig(
+                tolerance_cppsim={"rtol": 1e-4, "atol": 1e-5}  # Relaxed for HLS
+            )
+        )
+    ])
+    def kernel_test_config(self, request):
+        return request.param
+
     # ... required methods ...
-
-    def configure_kernel_node(self, op, model):
-        """Configure PE and SIMD for backend."""
-        op.set_nodeattr("PE", 8)
-        op.set_nodeattr("SIMD", 16)
-
-    def get_backend_fpgapart(self):
-        """Enable backend testing."""
-        return "xc7z020clg400-1"
-
-    def get_tolerance_cppsim(self):
-        """Relax tolerance for HLS fixed-point."""
-        return {"rtol": 1e-4, "atol": 1e-5}
 ```
 
 **Result:** All 6 tests run, including cppsim + rtlsim (Stage 3)
+
+**Control execution:**
+```bash
+# Run all tests
+pytest test_my_kernel_backend.py -v
+
+# Skip slow backend tests
+pytest test_my_kernel_backend.py -m "not cppsim and not rtlsim" -v
+```
 
 ---
 
 ## See Also
 
-- **Framework Implementation:** `frameworks/single_kernel_test.py`, `frameworks/dual_kernel_test.py`
+- **Framework Implementation:**
+  - `frameworks/single_kernel_test_v2.py` - Single kernel testing
+  - `frameworks/dual_kernel_test.py` - Dual kernel parity (legacy)
+  - `frameworks/kernel_parity_test.py` - Kernel parity v5.0 (RECOMMENDED)
+  - `frameworks/kernel_test_base_v2.py` - Base class with v5.0 utilities
+- **Comprehensive Guides:**
+  - `frameworks/KERNEL_PARITY_TEST_GUIDE.md` - Complete KernelParityTest documentation
+  - `_artifacts/phase3_kernelparitytest_flow.md` - Visual flow diagrams
+  - `_artifacts/PHASE_STATUS.md` - Implementation status
 - **Support Utilities:** `support/pipeline.py`, `support/validator.py`, `support/executors.py`
-- **Working Examples:** `frameworks/test_addstreams_dual_backend.py`, `kernels/test_duplicate_streams_backend.py`
+- **Working Examples:**
+  - `kernels/elementwise_binary/test_add_parity.py` - KernelParityTest example
+  - `frameworks/test_addstreams_dual_backend.py` - Backend integration
+  - `kernels/test_duplicate_streams_backend.py` - DuplicateStreams example
 - **Pipeline Tests:** `pipeline/test_addstreams_integration.py`
 - **Coverage Analysis:** Archived in `_artifacts/archive/planning_docs/COVERAGE_GAP_ANALYSIS.md`
 - **Backend Status:** Archived in `_artifacts/archive/planning_docs/BACKEND_INTEGRATION_STATUS.md`

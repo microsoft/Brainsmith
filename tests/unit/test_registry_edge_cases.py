@@ -170,7 +170,7 @@ class TestManifestCaching:
         """No manifest exists - should do full discovery and create manifest."""
         # empty_env creates a project with cache_components: false
         # Let's modify the config to enable caching
-        config_file = empty_env / '.brainsmith' / 'config.yaml'
+        config_file = empty_env / 'brainsmith.yaml'
         config_file.write_text("""
 cache_components: true
 component_sources: {}
@@ -201,7 +201,7 @@ component_sources: {}
     def test_load_from_valid_manifest(self, empty_env):
         """Valid cached manifest - should load from cache without imports."""
         # Enable caching
-        config_file = empty_env / '.brainsmith' / 'config.yaml'
+        config_file = empty_env / 'brainsmith.yaml'
         config_file.write_text("""
 cache_components: true
 component_sources: {}

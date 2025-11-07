@@ -20,7 +20,7 @@ Examples:
     YAML: build_dir: build                       → resolves to $PROJECT_DIR/build
     Env:  BSMITH_BUILD_DIR=build                → resolves to $PROJECT_DIR/build
 
-Project directory is detected by walking up from CWD to find .brainsmith/config.yaml.
+Project directory is detected by walking up from CWD to find brainsmith.yaml.
 
 Internal paths (deps_dir) always resolve to brainsmith installation, ignoring user input.
 
@@ -29,7 +29,7 @@ Configuration Priority
 Settings are loaded from multiple sources with the following priority (highest to lowest):
 1. CLI arguments (passed to SystemConfig constructor)
 2. Environment variables (BSMITH_* prefix)
-3. Project config file (.brainsmith/config.yaml)
+3. Project config file (brainsmith.yaml)
 4. Built-in defaults (Field defaults in SystemConfig)
 
 Path Resolution Flow
@@ -68,8 +68,7 @@ from brainsmith.registry.constants import (
 
 # Private constants for config file discovery
 # These are internal implementation details - CLI tools should inline values as needed
-_PROJECT_CONFIG_DIR = ".brainsmith"
-_PROJECT_CONFIG_FILE = "config.yaml"
+_PROJECT_CONFIG_FILE = "brainsmith.yaml"
 
 
 def _find_project_config() -> Optional[Path]:
@@ -77,9 +76,9 @@ def _find_project_config() -> Optional[Path]:
 
     Search order:
     1. If BSMITH_PROJECT_DIR is set, check that directory only
-    2. Otherwise, walk up from CWD to find .brainsmith/config.yaml
+    2. Otherwise, walk up from CWD to find brainsmith.yaml
 
-    Project directory is always the parent of .brainsmith/
+    Project directory is where brainsmith.yaml is located.
 
     Returns:
         Path to config file, or None if not found
@@ -87,7 +86,7 @@ def _find_project_config() -> Optional[Path]:
     # Priority 1: Explicit project directory override
     if project_dir_override := os.environ.get('BSMITH_PROJECT_DIR'):
         project_dir = Path(project_dir_override).resolve()
-        candidate = project_dir / _PROJECT_CONFIG_DIR / _PROJECT_CONFIG_FILE
+        candidate = project_dir / _PROJECT_CONFIG_FILE
 
         if candidate.exists():
             return candidate
@@ -96,12 +95,12 @@ def _find_project_config() -> Optional[Path]:
         # (don't fall through to upward walk - user explicitly set the location)
         return None
 
-    # Priority 2: Walk up from CWD to find .brainsmith/config.yaml
+    # Priority 2: Walk up from CWD to find brainsmith.yaml
     current = Path.cwd().resolve()
 
     # Walk up until we hit filesystem root
     while current != current.parent:
-        candidate = current / _PROJECT_CONFIG_DIR / _PROJECT_CONFIG_FILE
+        candidate = current / _PROJECT_CONFIG_FILE
 
         if candidate.exists():
             return candidate
@@ -236,7 +235,7 @@ class SystemConfig(BaseSettings):
     Priority order (highest to lowest):
     1. CLI arguments (passed to constructor)
     2. Environment variables (BSMITH_* prefix)
-    3. Project config (.brainsmith/config.yaml)
+    3. Project config (brainsmith.yaml)
     4. Built-in defaults
     """
 
@@ -531,7 +530,7 @@ class SystemConfig(BaseSettings):
         Project root detection priority:
         1. Custom project file location (from load_config project_file param) - HIGHEST
         2. BSMITH_PROJECT_DIR env var (explicit override for runtime)
-        3. Walk up from CWD to find config file, return its parent directory
+        3. Walk up from CWD to find brainsmith.yaml, return its parent directory
 
         Priority 1 ensures that when project init explicitly creates a config file,
         that file's location determines the project root, regardless of any sourced
@@ -549,7 +548,7 @@ class SystemConfig(BaseSettings):
         # Check for explicit project file first (e.g., from project init)
         project_file_used = getattr(self, '_project_file_used', None)
         if project_file_used:
-            return Path(project_file_used).parent.parent.resolve()
+            return Path(project_file_used).parent.resolve()
 
         # Then check environment variable override
         if 'BSMITH_PROJECT_DIR' in os.environ:
@@ -558,14 +557,14 @@ class SystemConfig(BaseSettings):
         # Walk up from CWD to find config
         config_file = _find_project_config()
         if config_file:
-            return config_file.parent.parent
+            return config_file.parent
 
         # No project found - fail with helpful error
         raise ValueError(
             "No Brainsmith project detected.\n\n"
             "To fix this, either:\n"
             "  1. Run 'brainsmith project init' to create a new project\n"
-            "  2. Navigate to an existing project directory (containing .brainsmith/)\n"
+            "  2. Navigate to an existing project directory (containing brainsmith.yaml)\n"
             "  3. Source the project environment: source .brainsmith/env.sh\n"
             f"\nCurrent directory: {Path.cwd()}"
         )
@@ -723,7 +722,7 @@ class SystemConfig(BaseSettings):
         """Generate .envrc file for direnv integration.
 
         Creates a direnv configuration that:
-        - Watches .brainsmith/config.yaml for changes
+        - Watches brainsmith.yaml for changes
         - Auto-regenerates environment when config changes
         - Sources .brainsmith/env.sh for all environment variables
         - Activates virtualenv automatically
@@ -748,7 +747,7 @@ class SystemConfig(BaseSettings):
 # Enable with: direnv allow
 
 # Watch config file - direnv will reload when it changes
-watch_file .brainsmith/config.yaml
+watch_file brainsmith.yaml
 
 # Activate virtualenv first (required for brainsmith command)
 if [ -d .venv ]; then
@@ -757,7 +756,7 @@ if [ -d .venv ]; then
 fi
 
 # Auto-regenerate environment if config is newer than env.sh
-if [ .brainsmith/config.yaml -nt .brainsmith/env.sh ]; then
+if [ brainsmith.yaml -nt .brainsmith/env.sh ]; then
     echo "Config changed, regenerating environment..."
     if command -v brainsmith &> /dev/null; then
         brainsmith project init > /dev/null 2>&1 || {

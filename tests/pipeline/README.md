@@ -57,7 +57,7 @@ pytest tests/pipeline/ -v --run-slow
 pytest tests/pipeline/ -v -m rtlsim
 
 # Config changes - automatic
-vim .brainsmith/config.yaml
+vim brainsmith.yaml
 cd .  # Auto-regenerates and reloads
 ```
 
@@ -78,7 +78,7 @@ pytest tests/pipeline/ -v --run-slow
 pytest tests/pipeline/ -v -m rtlsim
 
 # Config changes - manual regeneration
-vim .brainsmith/config.yaml
+vim brainsmith.yaml
 brainsmith project init  # Regenerate scripts (won't overwrite config.yaml)
 source .brainsmith/env.sh     # Reload environment
 ```

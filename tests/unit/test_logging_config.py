@@ -46,9 +46,7 @@ class TestLoggingConfigEssentials:
     def test_system_config_includes_logging(self):
         """SystemConfig includes logging field with default factory."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_dir = Path(tmpdir) / ".brainsmith"
-            config_dir.mkdir()
-            config_file = config_dir / "config.yaml"
+            config_file = Path(tmpdir) / "brainsmith.yaml"
             config_file.write_text("xilinx_path: /tools/Xilinx\nxilinx_version: '2024.2'\n")
 
             config = load_config(project_file=config_file)
@@ -60,9 +58,7 @@ class TestLoggingConfigEssentials:
     def test_load_from_yaml(self):
         """Load logging section from YAML config."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_dir = Path(tmpdir) / ".brainsmith"
-            config_dir.mkdir()
-            config_file = config_dir / "config.yaml"
+            config_file = Path(tmpdir) / "brainsmith.yaml"
 
             yaml_content = """
 xilinx_path: /tools/Xilinx
@@ -79,9 +75,7 @@ logging:
     def test_env_var_override(self):
         """BSMITH_LOG_LEVEL env var overrides YAML (validates precedence)."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_dir = Path(tmpdir) / ".brainsmith"
-            config_dir.mkdir()
-            config_file = config_dir / "config.yaml"
+            config_file = Path(tmpdir) / "brainsmith.yaml"
 
             yaml_content = """
 xilinx_path: /tools/Xilinx

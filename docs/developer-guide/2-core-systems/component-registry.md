@@ -199,7 +199,7 @@ def register_components():
 
 ### Configuration
 
-Configure component sources in `.brainsmith/config.yaml` or `~/.brainsmith/config.yaml`:
+Configure component sources in `brainsmith.yaml` or `~/brainsmith.yaml`:
 
 ```yaml
 # Enable component caching

@@ -34,11 +34,11 @@ Brainsmith follows a clear precedence order for configuration:
 
 1. **Command-line arguments** (highest priority)
 2. **Environment variables** (`BSMITH_*` prefix)
-3. **Project configuration** (`.brainsmith/config.yaml`)
-4. **User configuration** (`~/.brainsmith/config.yaml`)
+3. **Project configuration** (`brainsmith.yaml`)
+4. **User configuration** (`~/brainsmith.yaml`)
 5. **Built-in defaults** (lowest priority)
 
-See: [Configuration Guide](../../getting-started/configuration.md)
+See: [Configuration Guide](../../getting-started.md#configuration)
 
 ---
 
@@ -95,7 +95,7 @@ brainsmith config init [OPTIONS]
 ```
 
 **Options:**
-- `--user` - Create user-level config (~/.brainsmith/config.yaml)
+- `--user` - Create user-level config (~/brainsmith.yaml)
 - `--project` - Create project-level config (./brainsmith_config.yaml)
 - `--force, -f` - Overwrite existing file
 - `--full` - Include all possible configuration fields
@@ -400,7 +400,7 @@ brainsmith setup all
 # Initialize user configuration
 brainsmith config init --user
 
-# Edit ~/.brainsmith/config.yaml to configure Xilinx tools as needed
+# Edit ~/brainsmith.yaml to configure Xilinx tools as needed
 
 # Verify setup
 brainsmith setup check
@@ -467,10 +467,10 @@ brainsmith --debug smith model.onnx blueprint.yaml
 ### Reset Configuration
 ```bash
 # Remove user configuration
-rm ~/.brainsmith/config.yaml
+rm ~/brainsmith.yaml
 
 # Remove project configuration
-rm .brainsmith/config.yaml
+rm brainsmith.yaml
 
 # Reinitialize
 brainsmith config init --user
@@ -482,4 +482,4 @@ brainsmith config init --user
 
 - [Blueprints](blueprints.md) - Learn the YAML configuration format
 - [Design Space Exploration](../2-core-systems/design-space-exploration.md) - Understand DSE concepts
-- [Configuration Guide](../../getting-started/configuration.md) - Deep dive on configuration
+- [Configuration Guide](../../getting-started.md#configuration) - Deep dive on configuration

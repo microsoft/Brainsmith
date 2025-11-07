@@ -35,15 +35,23 @@ Get performance estimates across all configurations in 30-60 minutes. Choose you
 ## Get Started
 
 **New to FPGA acceleration?**
-→ [Quick Start](getting-started/quickstart.md) - Run the BERT example and explore results
+
+→ [Quick Start](getting-started.md#quick-start) - Run the BERT example and explore results
+
 
 **Ready to build your own?**
-→ [Installation](getting-started/installation.md) - Set up your development environment
+
+→ [Installation](getting-started.md) - Set up your development environment
+
 → [Blueprints](developer-guide/3-reference/blueprints.md) - Learn the configuration format
 
+
 **Extending Brainsmith?**
+
 → [Kernel Op Developer Guide](developer-guide/kernel_ops/README.md) - Complete guide to building FPGA hardware kernels
+
 → [Component Registry](developer-guide/2-core-systems/component-registry.md) - Add custom kernels and transforms
+
 → [Kernels](developer-guide/3-reference/kernels.md) - Understand kernel architecture and create custom operations
 
 ---

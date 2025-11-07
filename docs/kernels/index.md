@@ -27,7 +27,7 @@ Kernels are organized into three categories:
     | [LayerNorm](layernorm.md) | HLS | Layer normalization | ✅ Stable |
     | [Softmax](softmax.md) | HLS | Softmax activation | ✅ Stable |
 
-=== "FINN Legacy"
+=== "FINN"
 
     FINN-compatible kernels for migration and backward compatibility.
 
@@ -43,7 +43,6 @@ Kernels are organized into three categories:
     | Kernel | Backends | Operation | Status |
     |--------|----------|-----------|--------|
     | [RotaryEmbedding](rotaryembedding.md) | Python | Rotary position encoding | 🔬 Experimental |
-    | [Shuffle](shuffle.md) | HLS | Channel/dimension shuffling | ⚠️ Beta |
 
 ## Understanding Kernel Documentation
 

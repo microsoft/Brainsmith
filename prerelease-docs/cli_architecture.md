@@ -48,7 +48,7 @@ Brainsmith follows a clear precedence order for configuration:
 1. **Command-line arguments** (highest priority)
 2. **Environment variables** (`BSMITH_*` prefix)
 3. **Project configuration** (`./brainsmith_config.yaml`)
-4. **User configuration** (`~/.brainsmith/config.yaml`)
+4. **User configuration** (`~/brainsmith.yaml`)
 5. **Built-in defaults** (lowest priority)
 
 ### Configuration Example

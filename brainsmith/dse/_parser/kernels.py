@@ -7,9 +7,12 @@ Blueprint kernel parsing.
 Handles parsing of kernel specifications and backend resolution.
 """
 
+import logging
 from typing import List, Tuple, Type, Union
 
 from brainsmith.registry import list_backends_for_kernel, get_backend
+
+logger = logging.getLogger(__name__)
 
 
 def parse_kernels(kernels_data: List[Union[str, dict]]) -> List[Tuple[str, List[Type]]]:
@@ -26,13 +29,19 @@ def parse_kernels(kernels_data: List[Union[str, dict]]) -> List[Tuple[str, List[
 
     Returns:
         List of (kernel_name, backend_classes) tuples where backend_classes
-        are in priority order (first backend is tried first during specialization)
+        are in priority order (first backend is tried first during specialization).
+        Kernels with no backends will have an empty backend_classes list and will
+        not be specialized during build_hw_graph (a warning is logged).
 
     Raises:
         ValueError: If kernel spec format is invalid
-        ValueError: If no backends found/specified for kernel
         ValueError: If specified backend not found in registry
         ValueError: If specified backend doesn't match kernel
+
+    Note:
+        Kernels without backends are allowed. They will be included in the design
+        space but skipped during backend specialization. This enables registration
+        of kernels that don't yet have backend implementations.
 
     Examples:
         >>> # All backends for each kernel
@@ -76,9 +85,9 @@ def parse_kernels(kernels_data: List[Union[str, dict]]) -> List[Tuple[str, List[
             )
 
         if not backend_classes:
-            raise ValueError(
-                f"No backends found for kernel '{kernel_name}'. "
-                f"Kernel must have at least one registered backend."
+            logger.warning(
+                f"Kernel '{kernel_name}' has no registered backends. "
+                f"This kernel will not be specialized during build_hw_graph."
             )
 
         kernel_backends.append((kernel_name, backend_classes))

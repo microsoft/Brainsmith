@@ -32,7 +32,7 @@ class ConfigFormatter:
         """Format configuration metadata as Rich panel.
 
         Shows:
-        - Project directory (where .brainsmith/config.yaml is located)
+        - Project directory (where brainsmith.yaml is located)
         - Brainsmith directory (where brainsmith package is installed)
         - Environment status (direnv, venv)
         - Component manifest status (cache enabled, file exists)
@@ -45,7 +45,7 @@ class ConfigFormatter:
         """
         lines = []
 
-        # Project directory
+        # Project directory (where brainsmith.yaml is located)
         project_dir = config.project_dir
         lines.append(f"[cyan]Project directory:[/cyan]    {project_dir}")
 

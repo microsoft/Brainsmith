@@ -500,4 +500,4 @@ Brainsmith automates the construction of dataflow accelerators, handling kernel 
 
 - [Kernels](../3-reference/kernels.md) - Understand the building blocks of dataflow accelerators
 - [Design Space Exploration](../2-core-systems/design-space-exploration.md) - Optimize dataflow configurations
-- [Quick Start](../../getting-started/quickstart.md) - Build your first dataflow accelerator
+- [Quick Start](../../getting-started.md#quick-start) - Build your first dataflow accelerator

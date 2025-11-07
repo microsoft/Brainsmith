@@ -61,7 +61,7 @@ def load_config(
     Priority order (highest to lowest):
     1. CLI arguments (passed as kwargs)
     2. Environment variables (BSMITH_* prefix)
-    3. Project config file (.brainsmith/config.yaml)
+    3. Project config file (brainsmith.yaml)
     4. Built-in defaults
 
     Special handling:
