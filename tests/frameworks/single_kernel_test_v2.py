@@ -102,9 +102,6 @@ from qonnx.core.modelwrapper import ModelWrapper
 # Import base utilities
 from tests.frameworks.kernel_test_base_v2 import KernelTestBase_v2
 
-# Import test executors
-from tests.support.executors import CppSimExecutor, PythonExecutor, RTLSimExecutor
-
 # Import Phase 1 utilities
 from tests.support.pipeline import PipelineRunner
 
@@ -181,90 +178,8 @@ class SingleKernelTest(KernelTestBase_v2):
     # Internal helpers - use fixtures and Phase 1 utilities
     # ========================================================================
 
-    def _prepare_model_with_annotations(
-        self, kernel_test_config: "KernelTestConfig"
-    ) -> Tuple[ModelWrapper, str]:
-        """Create model with QONNX DataType annotations (NO Quant nodes).
-
-        This is an internal helper. Tests should not call directly.
-
-        Instead of inserting Quant nodes (IntQuant/FloatQuant/BipolarQuant),
-        this method directly annotates input tensors with QONNX DataTypes.
-        This produces identical InferDataTypes results with simpler graph structure.
-
-        Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-                Contains input_shapes, input_dtypes, operation, etc.
-
-        Returns:
-            (model, target_node): Model with DataType annotations and target node name
-        """
-        # Step 1: Get simple model from test
-        model, input_names = self.make_test_model(kernel_test_config)
-
-        # Step 2: Annotate inputs with QONNX DataTypes (direct annotation, no Quant nodes)
-        from tests.fixtures.model_annotation import annotate_model_datatypes
-
-        input_datatypes = kernel_test_config.input_dtypes
-        input_annotations = {name: input_datatypes[name] for name in input_names if name in input_datatypes}
-        if input_annotations:
-            annotate_model_datatypes(model, input_annotations, warn_unsupported=True)
-
-        # Step 3: Annotate outputs (infer from model or use defaults)
-        output_names = [out.name for out in model.graph.output]
-        for out_name in output_names:
-            if model.get_tensor_datatype(out_name) is None:
-                # Default: same dtype as first input
-                first_input = input_names[0]
-                if first_input in input_datatypes:
-                    model.set_tensor_datatype(out_name, input_datatypes[first_input])
-
-        # Step 4: Find target node (first node in graph)
-        if len(model.graph.node) == 0:
-            raise RuntimeError("No nodes found in graph")
-
-        target_node = model.graph.node[0].name
-
-        return model, target_node
-
-    def _generate_test_inputs(
-        self,
-        kernel_test_config: "KernelTestConfig",
-    ) -> Dict[str, np.ndarray]:
-        """Generate test data with correct shapes and datatypes.
-
-        This is an internal helper. Tests should not call directly.
-
-        Generates test data directly in the target DataType range (pre-quantized).
-        Since we use direct annotations (no Quant nodes), input names remain unchanged.
-
-        Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-                Contains input_shapes, input_dtypes, etc.
-
-        Returns:
-            Dict mapping input names to test data arrays (pre-quantized)
-        """
-        from tests.fixtures.test_data import generate_test_data
-
-        inputs = {}
-        _, input_names = self.make_test_model(kernel_test_config)
-
-        input_shapes = kernel_test_config.input_shapes
-        input_datatypes = kernel_test_config.input_dtypes
-
-        for name in input_names:
-            if name not in input_datatypes:
-                continue  # Skip if no datatype specified
-
-            dtype = input_datatypes[name]
-            shape = input_shapes[name]
-
-            # Generate data with correct dtype and shape (using configured seed)
-            # Data is pre-quantized (already in dtype's range)
-            inputs[name] = generate_test_data(dtype, shape, seed=self.get_test_seed())
-
-        return inputs
+    # Note: _prepare_model_with_annotations and _generate_test_inputs moved to
+    # KernelTestBase_v2 to eliminate duplication with KernelParityTest (v6.0)
 
     def get_use_custom_golden_reference(self) -> bool:
         """Override to use custom golden reference instead of QONNX execution.
@@ -546,12 +461,11 @@ class SingleKernelTest(KernelTestBase_v2):
         Returns:
             (backend_op, model) tuple for cppsim/rtlsim execution
 
-        Raises:
-            pytest.skip: If fpgapart not configured for this test
+        Note:
+            Use pytest marks (@pytest.mark.cppsim, @pytest.mark.rtlsim) to control
+            which backend tests run. Configure fpgapart in kernel_test_config.platform.
         """
         fpgapart = kernel_test_config.get_fpgapart()
-        if fpgapart is None:
-            pytest.skip("Backend testing skipped (no FPGA part configured for this test)")
 
         def builder():
             # Reuse cached Stage 2 model
@@ -729,17 +643,10 @@ class SingleKernelTest(KernelTestBase_v2):
         2. Python execution produces correct results
         3. Results match Stage 1 QONNX golden reference (quantized) within tolerance
         """
-        # Use cached Stage 2 model (reused across python/cppsim/rtlsim)
-        op, model = stage2_model
-
-        # Execute via Python backend (uses Stage 2 model)
-        executor = PythonExecutor()
-        actual_outputs = executor.execute(op, model, test_inputs)
-
-        # Validate against golden (from Stage 1 fixture)
-        tolerance = kernel_test_config.get_tolerance_python()
-        self.validate_against_golden(
-            actual_outputs, golden_outputs, "Python execution", tolerance
+        # Delegate to shared utility (v5.0 - eliminates duplication)
+        self._execute_and_validate_golden(
+            stage2_model, test_inputs, golden_outputs,
+            "python", "Python execution", kernel_test_config
         )
 
     @pytest.mark.pipeline
@@ -774,24 +681,18 @@ class SingleKernelTest(KernelTestBase_v2):
 
         Requires:
             - VITIS_PATH environment variable
-            - Backend configured (get_backend_fpgapart() returns FPGA part)
+            - Backend configured via kernel_test_config.platform (PlatformConfig)
             - HLS backend available for kernel
 
-        Skips:
-            - If backend not configured (handled by stage3_model fixture)
-            - If VITIS_PATH not set (handled by CppSimExecutor)
+        Control execution:
+            - Use @pytest.mark.cppsim to mark backend tests
+            - Skip with: pytest -m "not cppsim" -v
+            - If VITIS_PATH not set, CppSimExecutor will fail with clear error
         """
-        # Use cached Stage 3 model (reused for rtlsim test)
-        op, model = stage3_model
-
-        # Execute via cppsim (uses Stage 3 backend model)
-        executor = CppSimExecutor()
-        actual_outputs = executor.execute(op, model, test_inputs)
-
-        # Validate against golden (from Stage 1 fixture)
-        tolerance = kernel_test_config.get_tolerance_cppsim()
-        self.validate_against_golden(
-            actual_outputs, golden_outputs, "HLS simulation (cppsim)", tolerance
+        # Delegate to shared utility (v5.0 - eliminates duplication)
+        self._execute_and_validate_golden(
+            stage3_model, test_inputs, golden_outputs,
+            "cppsim", "HLS simulation (cppsim)", kernel_test_config
         )
 
     @pytest.mark.pipeline
@@ -830,23 +731,17 @@ class SingleKernelTest(KernelTestBase_v2):
 
         Requires:
             - Vivado installation with XSim
-            - Backend configured (handled by stage3_model fixture)
+            - Backend configured via kernel_test_config.platform (PlatformConfig)
             - Backend available for kernel (HLS or RTL)
 
-        Skips:
-            - If backend not configured (handled by stage3_model fixture)
-            - If Vivado not found (handled by RTLSimExecutor)
+        Control execution:
+            - Use @pytest.mark.rtlsim to mark backend tests
+            - Skip with: pytest -m "not rtlsim" -v
+            - If Vivado not found, RTLSimExecutor will fail with clear error
         """
-        # Use cached Stage 3 model (same as cppsim test)
-        op, model = stage3_model
-
-        # Execute via rtlsim (uses Stage 3 backend model)
-        executor = RTLSimExecutor()
-        actual_outputs = executor.execute(op, model, test_inputs)
-
-        # Validate against golden (from Stage 1 fixture)
-        tolerance = kernel_test_config.get_tolerance_rtlsim()
-        self.validate_against_golden(
-            actual_outputs, golden_outputs, "RTL simulation (rtlsim)", tolerance
+        # Delegate to shared utility (v5.0 - eliminates duplication)
+        self._execute_and_validate_golden(
+            stage3_model, test_inputs, golden_outputs,
+            "rtlsim", "RTL simulation (rtlsim)", kernel_test_config
         )
 

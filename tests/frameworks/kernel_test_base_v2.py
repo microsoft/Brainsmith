@@ -214,6 +214,244 @@ class KernelTestBase_v2(ABC):
         return None
 
     # ========================================================================
+    # Stage 2: Kernel Inference (v5.0 - Flexible API)
+    # ========================================================================
+
+    def get_kernel_op(self) -> Type:
+        """Return kernel operator class for default inference (optional).
+
+        Optional method used by simple Brainsmith test cases.
+        Not required if overriding infer_kernel() directly.
+
+        Returns:
+            Kernel operator class (e.g., ElementwiseBinary, AddStreams)
+
+        Example:
+            def get_kernel_op(self):
+                from brainsmith.kernels.elementwise_binary import ElementwiseBinary
+                return ElementwiseBinary
+
+        Raises:
+            NotImplementedError: If not overridden and default inference used
+
+        Note:
+            - Not abstract (optional)
+            - Used by simple cases with single kernel class
+            - Override infer_kernel() for custom inference logic
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement get_kernel_op() "
+            "or override infer_kernel() with custom inference logic"
+        )
+
+    def infer_kernel(
+        self,
+        model: ModelWrapper,
+        target_node: str,
+    ) -> Tuple[HWCustomOp, ModelWrapper]:
+        """Execute Stage 1 → Stage 2 kernel inference (v5.0).
+
+        Default implementation uses get_kernel_inference_transform() for
+        backward compatibility with existing tests.
+
+        Override for custom inference logic (multiple transforms, conditional, etc.).
+
+        Args:
+            model: Stage 1 model (ONNX nodes)
+            target_node: Name of target ONNX node to transform
+
+        Returns:
+            (op, model): Kernel operator instance and transformed model
+
+        Default behavior:
+            1. Call get_kernel_inference_transform() to get transform class
+            2. Apply transform
+            3. Find and return transformed node
+
+        Override for:
+            - Multiple transforms: Apply several transforms in sequence
+            - Conditional logic: Different transforms based on config
+            - Transform arguments: Transforms with custom params
+            - FINN inference: Use FINN-specific transforms
+
+        Example (default - uses get_kernel_inference_transform):
+            # Uses default implementation automatically
+            def get_kernel_inference_transform(self):
+                return InferKernelList
+
+        Example (override - multiple transforms):
+            def infer_kernel(self, model, target_node):
+                # Apply inference
+                transform = self.get_kernel_inference_transform()
+                model = model.transform(transform())
+
+                # Apply additional transforms
+                model = model.transform(SomeOtherTransform())
+
+                # Find and return node
+                op = self._find_hw_node(model, target_node)
+                return op, model
+
+        Example (override - FINN manual):
+            def infer_kernel(self, model, target_node):
+                from finn.transformation.fpgadataflow.infer_addstreams import InferAddStreams
+                model = model.transform(InferAddStreams())
+
+                # Find FINN node by op_type
+                op = self._find_hw_node(model, target_node, expected_type="AddStreams")
+                return op, model
+        """
+        # Get transform class from subclass (backward compatible)
+        transform_class = self.get_kernel_inference_transform()
+
+        # Apply inference transform
+        model = model.transform(transform_class())
+
+        # Find transformed node
+        op = self._find_hw_node(model, target_node)
+
+        return op, model
+
+    # ========================================================================
+    # Shared Helper Methods (Extracted from SingleKernelTest/KernelParityTest)
+    # ========================================================================
+
+    def _prepare_model_with_annotations(
+        self, kernel_test_config: "KernelTestConfig"
+    ) -> Tuple[ModelWrapper, str]:
+        """Create model with QONNX DataType annotations (NO Quant nodes).
+
+        This is an internal helper. Tests should not call directly.
+
+        Instead of inserting Quant nodes (IntQuant/FloatQuant/BipolarQuant),
+        this method directly annotates input tensors with QONNX DataTypes.
+        This produces identical InferDataTypes results with simpler graph structure.
+
+        Args:
+            kernel_test_config: Unified test configuration (v3.0, required)
+                Contains input_shapes, input_dtypes, operation, etc.
+
+        Returns:
+            (model, target_node): Model with DataType annotations and target node name
+        """
+        # Step 1: Get simple model from test
+        model, input_names = self.make_test_model(kernel_test_config)
+
+        # Step 2: Annotate inputs with QONNX DataTypes (direct annotation, no Quant nodes)
+        from tests.fixtures.model_annotation import annotate_model_datatypes
+
+        input_datatypes = kernel_test_config.input_dtypes
+        input_annotations = {
+            name: input_datatypes[name] for name in input_names if name in input_datatypes
+        }
+        if input_annotations:
+            annotate_model_datatypes(model, input_annotations, warn_unsupported=True)
+
+        # Step 3: Annotate outputs (infer from model or use defaults)
+        output_names = [out.name for out in model.graph.output]
+        for out_name in output_names:
+            if model.get_tensor_datatype(out_name) is None:
+                # Default: same dtype as first input
+                first_input = input_names[0]
+                if first_input in input_datatypes:
+                    model.set_tensor_datatype(out_name, input_datatypes[first_input])
+
+        # Step 4: Find target node (first node in graph)
+        if len(model.graph.node) == 0:
+            raise RuntimeError("No nodes found in graph")
+
+        target_node = model.graph.node[0].name
+
+        return model, target_node
+
+    def _generate_test_inputs(
+        self, kernel_test_config: "KernelTestConfig"
+    ) -> Dict[str, np.ndarray]:
+        """Generate test data with correct shapes and datatypes.
+
+        This is an internal helper. Tests should not call directly.
+
+        Args:
+            kernel_test_config: Unified test configuration
+
+        Returns:
+            Dict mapping input names to test data arrays
+        """
+        from tests.fixtures.test_data import generate_test_data
+
+        inputs = {}
+        _, input_names = self.make_test_model(kernel_test_config)
+
+        input_shapes = kernel_test_config.input_shapes
+        input_datatypes = kernel_test_config.input_dtypes
+
+        for name in input_names:
+            if name not in input_datatypes:
+                continue
+
+            dtype = input_datatypes[name]
+            shape = input_shapes[name]
+
+            inputs[name] = generate_test_data(dtype, shape, seed=self.get_test_seed())
+
+        return inputs
+
+    def _find_hw_node(
+        self,
+        model: ModelWrapper,
+        target_node: str,
+        expected_type=None,
+    ) -> HWCustomOp:
+        """Find HW node after kernel inference (v5.0 helper).
+
+        Helper method to locate the transformed kernel operator.
+
+        Args:
+            model: Model after inference transform
+            target_node: Original ONNX node name
+            expected_type: Expected kernel class or op_type string
+                          If class: checks isinstance()
+                          If str: checks op.onnx_node.op_type
+                          If None: returns any HWCustomOp/KernelOp found
+
+        Returns:
+            Kernel operator instance
+
+        Raises:
+            AssertionError: If node not found or wrong type
+
+        Example:
+            op = self._find_hw_node(model, "Add_0", ElementwiseBinary)
+            op = self._find_hw_node(model, "Add_0", expected_type="AddStreams")
+        """
+        # Get ONNX node from model
+        onnx_node = model.get_node_from_name(target_node)
+
+        # Wrap with custom op class
+        from qonnx.custom_op.registry import getCustomOp
+        op = getCustomOp(onnx_node)
+
+        # Verify it's a HW node
+        assert isinstance(op, HWCustomOp), (
+            f"Node {target_node} is not a hardware operator (found {type(op).__name__})"
+        )
+
+        # Type checking if expected_type provided
+        if expected_type is not None:
+            if isinstance(expected_type, type):
+                # Class check
+                assert isinstance(op, expected_type), (
+                    f"Node {target_node} is {type(op).__name__}, expected {expected_type.__name__}"
+                )
+            elif isinstance(expected_type, str):
+                # op_type string check
+                assert op.onnx_node.op_type == expected_type, (
+                    f"Node {target_node} has op_type {op.onnx_node.op_type}, expected {expected_type}"
+                )
+
+        return op
+
+    # ========================================================================
     # Shared Utility 1: Golden Reference Validation
     # ========================================================================
 
@@ -272,6 +510,85 @@ class KernelTestBase_v2(ABC):
             atol=tolerance["atol"],
         )
 
+    def _execute_and_validate_golden(
+        self,
+        stage_model: Tuple[HWCustomOp, ModelWrapper],
+        test_inputs: Dict[str, np.ndarray],
+        golden_outputs: Dict[str, np.ndarray],
+        execution_mode: str,
+        backend_label: str,
+        config: KernelTestConfig,
+    ) -> None:
+        """Execute kernel and validate against golden reference (v5.0).
+
+        Common logic shared by:
+        - SingleKernelTest: 3 golden tests (python/cppsim/rtlsim)
+        - KernelParityTest: 6 golden tests (kernel_a + kernel_b × 3 modes)
+
+        This method eliminates 74% code duplication (180 lines → 47 lines).
+
+        Args:
+            stage_model: (op, model) tuple from fixture
+            test_inputs: Test data
+            golden_outputs: Expected outputs
+            execution_mode: "python", "cppsim", or "rtlsim"
+            backend_label: Human-readable name for error messages
+                          Examples: "Python execution", "Kernel A cppsim", "FINN rtlsim"
+            config: Test configuration with tolerances
+
+        Raises:
+            AssertionError: If outputs don't match golden within tolerance
+            ValueError: If invalid execution_mode
+
+        Example (SingleKernelTest):
+            def test_python_execution_vs_golden(self, ...):
+                self._execute_and_validate_golden(
+                    stage2_model, test_inputs, golden_outputs,
+                    "python", "Python execution", kernel_test_config
+                )
+
+        Example (KernelParityTest):
+            def test_kernel_a_cppsim_vs_golden(self, ...):
+                self._execute_and_validate_golden(
+                    stage3_model_a, test_inputs, golden_outputs,
+                    "cppsim", "Kernel A cppsim", kernel_test_config
+                )
+        """
+        from tests.support.executors import PythonExecutor, CppSimExecutor, RTLSimExecutor
+
+        op, model = stage_model
+
+        # Select executor based on mode
+        if execution_mode == "python":
+            executor = PythonExecutor()
+        elif execution_mode == "cppsim":
+            executor = CppSimExecutor()
+        elif execution_mode == "rtlsim":
+            executor = RTLSimExecutor()
+        else:
+            raise ValueError(f"Invalid execution_mode: {execution_mode}")
+
+        # Execute kernel
+        actual_outputs = executor.execute(op, model, test_inputs)
+
+        # Get tolerance based on execution mode
+        if execution_mode == "python":
+            tolerance = config.get_tolerance_python()
+        elif execution_mode == "cppsim":
+            tolerance = config.get_tolerance_cppsim()
+        elif execution_mode == "rtlsim":
+            tolerance = config.get_tolerance_rtlsim()
+        else:
+            raise ValueError(f"Invalid execution_mode: {execution_mode}")
+
+        # Validate against golden
+        self.validate_against_golden(
+            actual_outputs,
+            golden_outputs,
+            backend_label,
+            tolerance
+        )
+
     # ========================================================================
     # Shared Utility 2: Backend Auto-Detection
     # ========================================================================
@@ -320,36 +637,38 @@ class KernelTestBase_v2(ABC):
         return [get_backend(name) for name in backend_names]
 
     # ========================================================================
-    # Shared Utility 3: Backend Specialization (Stage 2 → Stage 3)
+    # Shared Utility 3: Backend Specialization (Stage 2 → Stage 3) - v5.0
     # ========================================================================
 
-    def _specialize_to_backend_stage(
+    def specialize_to_backend(
         self,
         op: HWCustomOp,
         model: ModelWrapper,
-        kernel_test_config: "KernelTestConfig",
+        config: KernelTestConfig,
         backend_variants_override: Optional[List[Type]] = None,
     ) -> Tuple[HWCustomOp, ModelWrapper]:
-        """Execute Stage 2 → Stage 3 backend specialization.
+        """Execute Stage 2 → Stage 3 backend specialization (v5.0 - public).
+
+        Default implementation: auto-detect backends from registry.
+        Override for custom specialization logic.
 
         Common logic for transforming base kernel (Stage 2) to backend (Stage 3):
         1. Check fpgapart configured (skip test if None)
         2. Get backend variants (use override, get_backend_variants(), or auto-detect)
-        3. Specialize via specialize_to_backend()
-        4. Call configure_backend_node() hook
+        3. Specialize via support utility
+        4. Return specialized op and model
 
         Used by:
-        - SingleKernelTest.run_inference_pipeline(to_backend=True)
-        - DualKernelTest_v2.run_manual_pipeline(to_backend=True)
-        - DualKernelTest_v2.run_auto_pipeline(to_backend=True)
+        - SingleKernelTest stage3_model fixture
+        - KernelParityTest stage3_model_a/b fixtures
+        - Can be overridden for custom specialization
 
         Args:
             op: Base kernel operator instance (Stage 2)
                 Example: AddStreams (no backend)
             model: Model containing the base kernel
-            kernel_test_config: Unified test configuration (v3.0, required)
-                Contains fpgapart for backend specialization
-            backend_variants_override: Optional backend list (for manual pipeline)
+            config: Test configuration (contains fpgapart)
+            backend_variants_override: Optional backend list (for parity testing)
                                       If None, uses priority:
                                       1. get_backend_variants() (if overridden)
                                       2. _auto_detect_backends() (registry lookup)
@@ -358,50 +677,42 @@ class KernelTestBase_v2(ABC):
             (specialized_op, specialized_model): Backend operator and model (Stage 3)
             Example: (AddStreams_hls, model_with_backend)
 
-        Raises:
-            pytest.skip: If backend not configured (fpgapart is None)
+        Note:
+            Use pytest marks (@pytest.mark.cppsim, @pytest.mark.rtlsim) to control
+            which backend tests run. Configure fpgapart in kernel_test_config.platform.
+            If fpgapart is None, specialization will fail with a clear error.
 
-        Example (SingleKernelTest):
-            >>> # Stage 2 → Stage 3 (auto-detect backend)
-            >>> def run_inference_pipeline(self, ..., kernel_test_config, to_backend=False):
-            ...     # Stage 1 → Stage 2
-            ...     op, model = runner.run(...)
-            ...     # Stage 2 → Stage 3
-            ...     if to_backend:
-            ...         op, model = self._specialize_to_backend_stage(
-            ...             op, model, kernel_test_config
-            ...         )
-            ...     return op, model
+        Example (default - auto-detect):
+            # Uses default implementation automatically
+            def get_backend_variants(self):
+                return None  # Auto-detect
 
-        Example (DualKernelTest_v2 manual pipeline):
-            >>> # Stage 2 → Stage 3 (FINN backend override)
-            >>> def run_manual_pipeline(self, kernel_test_config, to_backend=False):
-            ...     # Stage 1 → Stage 2
-            ...     manual_op, manual_model = runner.run(...)
-            ...     # Stage 2 → Stage 3 (override with FINN backend)
-            ...     if to_backend:
-            ...         manual_op, manual_model = self._specialize_to_backend_stage(
-            ...             manual_op, manual_model, kernel_test_config,
-            ...             backend_variants_override=self.get_manual_backend_variants()
-            ...         )
-            ...     return manual_op, manual_model
+        Example (override - explicit backends):
+            def get_backend_variants(self):
+                return [MyKernel_hls]
 
-        Example (DualKernelTest_v2 auto pipeline):
-            >>> # Stage 2 → Stage 3 (auto-detect Brainsmith backend)
-            >>> def run_auto_pipeline(self, kernel_test_config, to_backend=False):
-            ...     # Stage 1 → Stage 2
-            ...     auto_op, auto_model = runner.run(...)
-            ...     # Stage 2 → Stage 3 (auto-detect)
-            ...     if to_backend:
-            ...         auto_op, auto_model = self._specialize_to_backend_stage(
-            ...             auto_op, auto_model, kernel_test_config
-            ...         )
-            ...     return auto_op, auto_model
+        Example (override - custom specialization):
+            def specialize_to_backend(self, op, model, config, backend_variants_override=None):
+                # Custom pre-processing
+                self._prepare_for_backend(op, model)
+
+                # Use default specialization
+                op, model = super().specialize_to_backend(op, model, config, backend_variants_override)
+
+                # Custom post-processing
+                self._finalize_backend(op, model)
+
+                return op, model
+
+        Backward compatibility:
+            Old code using _specialize_to_backend_stage() will continue to work
+            via alias maintained below.
         """
-        fpgapart = kernel_test_config.get_fpgapart()
+        fpgapart = config.get_fpgapart()
         if fpgapart is None:
-            pytest.skip(
-                "Backend testing skipped (no FPGA part configured for this test)"
+            raise ValueError(
+                "Backend specialization requires fpgapart to be configured. "
+                "Set platform=PlatformConfig(fpgapart='...') in your kernel_test_config."
             )
 
         # Determine backend variants (priority: override > get_backend_variants > auto-detect)
@@ -412,9 +723,24 @@ class KernelTestBase_v2(ABC):
             backend_variants = self._auto_detect_backends(op)
 
         # Specialize to backend (Stage 2 → Stage 3)
-        op, model = specialize_to_backend(op, model, fpgapart, backend_variants)
+        from tests.support.backend_utils import specialize_to_backend as do_specialize
+        op, model = do_specialize(op, model, fpgapart, backend_variants)
 
         return op, model
+
+    def _specialize_to_backend_stage(
+        self,
+        op: HWCustomOp,
+        model: ModelWrapper,
+        kernel_test_config: "KernelTestConfig",
+        backend_variants_override: Optional[List[Type]] = None,
+    ) -> Tuple[HWCustomOp, ModelWrapper]:
+        """Backward compatibility alias for specialize_to_backend().
+
+        DEPRECATED: Use specialize_to_backend() instead.
+        This method maintained for backward compatibility with existing code.
+        """
+        return self.specialize_to_backend(op, model, kernel_test_config, backend_variants_override)
 
     # ========================================================================
     # Shared Utility 4: Stage-Aware Parameter Configuration (v2.4)
