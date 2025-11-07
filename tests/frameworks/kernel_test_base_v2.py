@@ -1,24 +1,26 @@
-"""Test configuration and shared utilities for v2.3 frameworks.
+"""Test framework base class with compositional config (v4.0).
 
 This module provides:
-1. KernelTestConfig: Minimal abstract base class for fixture-based kernel tests (v2.0+)
-2. KernelTestBase_v2: Shared utilities for v2.3 frameworks (NEW in Phase 2)
+1. KernelTestBase_v2: Abstract base class for kernel tests with composition-based config
 
 Design Philosophy:
-- Pytest fixtures control parameterization (NOT test methods)
+- Composition over inheritance (config as parameter, not inheritance)
+- Pytest fixtures control parameterization
 - Tests define operations with symbolic shapes (concrete from fixtures)
-- Direct DataType annotations (NO Quant nodes) in v2.3
+- Direct DataType annotations (NO Quant nodes) in v2.3+
 - Automatic test data generation with correct types
-- Shared utilities extracted for DualKernelTest_v2 reuse
+- Shared utilities for SingleKernelTest and DualKernelTest_v2
 
-Architecture (v2.3):
-    KernelTestConfig (abstract interface)
-        ↓
-    KernelTestBase_v2 (shared utilities) ← NEW
-        ↓
+Architecture (v4.0):
+    KernelTestBase_v2 (abstract base class + shared utilities)
+        ↓ inherits
     ┌───────────────────┬──────────────────┐
     SingleKernelTest    DualKernelTest_v2
     (fixture-based)     (attribute-based)
+
+    KernelTestConfig (dataclass from test_config.py)
+        ↓ passed as parameter to methods
+    Test methods receive config, not inherit from it
 
 Usage:
     from tests.frameworks.kernel_test_base_v2 import KernelTestBase_v2
@@ -70,36 +72,53 @@ from tests.support.backend_utils import specialize_to_backend
 # Import validation utilities
 from tests.support.validator import GoldenValidator
 
+# Import compositional config (v4.0)
+from tests.frameworks.test_config import KernelTestConfig
 
-class KernelTestConfig(ABC):
-    """Minimal configuration interface for fixture-based kernel tests (v2.0+).
 
-    Subclasses implement:
-    - make_test_model(input_shapes): Create model with symbolic shapes
-    - get_kernel_inference_transform(): Return transform class
+class KernelTestBase_v2(ABC):
+    """Abstract base class for kernel tests with compositional config (v4.0).
 
-    Optional overrides:
-    - configure_kernel_node(op, model): Configure PE, SIMD, etc.
-    - get_tolerance_*(): Validation tolerances
-    - get_backend_fpgapart(): Enable backend testing
+    This base class provides:
+    1. Abstract methods that subclasses MUST implement
+    2. Shared utilities for SingleKernelTest and DualKernelTest_v2
+    3. Configuration hooks for parameterization
 
-    Pytest fixtures provide:
-    - input_shapes: Dict[str, Tuple[int, ...]] (concrete shapes)
-    - input_datatypes: Dict[str, DataType] (concrete types)
+    Architecture (v4.0):
+        KernelTestBase_v2 (abstract base class) ← THIS CLASS
+            ↓ inherits
+        ┌───────────────────┬──────────────────┐
+        SingleKernelTest    DualKernelTest_v2
 
-    Framework handles:
-    - Automatic DataType annotations (v2.3: direct annotations, no Quant nodes)
-    - Automatic test data generation (using Phase 1 utilities)
-    - Automatic golden reference (QONNX execution on annotated model)
+        KernelTestConfig (dataclass, passed as parameter)
+            ↓ composition (not inheritance)
+        Test methods receive config via pytest fixtures
+
+    Shared Utilities:
+    1. validate_against_golden(): GoldenValidator-based output validation
+    2. _auto_detect_backends(): Registry-based backend auto-detection
+    3. _specialize_to_backend_stage(): Stage 2→3 specialization with overrides
+    4. auto_configure_from_fixture(): Auto-apply config parameters
+
+    Abstract Methods (subclasses MUST implement):
+    1. make_test_model(kernel_test_config): Create test model
+    2. get_kernel_inference_transform(): Return transform class
+
+    Optional Configuration Hooks:
+    1. configure_kernel_node(op, model): Stage 2 configuration (deprecated)
+    2. configure_backend_node(op, model): Stage 3 configuration (deprecated)
+    3. configure_parameters(op, model, stage): Unified stage-aware configuration
+    4. get_backend_variants(): Backend variant classes
+    5. get_test_seed(): Random seed for test data
     """
 
     # ========================================================================
-    # Abstract Methods - Subclasses MUST implement (2 only!)
+    # Abstract Methods - Subclasses MUST implement
     # ========================================================================
 
     @abstractmethod
     def make_test_model(
-        self, kernel_test_config: "KernelTestConfig"
+        self, kernel_test_config: KernelTestConfig
     ) -> Tuple[ModelWrapper, List[str]]:
         """Create test model from unified configuration.
 
@@ -107,58 +126,43 @@ class KernelTestConfig(ABC):
         Framework automatically annotates tensors based on config.input_dtypes.
 
         Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-                Contains:
-                - input_shapes: Extract via config.input_shapes
-                - input_dtypes: Extract via config.input_dtypes
-                - operation: For polymorphic models (config.operation)
-                - dse_dimensions: For design space parameters
+            kernel_test_config: Unified test configuration (v4.0)
+                Access via properties:
+                - config.input_shapes: Dict[str, Tuple[int, ...]]
+                - config.input_dtypes: Dict[str, DataType]
+                - config.operation: str (for polymorphic models)
+                - config.dse_dimensions: Dict[str, Any]
 
         Returns:
             (model, input_names):
                 - model: ONNX model with operations (NO DataType annotations)
                 - input_names: List of input tensor names to annotate
 
-        Example (v3.0 - Polymorphic model creation):
+        Example (v4.0):
             def make_test_model(self, kernel_test_config):
-                '''Create operation dynamically based on config.'''
+                '''Create Add operation with shapes from config.'''
                 import onnx.helper as helper
                 from onnx import TensorProto
 
-                # Extract shapes from config
-                input_shapes = kernel_test_config.input_shapes
+                # Extract from compositional config
+                shapes = kernel_test_config.input_shapes
 
-                # Use concrete shapes from config
+                # Create model with concrete shapes
                 inp = helper.make_tensor_value_info(
-                    "input", TensorProto.FLOAT, input_shapes["input"]
+                    "input", TensorProto.FLOAT, shapes["input"]
                 )
                 param = helper.make_tensor_value_info(
-                    "param", TensorProto.FLOAT, input_shapes["param"]
+                    "param", TensorProto.FLOAT, shapes["param"]
                 )
                 out = helper.make_tensor_value_info(
-                    "output", TensorProto.FLOAT, input_shapes["input"]
+                    "output", TensorProto.FLOAT, shapes["input"]
                 )
 
-                # Polymorphic operation from config
-                node = helper.make_node(
-                    kernel_test_config.operation,
-                    ["input", "param"],
-                    ["output"]
-                )
+                node = helper.make_node("Add", ["input", "param"], ["output"])
                 graph = helper.make_graph([node], "test", [inp, param], [out])
 
                 from qonnx.util.basic import qonnx_make_model
                 model = ModelWrapper(qonnx_make_model(graph))
-
-                # Framework annotates these inputs automatically
-                return model, ["input", "param"]
-
-        Example (v3.0 - Single operation):
-            def make_test_model(self, kernel_test_config):
-                '''Create Add operation with shapes from config.'''
-                input_shapes = kernel_test_config.input_shapes
-
-                # ... create Add node with input_shapes ...
 
                 return model, ["input", "param"]
 
@@ -191,41 +195,6 @@ class KernelTestConfig(ABC):
     # Optional Configuration Hooks
     # ========================================================================
 
-    def configure_kernel_node(self, op: HWCustomOp, model: ModelWrapper) -> None:
-        """Configure kernel node after inference (Stage 2, optional).
-
-        DEPRECATED in v2.4: Use configure_parameters(op, model, stage=2) instead.
-
-        This method is called at Stage 2 (kernel). Parameters that only exist
-        at Stage 3 (backend) will cause errors. Override configure_parameters()
-        for stage-aware configuration.
-
-        Args:
-            op: Base kernel operator instance (e.g., AddStreams, MVAU)
-            model: Model containing the operator
-
-        Default:
-            No configuration (empty implementation)
-        """
-        pass
-
-    def configure_backend_node(self, op: HWCustomOp, model: ModelWrapper) -> None:
-        """Configure backend node after specialization (Stage 3, optional).
-
-        DEPRECATED in v2.4: Use configure_parameters(op, model, stage=3) instead.
-
-        Override configure_parameters() for unified stage-aware configuration.
-        This allows setting parameters at both Stage 2 and Stage 3 in a single method.
-
-        Args:
-            op: Backend operator instance (e.g., AddStreams_hls, LayerNorm_rtl)
-            model: Model containing the operator
-
-        Default:
-            No configuration (empty implementation)
-        """
-        pass
-
     def get_test_seed(self) -> int:
         """Return random seed for test data generation (optional).
 
@@ -234,78 +203,6 @@ class KernelTestConfig(ABC):
         """
         return 42
 
-    def get_tolerance_python(self, kernel_test_config: "KernelTestConfig") -> Dict[str, float]:
-        """Get Python execution tolerance from config.
-
-        This is a thin delegation wrapper - config object owns the logic and defaults.
-
-        Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-
-        Returns:
-            Dict with 'rtol' and 'atol' keys for np.allclose()
-            Default: {"rtol": 1e-7, "atol": 1e-9} (very tight)
-
-        Example:
-            tolerance = self.get_tolerance_python(kernel_test_config)
-            np.allclose(actual, expected, **tolerance)
-        """
-        return kernel_test_config.get_tolerance_python()
-
-    def get_tolerance_cppsim(self, kernel_test_config: "KernelTestConfig") -> Dict[str, float]:
-        """Get C++ simulation tolerance from config.
-
-        This is a thin delegation wrapper - config object owns the logic and defaults.
-
-        Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-
-        Returns:
-            Dict with 'rtol' and 'atol' keys for np.allclose()
-            Default: {"rtol": 1e-5, "atol": 1e-6} (moderate for fixed-point)
-
-        Example:
-            tolerance = self.get_tolerance_cppsim(kernel_test_config)
-            np.allclose(actual, expected, **tolerance)
-        """
-        return kernel_test_config.get_tolerance_cppsim()
-
-    def get_tolerance_rtlsim(self, kernel_test_config: "KernelTestConfig") -> Dict[str, float]:
-        """Get RTL simulation tolerance from config.
-
-        This is a thin delegation wrapper - config object owns the logic and defaults.
-
-        Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-
-        Returns:
-            Dict with 'rtol' and 'atol' keys for np.allclose()
-            Default: Delegates to cppsim tolerance
-
-        Example:
-            tolerance = self.get_tolerance_rtlsim(kernel_test_config)
-            np.allclose(actual, expected, **tolerance)
-        """
-        return kernel_test_config.get_tolerance_rtlsim()
-
-    def get_backend_fpgapart(self, kernel_test_config: "KernelTestConfig") -> Optional[str]:
-        """Get FPGA part string from config for backend specialization.
-
-        This is a thin delegation wrapper - config object owns the logic.
-
-        Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-
-        Returns:
-            str: FPGA part string (e.g., "xc7z020clg400-1")
-            None: Backend specialization disabled
-
-        Example:
-            fpgapart = self.get_backend_fpgapart(kernel_test_config)
-            if fpgapart:
-                op.set_nodeattr("fpgapart", fpgapart)
-        """
-        return kernel_test_config.get_fpgapart()
 
     def get_backend_variants(self) -> Optional[List[Type]]:
         """Backend variant classes for specialization in priority order.
@@ -315,25 +212,6 @@ class KernelTestConfig(ABC):
             Default: None (auto-detect HLS backend based on kernel op_type)
         """
         return None
-
-
-class KernelTestBase_v2(KernelTestConfig):
-    """Shared utilities for v2.3 test frameworks.
-
-    This intermediate base class provides common utilities shared by both
-    SingleKernelTest and DualKernelTest_v2:
-
-    1. validate_against_golden(): GoldenValidator-based output validation
-    2. _auto_detect_backends(): Registry-based backend auto-detection
-    3. _specialize_to_backend_stage(): Stage 2→3 specialization with overrides
-
-    Inheritance Chain:
-        KernelTestConfig (abstract interface)
-            ↓ inherits
-        KernelTestBase_v2 (shared utilities) ← THIS CLASS
-            ↓ inherits
-        SingleKernelTest / DualKernelTest_v2 (framework-specific)
-    """
 
     # ========================================================================
     # Shared Utility 1: Golden Reference Validation
@@ -520,11 +398,10 @@ class KernelTestBase_v2(KernelTestConfig):
             ...         )
             ...     return auto_op, auto_model
         """
-        fpgapart = self.get_backend_fpgapart(kernel_test_config)
+        fpgapart = kernel_test_config.get_fpgapart()
         if fpgapart is None:
             pytest.skip(
-                "Backend specialization not configured. "
-                "Override get_backend_fpgapart() to enable backend testing."
+                "Backend testing skipped (no FPGA part configured for this test)"
             )
 
         # Determine backend variants (priority: override > get_backend_variants > auto-detect)
@@ -536,10 +413,6 @@ class KernelTestBase_v2(KernelTestConfig):
 
         # Specialize to backend (Stage 2 → Stage 3)
         op, model = specialize_to_backend(op, model, fpgapart, backend_variants)
-
-        # Stage 3 configuration hook (backend-specific parameters)
-        # Example: op.set_nodeattr("mem_mode", "internal_decoupled")
-        self.configure_backend_node(op, model)
 
         return op, model
 
@@ -572,66 +445,6 @@ class KernelTestBase_v2(KernelTestConfig):
         """
         return hasattr(op, 'kernel_schema')
 
-    def set_dse_param(self, op, model: ModelWrapper, name: str, value):
-        """Set DSE parameter using correct API for node type.
-
-        This is a convenience helper for setting single DSE parameters.
-        For multiple Brainsmith params, chain with_dimension() directly
-        for better performance:
-
-            point = op.design_point \\
-                .with_dimension("PE", 32) \\
-                .with_dimension("SIMD", 16) \\
-                .with_dimension("mem_mode", "internal")
-            op.apply_design_point(point)
-
-        Args:
-            op: Operator instance (KernelOp or HWCustomOp)
-            model: ModelWrapper (needed for Brainsmith initialization)
-            name: Parameter name (e.g., "PE", "SIMD")
-            value: Parameter value
-
-        Raises:
-            AttributeError: Parameter not found, with helpful context
-
-        Example:
-            # Single parameter
-            self.set_dse_param(op, model, "PE", 32)
-
-            # Multiple parameters (use native API for efficiency)
-            if self.is_brainsmith(op):
-                point = op.design_point \\
-                    .with_dimension("PE", 32) \\
-                    .with_dimension("SIMD", 16)
-                op.apply_design_point(point)
-        """
-        if self.is_brainsmith(op):
-            # Brainsmith: Use immutable design point API
-            op._ensure_ready(model)
-            try:
-                point = op.design_point.with_dimension(name, value)
-                op.apply_design_point(point)
-            except KeyError as e:
-                available = list(op.design_space.dimensions.keys())
-                raise AttributeError(
-                    f"DSE parameter '{name}' not found on {op.__class__.__name__}.\n"
-                    f"Available DSE dimensions: {available}\n"
-                    f"Current stage: Stage {self.get_stage(op)}\n"
-                    f"Tip: Check if parameter only exists at Stage 3 (backend)"
-                ) from e
-        else:
-            # FINN: Direct nodeattr mutation
-            try:
-                op.set_nodeattr(name, value)
-            except (AttributeError, KeyError) as e:
-                available = [k for k in op.get_nodeattr_types().keys()
-                            if not k.startswith('code_gen') and not k.startswith('exec')]
-                raise AttributeError(
-                    f"Parameter '{name}' not found on {op.__class__.__name__}.\n"
-                    f"Available parameters: {available}\n"
-                    f"Current stage: Stage {self.get_stage(op)}"
-                ) from e
-
     def configure_parameters(self, op, model: ModelWrapper, stage: int):
         """Configure node parameters at any stage (NEW HOOK in v2.4).
 
@@ -647,7 +460,6 @@ class KernelTestBase_v2(KernelTestConfig):
         Use native APIs directly:
             • op.set_nodeattr(name, value) - Structural/runtime params
             • op.design_point.with_dimension() - Brainsmith DSE (multi-param)
-            • self.set_dse_param() - Convenience for single DSE param
 
         Detection helpers:
             • self.is_brainsmith(op) - Check if Brainsmith KernelOp
@@ -671,17 +483,7 @@ class KernelTestBase_v2(KernelTestConfig):
                         # FINN
                         op.set_nodeattr("PE", 32)
         """
-        # Backward compatibility: call old hooks if overridden
-        if stage == 2 and self._has_custom_impl('configure_kernel_node'):
-            self.configure_kernel_node(op, model)
-        elif stage == 3 and self._has_custom_impl('configure_backend_node'):
-            self.configure_backend_node(op, model)
-
-    def _has_custom_impl(self, method_name: str) -> bool:
-        """Check if subclass overrides a method."""
-        base_method = getattr(KernelTestBase_v2, method_name, None)
-        subclass_method = getattr(self.__class__, method_name, None)
-        return base_method is not subclass_method
+        pass
 
     # ========================================================================
     # Shared Utility 5: Auto-Configuration from Fixture (v2.5)
@@ -692,7 +494,7 @@ class KernelTestBase_v2(KernelTestConfig):
         op,
         model: ModelWrapper,
         stage: int,
-        config: 'KernelTestConfig'
+        config: KernelTestConfig
     ) -> None:
         """Auto-apply configuration from unified fixture (v2.5).
 
@@ -783,7 +585,7 @@ class KernelTestBase_v2(KernelTestConfig):
         # Apply the configured design point
         op.apply_design_point(point)
 
-    def _apply_finn_config(self, op, config: 'KernelTestConfig', stage: int):
+    def _apply_finn_config(self, op, config: KernelTestConfig, stage: int):
         """Apply configuration to FINN HWCustomOp node.
 
         FINN nodes use direct nodeattr mutation instead of design points.

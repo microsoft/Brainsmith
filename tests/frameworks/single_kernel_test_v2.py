@@ -618,7 +618,7 @@ class SingleKernelTest(KernelTestBase_v2):
         actual_outputs = executor.execute(op, model, test_inputs)
 
         # Validate against golden (from Stage 1 fixture)
-        tolerance = self.get_tolerance_python(kernel_test_config)
+        tolerance = kernel_test_config.get_tolerance_python()
         self.validate_against_golden(actual_outputs, golden_outputs, "Python execution", tolerance)
 
     @pytest.mark.pipeline
@@ -663,7 +663,7 @@ class SingleKernelTest(KernelTestBase_v2):
         actual_outputs = executor.execute(op, model, test_inputs)
 
         # Validate against golden (from Stage 1 fixture)
-        tolerance = self.get_tolerance_cppsim(kernel_test_config)
+        tolerance = kernel_test_config.get_tolerance_cppsim()
         self.validate_against_golden(actual_outputs, golden_outputs, "HLS simulation (cppsim)", tolerance)
 
     @pytest.mark.pipeline
@@ -711,6 +711,6 @@ class SingleKernelTest(KernelTestBase_v2):
         actual_outputs = executor.execute(op, model, test_inputs)
 
         # Validate against golden (from Stage 1 fixture)
-        tolerance = self.get_tolerance_rtlsim(kernel_test_config)
+        tolerance = kernel_test_config.get_tolerance_rtlsim()
         self.validate_against_golden(actual_outputs, golden_outputs, "RTL simulation (rtlsim)", tolerance)
 

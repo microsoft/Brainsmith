@@ -79,7 +79,7 @@ fi
 declare -A GIT_DEPS=(
     ["brevitas"]="https://github.com/Xilinx/brevitas.git@deps/rm_numpy"
     ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git@custom/brainsmith"
-    ["finn"]="https://github.com/tafk7/finn.git@custom/specialize-backend"
+    ["finn"]="https://github.com/tafk7/finn.git@feature/logging-integration-transformer"
     ["finn-experimental"]="https://github.com/Xilinx/finn-experimental.git@0724be21111a21f0d81a072fccc1c446e053f851"
     ["dataset-loading"]="https://github.com/fbcotter/dataset_loading.git@0.0.4"
 )
@@ -125,6 +125,9 @@ resolve_ref_to_commit() {
     local ref="$2"
 
     cd "$name"
+
+    # Fetch latest from remote to ensure we have up-to-date refs
+    git fetch origin --quiet 2>/dev/null || true
 
     # First try to resolve as-is (works for local branches, tags, and hashes)
     local resolved_commit=$(git rev-parse "$ref" 2>/dev/null || echo "")

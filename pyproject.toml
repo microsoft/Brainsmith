@@ -82,18 +82,34 @@ minversion = "6.0"
 addopts = ["-ra"]  # Show all test outcomes
 testpaths = ["tests"]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    # Test Framework Type
+    "single_kernel: marks tests using SingleKernelTest framework",
+    "dual_kernel: marks tests using DualKernelTest framework",
     "integration: marks tests as integration tests",
+
+    # Test Purpose
+    "pipeline: marks tests validating pipeline transformations",
+    "golden: marks tests comparing against golden reference outputs",
     "parity: marks tests comparing manual vs auto HWCustomOp implementations",
+
+    # Test Selection (Coverage)
+    "basic_validation: marks representative test cases for quick validation",
+
+    # Execution Mode
+    "python_only: marks tests that only validate Python execution (no backend)",
     "cppsim: marks tests requiring C++ simulation with Vivado/Vitis HLS",
+    "rtlsim: marks tests requiring RTL simulation",
+    "hardware: marks tests that require actual hardware",
+
+    # Speed/Resources
+    "fast: marks tests that run quickly",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+
+    # Build Requirements
     "hls: marks tests requiring HLS code generation",
     "rtl: marks tests requiring RTL synthesis",
-    "rtlsim: marks tests requiring RTL simulation",
-    "fast: marks tests that run quickly",
     "finn_build: marks tests that perform FINN builds",
-    "rtl_sim: marks tests that require RTL simulation",
     "bitfile: marks tests that generate bitfiles",
-    "hardware: marks tests that require actual hardware",
 ]
 
 # Coverage configuration - optional for alpha (pre-release) stage
@@ -219,6 +235,7 @@ pytest-timeout = "~=2.2"     # Prevent hanging builds
 # Regression testing
 syrupy = "~=4.0"             # Snapshot testing for tree structures
 pytest-regressions = "~=2.5" # Golden file testing for artifacts
+pytest-cases = ">=3.8.1,<3.9.0"     # Parameterization with case functions
 
 # Essential linting only
 ruff = "~=0.1.0"

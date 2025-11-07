@@ -839,7 +839,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(manual_op, manual_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_python(kernel_test_config)
+        tolerance = kernel_test_config.get_tolerance_python()
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Manual Python execution", tolerance
         )
@@ -862,7 +862,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(auto_op, auto_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_python(kernel_test_config)
+        tolerance = kernel_test_config.get_tolerance_python()
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Auto Python execution", tolerance
         )
@@ -887,7 +887,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(manual_op, manual_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_cppsim(kernel_test_config)
+        tolerance = kernel_test_config.get_tolerance_cppsim()
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Manual HLS cppsim", tolerance
         )
@@ -912,7 +912,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(auto_op, auto_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_cppsim(kernel_test_config)
+        tolerance = kernel_test_config.get_tolerance_cppsim()
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Auto HLS cppsim", tolerance
         )
@@ -937,7 +937,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(manual_op, manual_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_rtlsim(kernel_test_config)
+        tolerance = kernel_test_config.get_tolerance_rtlsim()
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Manual RTL rtlsim", tolerance
         )
@@ -962,7 +962,7 @@ class DualKernelTest_v2(KernelTestBase_v2):
         actual_outputs = executor.execute(auto_op, auto_model, inputs)
 
         # Validate (uses inherited method from KernelTestBase_v2)
-        tolerance = self.get_tolerance_rtlsim(kernel_test_config)
+        tolerance = kernel_test_config.get_tolerance_rtlsim()
         self.validate_against_golden(
             actual_outputs, golden_outputs, "Auto RTL rtlsim", tolerance
         )

@@ -112,7 +112,6 @@ class FINNAdapter:
 
             # CRITICAL: Set True to prevent FINN from redirecting stdout/stderr
             # which conflicts with Rich console logging, causing hangs
-            finn_config["no_stdout_redirect"] = True
             finn_config["verbose"] = True
 
             # Disable pdb debugger for automated builds (pytest captures stdin/stdout)

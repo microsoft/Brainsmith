@@ -7,7 +7,7 @@
 
 ## Installation Options
 
-#### 1. Clone the Repository
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/microsoft/brainsmith.git ./brainsmith
@@ -19,44 +19,43 @@ cd brainsmith
 !!! note "Prerequisites"
     Python 3.11+ and [Poetry](https://python-poetry.org/docs/#installation) installed
 
+---
 
-#### 2. Run Automated Setup
-
-The `setup-venv.sh` script creates a virtual environment, installs dependencies, and configures direnv if available:
+#### i. Run Automated Setup
 
 ```bash
 ./setup-venv.sh
 ```
 
 This script will:
+```
 - Create `.venv` virtual environment
-- Install all dependencies via Poetry
+- Install pip dependencies via Poetry
+- Install Git & C++ dependencies into `deps/`
 - Initialize project configuration in `.brainsmith/`
 - Set up direnv integration (if direnv is installed)
+```
 
-#### 3. Configure Vivado Paths
+#### ii. Configure Project Settings
 
-Edit the project configuration file to match your Xilinx installation:
+Edit the project configuration file to customize project settings.
 
 ```bash
 vim .brainsmith/config.yaml
 ```
 
-Set the following required fields:
+Example configuration (see all settings [here](../api/settings.md)):
 
 ```yaml
-xilinx_path: /opt/Xilinx/Vivado/2024.2  # Path to your Vivado installation
-xilinx_version: 2024.2                   # Vivado version
-build_dir: /tmp/finn_dev_${USER}         # Optional: build directory
+xilinx_path: /<path-to-xilinx-tools>/Xilinx/Vivado
+xilinx_version: 2024.2
 ```
 
-#### 4. Activate Environment
+#### iii. Activate Environment
 
 You have two options for activating the environment:
 
 **Option 1: direnv (automatic)**
-
-If direnv is installed and configured:
 
 ```bash
 cd .  # Triggers direnv to load .brainsmith/env.sh
