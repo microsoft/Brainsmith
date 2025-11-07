@@ -1,18 +1,17 @@
 # Multilayer Offload (MLO)
 
-Multilayer Offload (MLO) is a powerful feature developed by the FINN and Brainsmith teams that enables the implementation of much larger neural networks by implementing a repeating slice of the model (such as a single transformer encoder layer) in hardware and cycling model weights through external memory (DRAM/HBM). This technique allows the acceleration of models that would otherwise be too large to fit on the FPGA.
+Multilayer Offload (MLO) is a powerful feature recently added to FINN that enables the implementation of much larger neural networks by implementing a repeating slice of the model (such as a single transformer encoder layer) in hardware and cycling model weights through external memory (DRAM/HBM). This technique allows models that would otherwise be too large to be mapped to the FPGA.
 
 ## Overview
 
-
-have stored all model weights on-chip in BRAM or UltraRAM, which severely limits the size of models that can be implemented. MLO overcomes this limitation by:
+In many cases large Deep Learning models such as transformers and SLMs (and LLMs for that matter) have millions or billions of parameters processed over several identical repeating layers. One solution would be to map these layers to multiple FPGAs but the sheer quantity of layers (e.g. 32 layers in the PHI-4 Mini) makes it impractical to spread the design across so many devices. MLO overcomes this limitation by:
 
 1. **Implementing a single repeating layer** (e.g., one transformer encoder) in hardware
 2. **Storing weights off-chip** in high-bandwidth memory (HBM/DRAM)
 3. **Streaming weights** into the accelerator as needed for each layer
 4. **Reusing the same hardware** to process multiple layers sequentially
 
-This approach trades some throughput for the ability to handle much larger models, making it ideal for large language models, vision transformers, and other deep architectures.
+This approach trades some throughput for the ability to handle much larger models, making it ideal for larger transformer models such as SLMs, vision transformers, and other deep architectures.
 
 ## How It Works
 
@@ -33,7 +32,7 @@ The `loop_body_hierarchy` configuration must match the hierarchical naming struc
 **Technical Implementation:**
 The node extraction mechanism is implemented in FINN's loop rolling transformations:
 
-- **Step Location**: `deps/finn/src/finn/builder/build_dataflow_steps.py` (line 984)
+- **Step Location**: `deps/finn/src/finn/builder/build_dataflow_steps.py`
 - **Extraction Process**: `deps/finn/src/finn/transformation/fpgadataflow/loop_rolling.py` (LoopExtraction class)
 - **Hierarchy Matching**: `deps/finn/src/finn/util/onnxscript_helpers.py` (PytorchHierarchyNode class)
 
@@ -59,31 +58,16 @@ For models with multiple independent repeating structures, you can specify multi
 finn_config:
   loop_body_hierarchy: [
     ['encoder', 'encoder.layer.0'],
-    ['decoder', 'decoder.layer.0']
+    ['encoder', 'encoder.layer.1']
   ]
 ```
 
-This advanced configuration enables MLO for models like:
-- **Encoder-Decoder architectures** (e.g., T5, BART) with separate encoder and decoder stacks
-- **Multi-tower models** with independent processing paths
-- **Hierarchical models** with multiple levels of repeating structures
+This advanced configuration enables the following:
+- **Multiple Loop Iterations in a Single Body** - Include nodes from consecutive layers (e.g., layer.0 and layer.1) to unroll multiple iterations into the hardware implementation
+- **Fine-tuning Node Selection** - Adjust which nodes are included in the loop body when metadata is lost or inexact during ONNX export
 
 **Multiple Group Behavior:**
-- Each group creates a separate loop rolling region
-- Groups can have different numbers of layers (e.g., 12 encoder layers, 6 decoder layers)
-- Weight streaming is managed independently for each group
-- Hardware resources can be shared or dedicated per group depending on the implementation
-
-**Example: T5 Model Configuration**
-```yaml
-finn_config:
-  loop_body_hierarchy: [
-    ['encoder', 'encoder.block.0'],        # T5 encoder blocks
-    ['decoder', 'decoder.block.0']         # T5 decoder blocks
-  ]
-```
-
-This tells Brainsmith to implement both the first encoder block and first decoder block in hardware, then reuse them for all subsequent blocks in their respective stacks.
+- The loop body will include **all** of the nodes belonging to each hierarchy region within the loop body.
 
 #### Hierarchy Level Specification
 
@@ -122,18 +106,9 @@ The loop rolling transformation (`step_loop_rolling` in FINN) performs these key
 
 1. **Parses the `loop_body_hierarchy`** to identify which nodes belong to the repeating structure
 2. **Extracts nodes by name scope matching** - finds all ONNX nodes whose names match the specified hierarchy pattern (e.g., nodes starting with 'bert.encoder.layer.0')
-3. **Creates a `FINNLoop_0_` namespace** - renames extracted nodes with the `FINNLoop_0_` prefix to indicate they are part of the loop body
-4. **Generates loop iteration logic** - creates control structures to iterate through all layers using the same hardware
-5. **Sets up weight streaming infrastructure** - configures memory interfaces to stream different weights for each iteration
+3. **Generates loop iteration logic** - creates control structures to iterate through all layers using the same hardware
+4. **Sets up weight streaming infrastructure** - configures memory interfaces to stream different weights for each iteration
 6. **Updates folding configuration** - modifies parallelization parameters to account for the loop structure
-
-**Technical Details:**
-- Node extraction uses the dynamo-generated name scopes to precisely identify which operations belong to each layer
-- The `FINNLoop_0_` prefix in folding configs (like `FINNLoop_0_MVAU_rtl_0`) indicates nodes that are part of the rolled loop body
-- Loop iteration count is determined by analyzing how many layers match the specified pattern
-- Weight addresses are automatically calculated based on layer index and parameter sizes
-
-**Note:** The loop rolling step is implemented in FINN as `finn.builder.build_dataflow_steps.step_loop_rolling` and requires proper name scope metadata to function correctly.
 
 #### Loop Body Extraction Details
 
@@ -156,23 +131,12 @@ def extract_loop_body_nodes(model, loop_body_hierarchy):
 
     return extracted_nodes
 
-def rename_for_loop_rolling(nodes):
-    """Rename extracted nodes with FINNLoop_0_ prefix."""
-    for node in nodes:
-        # Transform: 'bert.encoder.layer.0.attention.self.query'
-        # Into:      'FINNLoop_0_attention_self_query'
-        original_name = node.name
-        suffix = original_name.replace(target_pattern + '.', '')
-        node.name = f'FINNLoop_0_{suffix.replace(".", "_")}'
 ```
 
-**Evidence from Folding Configurations:**
-The transformation results are visible in the folding configuration files, where original layer-specific nodes become `FINNLoop_0_` prefixed nodes:
-- `bert.encoder.layer.0.attention.output.dense` → `FINNLoop_0_MVAU_rtl_0`
-- `bert.encoder.layer.0.intermediate.dense` → `FINNLoop_0_MVAU_rtl_1`
-- `bert.encoder.layer.0.output.LayerNorm` → `FINNLoop_0_LayerNorm_hls_0`
+The metadata fields exported by PyTorch Dynamo are not always reliable and in some cases can be removed by optimization passes. When encountered, these issues are reported to the onnxscript team and are often resolved. However, we have tried to make the Loop Body Extraction process as robust as possible in the presence of missing metadata.
 
-To see the exact extraction implementation, you would need to examine the FINN library source code at `finn/src/finn/builder/build_dataflow_steps.py`.
+In some cases, the Loop Body Extraction process can identify nodes with missing metadata fields. For example, if a node is missing its metadata field, Loop Extract attempts to infer the missing information for that node by checking the metadata of its input and output nodes.
+
 
 ## Configuration
 
@@ -201,6 +165,9 @@ design_space:
     - "apply_folding_config"
     # ... rest of pipeline
 ```
+
+The easiest way to identify the proper loop body hierarchy is to open the model in Netron and check the values of the node metadata that you'd like to include in the loop body.
+
 
 ### BERT MLO Example
 
@@ -231,131 +198,6 @@ design_space:
         insert: "shell_metadata_handover"
 ```
 
-### Encoder-Decoder MLO Example
-
-For models with both encoder and decoder stacks (like T5, BART), you can use multiple hierarchy groups:
-
-```yaml
-# t5_mlo_demo.yaml
-name: "T5 with MLO"
-description: "T5 model with encoder and decoder offload"
-
-finn_config:
-  loop_body_hierarchy: [
-    ['encoder', 'encoder.block.0'],      # T5 encoder blocks
-    ['decoder', 'decoder.block.0']       # T5 decoder blocks
-  ]
-  split_large_fifos: true
-
-design_space:
-  steps:
-    - "qonnx_to_finn"
-    - "bert_streamlining"  # Can reuse BERT streamlining for transformers
-    - "infer_kernels"
-    - "create_dataflow_partition"
-    - "specialize_layers"
-    - "loop_rolling"       # Handles both encoder and decoder groups
-    - "target_fps_parallelization"
-    - "apply_folding_config"
-    # ... rest of pipeline
-```
-
-This configuration creates two separate loop rolling regions - one for the encoder stack and one for the decoder stack, each reusing their respective hardware implementations.
-
-## Performance Characteristics
-
-### Memory Bandwidth Requirements
-
-MLO places high demands on memory bandwidth since weights must be streamed continuously:
-
-- **Weight streaming bandwidth**: Model size × layers × clock frequency / execution cycles
-- **Activation memory**: Only need to store activations for current layer
-- **Memory efficiency**: Much lower on-chip memory usage
-
-### Throughput vs. Latency Trade-offs
-
-**Advantages:**
-- **Much larger models** can be implemented
-- **Lower on-chip memory usage** (BRAM/UltraRAM)
-- **Better memory utilization** across layers
-
-**Trade-offs:**
-- **Reduced throughput** due to sequential layer processing
-- **Higher memory bandwidth requirements**
-- **Increased latency** for single inference
-- **More complex control logic**
-
-### When to Use MLO
-
-**Use MLO when:**
-- Model is too large to fit on-chip (>24 layers typical threshold)
-- High-bandwidth memory is available (HBM preferred)
-- Batch processing can amortize sequential layer costs
-- Model has clear repeating structure (transformers, CNNs with residual blocks)
-
-**Avoid MLO when:**
-- Model easily fits on-chip with traditional approach
-- Ultra-low latency is critical
-- Limited memory bandwidth available
-- Model lacks clear repeating structure
-
-## Implementation Details
-
-### Folding Configuration
-
-MLO requires special consideration for folding (parallelization) parameters:
-
-```python
-# Generate folding config for MLO
-python gen_folding_config.py \
-    --simd 4 \
-    --pe 4 \
-    --num_layers 2 \  # Number of layers to implement
-    -t 1 \
-    -o ./configs/bert_mlo_demo.json
-```
-
-The folding configuration affects both:
-- **Compute parallelism** within each layer
-- **Memory bandwidth requirements** for weight streaming
-
-### Weight Management
-
-MLO generates additional logic for:
-- **Weight buffer management**: Double/triple buffering for overlap
-- **DMA controllers**: Efficient weight streaming from external memory
-- **Address generation**: Calculating weight addresses for each layer
-- **Synchronization**: Coordinating weight loads with computation
-
-### Loop Control
-
-The generated accelerator includes:
-- **Layer counters**: Track current layer being processed
-- **State machines**: Control weight loading and computation phases
-- **Flow control**: Manage data flow between layers
-- **Completion detection**: Signal when all layers are processed
-
-## Roofline Analysis
-
-Brainsmith includes built-in roofline analysis for MLO configurations:
-
-```python
-# MLO models in roofline analysis
-bert_large_mlo = {
-    'offload': True,           # Enable MLO mode
-    'arch': 'bert',
-    'num_layers': 24,          # Total layers (only 1 implemented)
-    'seq_len': 512,
-    'num_heads': 16,
-    'head_size': 64,
-    'intermediate': 4*16*64,
-}
-```
-
-The `'offload': True` flag tells the roofline model to:
-- Calculate sequential execution cycles (`num_layers` iterations)
-- Account for weight streaming bandwidth requirements
-- Model memory access patterns for large models
 
 ## Example: BERT MLO Demo
 
@@ -387,22 +229,6 @@ python bert_demo.py \
 
 This creates a BERT model with 2 encoder layers where only the first layer is implemented in hardware, and the second layer reuses the same hardware with different weights.
 
-## Best Practices
-
-### Loop Body Identification
-
-1. **Analyze your ONNX model structure** - Use tools like Netron to visualize the graph hierarchy
-2. **Find repeating name scopes** - Look for patterns like `encoder.layer.0`, `encoder.layer.1`, etc.
-3. **Match PyTorch module names** - The hierarchy should correspond to your model's module structure
-4. **Verify name scope consistency** - Ensure all repeated layers follow the same naming convention
-5. **Test with small models** - Start with 2-3 layers to verify correct loop body identification
-
-**For Multiple Hierarchy Groups:**
-6. **Identify independent repeating structures** - Look for separate stacks like encoder/decoder
-7. **Ensure group isolation** - Verify groups don't have cross-dependencies that complicate rolling
-8. **Balance resource allocation** - Consider if groups should share hardware or have dedicated resources
-9. **Test groups independently** - Validate each hierarchy group works before combining them
-
 **CRITICAL: ONNX Export Requirements**
 ```python
 # When exporting your model to ONNX, you MUST use dynamo=True
@@ -422,232 +248,323 @@ bo.export_qonnx(
 
 **Alternative: Custom Loop Rolling for Non-Dynamo Export**
 
-If you cannot use `dynamo=True` (due to compatibility issues, model complexity, or other constraints), you'll need to implement a custom loop rolling step. This involves writing your own loop body extraction logic that replicates what FINN's `LoopExtraction` transformation does with PyTorch metadata.
+If you cannot use `dynamo=True` (due to compatibility issues, model complexity, or other constraints), you can either add the metadata manually or you can implement a custom loop rolling step.
 
-**Understanding the Standard Implementation:**
-FINN's standard loop rolling (in `deps/finn/src/finn/transformation/fpgadataflow/loop_rolling.py`) works by:
-1. Using `PytorchHierarchyNode` to parse `pkg.torch.onnx.name_scopes` metadata
-2. Building a hierarchy tree from the metadata
-3. Using prefix matching to find nodes under specified hierarchy paths
-4. Extracting matching nodes and creating loop templates with `FINNLoop_0_` prefixes
+**Adding Metadata Manually**
 
-**Custom Implementation:**
+If your ONNX model was exported without `dynamo=True` or the metadata was lost during optimization, you can manually add the required `pkg.torch.onnx.name_scopes` metadata to enable MLO. This approach requires modifying the ONNX model's metadata properties directly.
+
+**Step 1: Understanding the Metadata Structure**
+
+The `pkg.torch.onnx.name_scopes` metadata field contains hierarchical naming information that maps each ONNX node back to its originating PyTorch module. The metadata is stored as a list of strings representing the hierarchy path from the root module to the specific operation.
+
+For example, in a BERT model:
+```python
+# Layer 0 attention query node
+['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.query']
+
+# Layer 0 attention key node
+['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.key']
+
+# Layer 1 attention query node
+['bert', 'bert.encoder', 'bert.encoder.layer.1', 'bert.encoder.layer.1.attention.self.query']
+```
+
+**Step 2: Identify Your Model's Hierarchy**
+
+First, determine the hierarchical structure of your model:
+
+```python
+import torch
+
+# Example: Print your PyTorch model structure
+model = YourModel()
+for name, module in model.named_modules():
+    print(name)
+
+# Output might look like:
+# encoder
+# encoder.layer.0
+# encoder.layer.0.attention
+# encoder.layer.0.attention.self
+# encoder.layer.1.attention
+# encoder.layer.1.attention.self
+```
+
+**Step 3: Add Metadata to ONNX Nodes**
+
+Use the following script to add metadata to your ONNX model:
+
+```python
+import onnx
+from onnx import helper
+
+def add_name_scope_metadata(model_path, output_path, node_hierarchy_map):
+    """
+    Add pkg.torch.onnx.name_scopes metadata to ONNX nodes.
+
+    Args:
+        model_path: Path to input ONNX model
+        output_path: Path to save modified ONNX model
+        node_hierarchy_map: Dict mapping node names to hierarchy paths (as list of strings)
+                           e.g., {'MatMul_0': ['encoder', 'encoder.layer.0', 'encoder.layer.0.attention']}
+    """
+    model = onnx.load(model_path)
+
+    for node in model.graph.node:
+        if node.name in node_hierarchy_map:
+            hierarchy_list = node_hierarchy_map[node.name]
+            # Convert list to the string format expected by ONNX metadata
+            # Format: serialized list of strings
+            hierarchy_str = str(hierarchy_list)
+
+            # Add or update the metadata attribute
+            metadata_found = False
+            for attr in node.attribute:
+                if attr.name == "pkg.torch.onnx.name_scopes":
+                    attr.s = hierarchy_str.encode('utf-8')
+                    metadata_found = True
+                    break
+
+            if not metadata_found:
+                # Create new metadata attribute
+                metadata_attr = helper.make_attribute(
+                    "pkg.torch.onnx.name_scopes",
+                    hierarchy_str
+                )
+                node.attribute.append(metadata_attr)
+
+    onnx.save(model, output_path)
+    print(f"Model with metadata saved to {output_path}")
+
+# Example usage for a BERT model
+node_hierarchy_map = {
+    # Attention layer nodes
+    'MatMul_0': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.query']",
+    'MatMul_1': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.key']",
+    'MatMul_2': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.value']",
+    'MatMul_3': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.output.dense']",
+
+    # Intermediate layer nodes
+    'MatMul_4': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.intermediate.dense']",
+    'MatMul_5': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.output.dense']",
+
+    # LayerNorm nodes
+    'LayerNormalization_0': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.output.LayerNorm']",
+    'LayerNormalization_1': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.output.LayerNorm']",
+
+    # You only need to add metadata for the nodes used in the loop body template
+}
+
+add_name_scope_metadata(
+    'model_without_metadata.onnx',
+    'model_with_metadata.onnx',
+    node_hierarchy_map
+)
+```
+
+**Step 4: Verify Metadata with Netron**
+
+After adding metadata, open the modified model in Netron and inspect node properties to verify the `pkg.torch.onnx.name_scopes` field appears correctly.
+
+**Step 5: Use in MLO Configuration**
+
+Once metadata is added, configure your blueprint with the appropriate `loop_body_hierarchy`:
+
+```yaml
+finn_config:
+  loop_body_hierarchy: [['encoder', 'encoder.layer.0']]  # Must match your hierarchy paths
+```
+
+**Important Notes:**
+- Metadata must accurately reflect the repeating structure of your model
+- All nodes within a layer should have consistent hierarchy prefixes
+- Test with a small model (2-3 layers) before applying to larger models
+- Incorrect metadata will cause loop body extraction to fail or extract wrong nodes
+
+
+**Custom Loop Rolling Step**
+
+If you cannot export via PyTorch Dynamo, you can write your own *Loop Extraction* transform and then leverage the existing *Loop Rolling* transform to create the FINNLoop ONNX node. At present, you'll need to copy the *Loop Rolling* step in FINN and replace the *Loop Extraction* functionality. In the future, we plan to update the Loop Rolling step to accept a custom *Loop Extraction* function.
+
+The standard Loop Rolling build step consists of two transformations: *Loop Body Extraction* and *Loop Rolling*. *Loop Body Extraction* returns a *LoopBodyTemplate* object which is used by the *LoopRolling* transformation to as a pattern to identify individual instances of each loop body. The *LoopBody* template object is created using an ONNX file that contains one copy of the LoopBody you'd like to create.
+
+If you have a graph of the loop body or can easily create one, then you can simply create a custom Loop Rolling step in BrainSmith that creates the LoopBodyTemplate object from the ONNX file and passes it to the LoopRolling transformation as shown in the example code below.
+
+**Example: Custom Loop Rolling Step with Pre-built Loop Body Template**
+
 ```python
 from brainsmith.core.plugins import step
-from qonnx.transformation.base import Transformation
-from qonnx.core.modelwrapper import ModelWrapper
-import copy
+from finn.transformation.fpgadataflow.loop_rolling import LoopBodyTemplate, LoopRolling
 
-@step(
-    name="custom_loop_rolling",
-    category="topology_opt",
-    description="Custom loop rolling with manual node collection"
-)
-def custom_loop_rolling_step(model, cfg):
-    """Custom loop rolling step for models without dynamo metadata."""
+@step(name="custom_loop_rolling_with_template")
+def custom_loop_rolling_with_template(model, cfg):
+    """
+    Custom loop rolling step that uses a pre-created loop body ONNX file.
 
-    class CustomLoopRolling(Transformation):
-        def __init__(self, loop_body_hierarchy):
-            super().__init__()
-            self.loop_body_hierarchy = loop_body_hierarchy
+    Use this approach when you have manually created or extracted the loop body
+    graph and saved it to an ONNX file.
+    """
+    # Load the loop body template from a pre-created ONNX file
+    # This file should contain one complete iteration of your loop body
+    loop_body_template_path = "path/to/your/loop_body_template.onnx"
+    loop_body_template = LoopBodyTemplate(loop_body_template_path)
 
-        def apply(self, model):
-            # Replicate FINN's LoopExtraction + LoopRolling logic
-            # without relying on PyTorch name_scopes metadata
+    # Apply the loop rolling transformation using your custom template
+    model = model.transform(LoopRolling(loop_body_template))
 
-            # Step 1: Manual node pattern matching (replaces hierarchy parser)
-            loop_body_nodes = self.collect_loop_body_nodes(model)
-
-            # Step 2: Create loop template (replaces FINN's template creation)
-            loop_template = self.create_loop_template(model, loop_body_nodes)
-
-            # Step 3: Remove original nodes and add loop structure
-            rolled_model = self.apply_loop_rolling(model, loop_body_nodes, loop_template)
-
-            return rolled_model
-
-        def collect_loop_body_nodes(self, model):
-            """
-            Manual node collection that replaces PytorchHierarchyNode.get_nodes().
-
-            This must identify the same nodes that would be found by:
-            P = PytorchHierarchyNode()
-            for node in model.graph.node: P.add_node(node)
-            nodes = P.get_nodes(self.loop_body_hierarchy[0])
-            """
-            loop_nodes = []
-
-            # Strategy 1: Pattern matching on node names
-            # Look for nodes belonging to first layer/block
-            hierarchy_path = self.loop_body_hierarchy[0]  # e.g., ['encoder', 'encoder.layer.0']
-            target_prefix = hierarchy_path[-1]  # e.g., 'encoder.layer.0'
-
-            for node in model.graph.node:
-                # Match nodes that would have the target hierarchy prefix
-                if node.name.startswith(target_prefix):
-                    loop_nodes.append(node)
-                # Alternative: look for pattern in node name
-                elif f".{target_prefix.split('.')[-1]}." in node.name:  # e.g., ".layer.0."
-                    loop_nodes.append(node)
-
-            # Strategy 2: Graph structure analysis for complex cases
-            if not loop_nodes:
-                loop_nodes = self.analyze_graph_structure(model, target_prefix)
-
-            return loop_nodes
-
-        def analyze_graph_structure(self, model, target_prefix):
-            """
-            Fallback method using graph connectivity analysis.
-            Identifies repeating subgraph patterns when name matching fails.
-            """
-            # Find repeated subgraph structures
-            # This is more complex but handles cases where naming isn't consistent
-            nodes = []
-
-            # Example: Find nodes between specific input/output patterns
-            # Look for activation functions that mark layer boundaries
-            # Analyze weight tensor sizes that repeat across layers
-            # Use topological sorting to identify layer boundaries
-
-            return nodes
-
-        def create_loop_template(self, model, loop_body_nodes):
-            """
-            Create loop template that replicates FINN's template creation.
-            The template represents one iteration that will be reused.
-            """
-            # Create a subgraph containing just the loop body nodes
-            loop_subgraph = self.extract_subgraph(model, loop_body_nodes)
-
-            # Add FINNLoop_0_ prefix to node names (matches FINN convention)
-            for node in loop_subgraph.graph.node:
-                node.name = f"FINNLoop_0_{node.name}"
-
-            return loop_subgraph
-
-        def extract_subgraph(self, model, nodes):
-            """Extract nodes and their dependencies into a new model."""
-            # Implementation would extract the subgraph containing loop_body_nodes
-            # Include necessary inputs, outputs, and intermediate values
-            subgraph_model = ModelWrapper(copy.deepcopy(model.model))
-            # ... subgraph extraction logic ...
-            return subgraph_model
-
-        def apply_loop_rolling(self, model, original_nodes, loop_template):
-            """
-            Apply the loop rolling by removing original nodes and adding loop structure.
-            This replicates what FINN's LoopRolling transformation does.
-            """
-            # Remove the original loop body nodes from the main graph
-            for node in original_nodes:
-                model.graph.node.remove(node)
-
-            # Add the loop template to the graph
-            for template_node in loop_template.graph.node:
-                model.graph.node.append(template_node)
-
-            # Add loop control logic, iteration parameters, etc.
-            # This is where the actual looping mechanism gets implemented
-
-            return model
-
-    # Apply the custom transformation with your hierarchy configuration
-    hierarchy = cfg.loop_body_hierarchy if hasattr(cfg, 'loop_body_hierarchy') else [['encoder', 'encoder.layer.0']]
-    model = model.transform(CustomLoopRolling(hierarchy))
     return model
 ```
 
-**Key Implementation Points:**
+In this approach, you need to manually create `loop_body_template.onnx` containing one instance of your repeating layer structure. You can create this file by:
+1. Extracting a subgraph from your full model using ONNX tools
+2. Building it programmatically using ONNX IR or onnxscript
+3. Exporting a single layer model from PyTorch
 
-1. **Node Pattern Matching**: Replace PyTorch metadata parsing with manual pattern matching on node names
-2. **Hierarchy Simulation**: Manually identify what `PytorchHierarchyNode.get_nodes()` would find
-3. **Template Creation**: Create loop templates with `FINNLoop_0_` prefixes matching FINN conventions
-4. **Graph Modification**: Remove original nodes and add loop structure like `LoopRolling` transformation
+Otherwise, you can create a custom LoopBodyExtraction transform. One approach to creating this transform is to create a *python* list of ONNX nodes within the model that fully comprise an iteration of the LoopBody. Then you can use that list to create a SubGraphView object which can in turn be saved to an ONNX file and then used to create the LoopBodyTemplate as shown in the example code below.
 
-**Advanced Strategies:**
+**Example: Custom Loop Extraction and Rolling**
+
 ```python
-# Strategy for complex models without clear naming patterns
-def identify_layer_boundaries(self, model):
-    """Use graph analysis to find layer boundaries."""
+from brainsmith.core.plugins import step
+from finn.transformation.fpgadataflow.loop_rolling import LoopBodyTemplate, LoopRolling
+from finn.util import onnxscript_helpers as osh
+import onnxscript
+from onnxscript import ir
+import onnx
 
-    # Method 1: Look for parameter/weight nodes that repeat
-    weight_patterns = {}
-    for node in model.graph.node:
-        if node.op_type in ['MatMul', 'Conv']:
-            # Analyze weight tensor shapes and names
-            pass
+class CustomLoopExtraction:
+    """
+    Custom loop body extraction that identifies loop body nodes
+    without relying on PyTorch metadata.
+    """
 
-    # Method 2: Use activation function positions
-    layer_boundaries = []
-    for i, node in enumerate(model.graph.node):
-        if node.op_type in ['Relu', 'Gelu', 'LayerNormalization']:
-            # These often mark layer boundaries
-            layer_boundaries.append(i)
+    def __init__(self, loop_body_hierarchy):
+        self.loop_body_hierarchy = loop_body_hierarchy
+        self.loop_body_template = None
 
-    # Method 3: Analyze data flow patterns
-    # Look for nodes that have similar input/output patterns
-    return layer_boundaries
+    def extract_loop_body_nodes(self, graph, target_pattern):
+        """
+        Identify nodes that belong to the loop body.
+
+        This is where you implement your custom logic to find the nodes.
+        You can use pattern matching, graph analysis, or any other method.
+        """
+        extracted_nodes = []
+
+        # Strategy 1: Simple name prefix matching
+        for node in graph._nodes:
+            if node.name.startswith(target_pattern):
+                extracted_nodes.append(node)
+
+        # Strategy 2: If prefix matching fails, try pattern in node name
+        if not extracted_nodes:
+            layer_id = target_pattern.split('.')[-1]
+            for node in graph._nodes:
+                if f".{layer_id}." in node.name or f"_{layer_id}_" in node.name:
+                    extracted_nodes.append(node)
+
+        return extracted_nodes
+
+    def apply(self, model):
+        """Extract loop body and create template file."""
+        # Deserialize the model to ONNX IR
+        model_ir = onnxscript.ir.serde.deserialize_model(model.model)
+        graph = model_ir.graph
+
+        # Get the target pattern from hierarchy
+        target_pattern = self.loop_body_hierarchy[0][-1]
+
+        # Extract nodes belonging to the loop body
+        nodes = self.extract_loop_body_nodes(graph, target_pattern)
+
+        if not nodes:
+            raise ValueError(f"No nodes found matching pattern: {target_pattern}")
+
+        print(f"Extracted {len(nodes)} nodes for loop body")
+
+        # Create a SubGraphView containing only the loop body nodes
+        loop_body_graph_view = osh.SubGraphView(graph, "loop-body", nodes)
+
+        # Create an ONNX model from the subgraph
+        loop_body_model = onnxscript.ir.Model(
+            loop_body_graph_view,
+            ir_version=model.model.ir_version
+        )
+
+        # Serialize and save the loop body template
+        proto = onnxscript.ir.serde.serialize_model(loop_body_model)
+        template_path = "loop-body-template.onnx"
+        onnx.save(proto, template_path)
+
+        print(f"Loop body template saved to: {template_path}")
+
+        # Create the LoopBodyTemplate object
+        self.loop_body_template = LoopBodyTemplate(template_path)
+
+        return model
+
+@step(name="custom_loop_rolling_full")
+def custom_loop_rolling_full(model, cfg):
+    """
+    Complete custom loop rolling step with custom extraction.
+
+    This approach:
+    1. Uses custom logic to identify loop body nodes
+    2. Creates a loop body template from those nodes
+    3. Applies FINN's LoopRolling transformation
+    """
+    # Get loop body hierarchy from config
+    hierarchy = cfg.loop_body_hierarchy if hasattr(cfg, 'loop_body_hierarchy') \
+                else [['encoder', 'encoder.layer.0']]
+
+    # Step 1: Custom extraction to create loop body template
+    extractor = CustomLoopExtraction(hierarchy)
+    model = extractor.apply(model)
+
+    # Step 2: Apply FINN's loop rolling with the custom template
+    if extractor.loop_body_template is None:
+        raise ValueError("Loop body extraction failed - no template created")
+
+    model = model.transform(LoopRolling(extractor.loop_body_template))
+
+    print("Custom loop rolling completed successfully")
+
+    return model
 ```
 
-**When to use this approach:**
-- Your model export framework doesn't support `dynamo=True` (TensorFlow, JAX, older PyTorch versions)
-- Complex model architectures that don't export cleanly with dynamo
-- Models with custom operators or non-standard layer structures
-- Need fine-grained control over which nodes are included in the loop body
-- Legacy models or frameworks without proper metadata support
-- Production deployments where you need guaranteed behavior without metadata dependencies
+**Key Points:**
 
-**Implementation considerations:**
-- **Complexity**: Requires deep understanding of your model's ONNX graph structure and FINN's loop rolling internals
-- **Maintenance**: Must manually identify repeating patterns that `PytorchHierarchyNode` would detect automatically
-- **Edge Cases**: Need to handle skip connections, residual blocks, and cross-layer dependencies manually
-- **Testing**: More extensive validation needed since you're bypassing FINN's tested metadata-based approach
-- **Debugging**: Harder to debug since you lose the hierarchical structure information from PyTorch
-- **Performance**: May be slower during compilation since pattern matching is less efficient than metadata lookup
+1. **CustomLoopExtraction.extract_loop_body_nodes()**: This is where you implement your custom logic to identify which nodes belong to the loop body. The example shows simple name matching, but you can implement more sophisticated graph analysis.
 
-**Technical Requirements:**
-Your custom implementation must replicate these key FINN behaviors:
-1. **Node Collection**: Find the same nodes that `PytorchHierarchyNode.get_nodes(hierarchy)` would return
-2. **Template Creation**: Generate loop templates with `FINNLoop_0_` naming convention
-3. **Graph Modification**: Remove original nodes and add loop control structure
-4. **Dependency Handling**: Maintain proper input/output connections and intermediate values
-5. **Metadata Preservation**: Keep any essential node attributes and properties intact
+2. **SubGraphView**: This FINN utility class creates a view of a subgraph given a list of nodes. It automatically handles:
+   - Finding all necessary inputs/outputs
+   - Maintaining graph connectivity
+   - Preserving node attributes and metadata
 
-**Example: Finding BERT encoder hierarchy**
-```python
-# In your PyTorch model, if you have:
-# self.encoder.layer[0], self.encoder.layer[1], ...
-# The ONNX export (with dynamo=True) will create name scopes like:
-# encoder.layer.0.*, encoder.layer.1.*, ...
-# So your loop_body_hierarchy should be: [['encoder', 'encoder.layer.0']]
+3. **LoopBodyTemplate**: This class (from FINN) wraps the loop body ONNX file and provides the pattern matching infrastructure that LoopRolling needs.
+
+4. **LoopRolling transformation**: This is FINN's standard transformation that:
+   - Finds all instances of the loop body pattern in your model
+   - Replaces them with a single FINNLoop node
+   - Sets up weight streaming infrastructure
+   - Handles I/O normalization and type checking
+
+**Usage in Blueprint:**
+
+```yaml
+design_space:
+  steps:
+    - "qonnx_to_finn"
+    - "bert_streamlining"
+    - "infer_kernels"
+    - "create_dataflow_partition"
+    - "specialize_layers"
+    - "custom_loop_rolling_full"  # Your custom step
+    - "target_fps_parallelization"
+    - "apply_folding_config"
 ```
 
-### Memory System Design
-
-1. **Use HBM when available** - Higher bandwidth than DDR for weight streaming
-2. **Optimize memory access patterns** - Sequential access is more efficient
-3. **Size buffers appropriately** - Balance memory usage vs. bandwidth utilization
-
-### Model Architecture
-
-1. **Ensure clear layer boundaries** in your model structure
-2. **Consistent layer shapes** across the repeated structure
-3. **Minimize cross-layer dependencies** that complicate weight streaming
-
-### Performance Tuning
-
-1. **Profile memory bandwidth utilization** - Should be >80% for efficiency
-2. **Balance compute and memory** - Don't over-parallelize if memory-bound
-3. **Consider mixed precision** - Lower precision reduces bandwidth requirements
-4. **Optimize FIFO depths** - Critical for maintaining pipeline efficiency
-
-### Verification
-
-1. **Use smaller models first** - Debug with 2-3 layers before scaling up
-2. **Compare against non-MLO** - Verify functional correctness
-3. **Test weight loading** - Ensure correct weights loaded for each layer
-4. **Monitor memory bandwidth** - Verify streaming performance
 
 ## Debugging MLO Issues
 
@@ -658,21 +575,28 @@ Your custom implementation must replicate these key FINN behaviors:
 - Verify the ONNX model contains proper hierarchical node names
 - If unable to use dynamo export, implement custom loop rolling step (see Loop Body Identification section)
 
+**Missing Loop Body Nodes**
+
+If a node that should be in the loop body is not included during *Loop Extraction*, this can appear in `loopbody_template.onnx` as unexpected inputs and outputs to the loop body graph. Further, this can result in loop rolling failure or errors in subsequent build steps like `step_create_dataflow_partition`.
+
+Sometimes a node in the middle of the loop body will be excluded from the loop body. This can result in a self-referencing loop error in `step_create_dataflow_partition`, where the partitioning process detects invalid circular dependencies.
+
+**Debugging Steps:**
+1. Open `loopbody_template.onnx` in your build directory using Netron
+2. Check for unexpected graph inputs/outputs that should be internal to the loop body
+3. Identify which nodes are missing by comparing against your expected layer structure
+4. Adjust the `loop_body_hierarchy` configuration to include missing nodes:
+   - Try adding an additional hierarchy group for the missing node's namespace
+   - Use a broader hierarchy prefix to capture more nodes
+   - If using custom loop extraction, verify your node matching patterns
+5. Verify metadata on the missing nodes (check `pkg.torch.onnx.name_scopes` field in Netron)
+6. Rebuild and verify the `loopbody_template.onnx` contains all expected nodes
+
+
 **Incorrect loop body identification:**
 - Check `loop_body_hierarchy` matches your model structure
 - Verify layer naming conventions in ONNX graph
 
-**Memory bandwidth bottlenecks:**
-- Profile actual vs. theoretical bandwidth usage
-- Consider reducing parallelism or increasing memory frequency
-
-**Weight loading errors:**
-- Check weight buffer sizes and addressing logic
-- Verify DMA controller configuration
-
-**Pipeline stalls:**
-- Analyze FIFO depths and utilization
-- Look for producer/consumer mismatches
 
 ### Debug Tools
 
@@ -680,22 +604,6 @@ Your custom implementation must replicate these key FINN behaviors:
 2. **Enable verification** - Use RTL simulation to check correctness
 3. **Memory tracing** - Monitor weight loading patterns
 4. **Performance counters** - Track cycles, bandwidth utilization
-
-## Future Enhancements
-
-### Planned Features
-
-- **Multi-level loop rolling** - Support for nested repeating structures
-- **Dynamic weight caching** - Intelligent caching of frequently accessed weights
-- **Mixed-precision streaming** - Different precision for different layers
-- **Async weight prefetching** - More sophisticated memory scheduling
-
-### Research Directions
-
-- **Sparse weight streaming** - Skip zero weights to reduce bandwidth
-- **Compressed weight formats** - On-the-fly decompression
-- **Multi-model support** - Switch between different models dynamically
-- **Cross-layer optimization** - Optimize across layer boundaries
 
 ## See Also
 
