@@ -340,18 +340,18 @@ def add_name_scope_metadata(model_path, output_path, node_hierarchy_map):
 # Example usage for a BERT model
 node_hierarchy_map = {
     # Attention layer nodes
-    'MatMul_0': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.query']",
-    'MatMul_1': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.key']",
-    'MatMul_2': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.value']",
-    'MatMul_3': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.output.dense']",
+    'MatMul_0': ['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.query'],
+    'MatMul_1': ['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.key'],
+    'MatMul_2': ['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.self.value'],
+    'MatMul_3': ['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.output.dense'],
 
     # Intermediate layer nodes
-    'MatMul_4': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.intermediate.dense']",
-    'MatMul_5': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.output.dense']",
+    'MatMul_4': ['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.intermediate.dense'],
+    'MatMul_5': ['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.output.dense'],
 
     # LayerNorm nodes
-    'LayerNormalization_0': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.output.LayerNorm']",
-    'LayerNormalization_1': "['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.output.LayerNorm']",
+    'LayerNormalization_0': ['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.attention.output.LayerNorm'],
+    'LayerNormalization_1': ['bert', 'bert.encoder', 'bert.encoder.layer.0', 'bert.encoder.layer.0.output.LayerNorm'],
 
     # You only need to add metadata for the nodes used in the loop body template
 }
