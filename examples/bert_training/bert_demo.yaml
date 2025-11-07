@@ -26,6 +26,7 @@ finn_config:
   #verify_save_rtlsim_waveforms: true #This is really big
   verify_save_full_context: true
   verification_atol: 0.1
+  preserve_thresh_shape: true
 
 design_space:
   # Inherit kernels from parent blueprint

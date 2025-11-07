@@ -199,6 +199,8 @@ FINN_TRANSFORMS = [
     ('ExternalizeParams', f'{FT}.fpgadataflow.externalize_params.ExternalizeParams'),
     ('CapConvolutionFIFODepths', f'{FT}.fpgadataflow.set_fifo_depths.CapConvolutionFIFODepths'),
     ('RemoveShallowFIFOs', f'{FT}.fpgadataflow.set_fifo_depths.RemoveShallowFIFOs'),
+    ('ShuffleDecomposition', f'{FT}.fpgadataflow.transpose_decomposition.ShuffleDecomposition'),
+    ('InferInnerOuterShuffles', f'{FT}.fpgadataflow.transpose_decomposition.InferInnerOuterShuffles'),
     ('InsertHook', f'{FT}.fpgadataflow.insert_hook.InsertHook'),
     ('InsertIODMA', f'{FT}.fpgadataflow.insert_iodma.InsertIODMA'),
 ]
@@ -265,6 +267,7 @@ FINN_KERNEL_INFERENCES = [
     ('InferElementwiseBinaryOperation', f'{FT}.fpgadataflow.convert_to_hw_layers.InferElementwiseBinaryOperation', 'ElementwiseBinaryOperation'),
     ('InferLookupLayer', f'{FT}.fpgadataflow.convert_to_hw_layers.InferLookupLayer', 'Lookup'),
     ('InferStreamingEltwise', f'{FT}.fpgadataflow.convert_to_hw_layers.InferStreamingEltwise', 'StreamingEltwise'),
+    ('InferShuffle', f'{FT}.fpgadataflow.convert_to_hw_layers.InferShuffle', 'Shuffle'),
     ('InferUpsample', f'{FT}.fpgadataflow.convert_to_hw_layers.InferUpsample', 'UpsampleNearestNeighbour'),
     # From other files
     ('InferPixelPaddingDeconv', f'{FT}.fpgadataflow.infer_pixel_padding_deconv.InferPixelPaddingDeconv', 'PixelPaddingDeconv'),
@@ -419,6 +422,7 @@ FINN_STEPS = [
     ('target_fps_parallelization', 'finn.builder.build_dataflow_steps.step_target_fps_parallelization'),
     ('apply_folding_config', 'finn.builder.build_dataflow_steps.step_apply_folding_config'),
     ('minimize_bit_width', 'finn.builder.build_dataflow_steps.step_minimize_bit_width'),
+    ('transpose_decomposition', 'finn.builder.build_dataflow_steps.step_transpose_decomposition'),
     ('generate_estimate_reports', 'finn.builder.build_dataflow_steps.step_generate_estimate_reports'),
     ('hw_codegen', 'finn.builder.build_dataflow_steps.step_hw_codegen'),
     ('hw_ipgen', 'finn.builder.build_dataflow_steps.step_hw_ipgen'),

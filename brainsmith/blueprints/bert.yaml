@@ -38,6 +38,7 @@ design_space:
     - "apply_folding_config"
     - "minimize_bit_width"
     - "generate_estimate_reports"
+    - "transpose_decomposition"
     - "hw_codegen"
     - "hw_ipgen"
     - "set_fifo_depths"
