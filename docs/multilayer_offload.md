@@ -92,14 +92,6 @@ loop_body_hierarchy: [
 
 The FINN loop rolling step will find all ONNX nodes whose names start with the final hierarchy level (e.g., `bert.encoder.layer.0`) and extract them as the loop body.
 
-### Weight Streaming
-
-Instead of storing all weights on-chip, MLO:
-1. **Streams weights from HBM/DRAM** for each layer as needed
-2. **Prefetches weights** for the next layer while processing the current one
-3. **Manages weight buffers** to overlap computation and memory access
-4. **Reuses computation hardware** across all layers
-
 ### Loop Rolling Process
 
 The loop rolling transformation (`step_loop_rolling` in FINN) performs these key operations:
