@@ -108,7 +108,7 @@ public:
             throw std::runtime_error("Unsupported G_OUT_DTYPE");
 
         // Setup the FPGA
-        std::string f_path = CONFIG_PATH;
+        std::string f_path = BW_CONFIG_PATH;
         if(setup_qdma(f_path.c_str()) < 0)
             throw std::runtime_error("Platform setup failed");
 

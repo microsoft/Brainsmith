@@ -487,6 +487,10 @@ function(create_py)
     ${TORCH_INCLUDE_DIRS}
   )
 
+  target_compile_definitions(sw_python PRIVATE
+    BW_CONFIG_PATH="${CMAKE_BINARY_DIR}/sw/export/config/xfer_config.txt"
+  )
+
   target_link_libraries(sw_python PRIVATE
     aio rt pthread
     ${TORCH_LIBRARIES}

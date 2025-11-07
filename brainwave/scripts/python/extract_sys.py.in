@@ -35,8 +35,6 @@ core_mhmw    = [${CORE_MHMW_CSV}]
 core_dtypes  = [${CORE_DTYPES_CSV}]
 core_count   = ${CORE_ID_COUNT}
 
-# Path into your repo (CMake substitutes BWAVE_DIR)
-cfg_path     = "${CMAKE_BINARY_DIR}/sw/export/config/xfer_config.txt"
 # ---------------------------------------------------------------------------------------------
 
 
@@ -73,9 +71,6 @@ def write_header(wr_path: Path, rd_csr: bool, reg_defs: List[Tuple[str, int]]):
     out.append("#include <cstdint>")
     out.append("")
     out.append("// ---- Auto-generated ----")
-    out.append("")
-    out.append("// FPGA config file")
-    out.append(f'inline constexpr const char* CONFIG_PATH = "{cfg_path}";')
     out.append("")
     out.append("// Host streams enabled")
     out.append(f"inline constexpr bool HOST_STREAMS = { 'true' if en_strm else 'false' };")
