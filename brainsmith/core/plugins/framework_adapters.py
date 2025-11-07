@@ -299,6 +299,7 @@ FINN_BACKENDS = [
     ('StreamingEltwise_hls', f'{FK}.hls.streamingeltwise_hls.StreamingEltwise_hls', 'StreamingEltwise', 'hls'),
     ('TLastMarker_hls', f'{FK}.hls.tlastmarker_hls.TLastMarker_hls', 'TLastMarker', 'hls'),
     ('UpsampleNearestNeighbour_hls', f'{FK}.hls.upsampler_hls.UpsampleNearestNeighbour_hls', 'UpsampleNearestNeighbour', 'hls'),
+    ('OuterShuffle_hls', f'{FK}.hls.outer_shuffle_hls.OuterShuffle_hls', 'OuterShuffle_hls', 'hls'),
     # RTL Backends
     ('ConvolutionInputGenerator_rtl', f'{FK}.rtl.convolutioninputgenerator_rtl.ConvolutionInputGenerator_rtl', 'ConvolutionInputGenerator', 'rtl'),
     ('FMPadding_rtl', f'{FK}.rtl.fmpadding_rtl.FMPadding_rtl', 'FMPadding', 'rtl'),
@@ -307,8 +308,7 @@ FINN_BACKENDS = [
     ('StreamingFIFO_rtl', f'{FK}.rtl.streamingfifo_rtl.StreamingFIFO_rtl', 'StreamingFIFO', 'rtl'),
     ('Thresholding_rtl', f'{FK}.rtl.thresholding_rtl.Thresholding_rtl', 'Thresholding', 'rtl'),
     ('VVAU_rtl', f'{FK}.rtl.vectorvectoractivation_rtl.VVAU_rtl', 'VVAU', 'rtl'),
-    ('InnerShuffle_rtl', f'{FK}.inner_shuffle_rtl.InnerShuffle_rtl'),
-    ('OuterShuffle_hls', f'{FK}.outer_shuffle_hls.OuterShuffle_hls'),
+    ('InnerShuffle_rtl', f'{FK}.rtl.inner_shuffle_rtl.InnerShuffle_rtl', 'InnerShuffle_rtl', 'rtl'),
 ]
 
 
