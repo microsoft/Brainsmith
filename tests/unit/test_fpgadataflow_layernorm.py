@@ -88,7 +88,6 @@ def create_layernorm_model(epsilon):
 
 def test_fpgadataflow_layernorm():
     model = create_layernorm_model(epsilon=9.999999960041972e-13)
-    model.save("layernorm.onnx")
     model = model.transform(ExpandNorms())
     model = model.transform(InferShapes())
     model = model.transform(InferDataTypes())
@@ -96,10 +95,9 @@ def test_fpgadataflow_layernorm():
     model = model.transform(to_hw.InferElementwiseBinaryOperation())
     model = model.transform(SpecializeLayers(test_fpga_part))
     model = model.transform(GiveUniqueNodeNames())
-    model.save("test.onnx")
-    import pdb; pdb.set_trace()
+    getCustomOp(model.graph.node[0]).set_nodeattr("SIMD", 8)
 
-    # Execute 
+    # Execute
     model = model.transform(SetExecMode("rtlsim"))
     model = model.transform(PrepareIP(test_fpga_part, target_clk_ns))
     model = model.transform(HLSSynthIP())

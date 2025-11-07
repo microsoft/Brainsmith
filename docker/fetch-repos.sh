@@ -28,7 +28,7 @@ RFSOC4x2_BDF_URL="https://github.com/RealDigitalOrg/RFSoC4x2-BSP.git"
 KV260_BDF_URL="https://github.com/Xilinx/XilinxBoardStore.git"
 
 QONNX_COMMIT="custom/brainsmith"
-FINN_COMMIT="custom/transformer_loop"
+FINN_COMMIT="custom/transformer_layernorm"
 FINN_EXP_COMMIT="0724be21111a21f0d81a072fccc1c446e053f851"
 BREVITAS_COMMIT="b106358c4169d8a9b68cb2a531aa795417d74887"
 CNPY_COMMIT="8c82362372ce600bbd1cf11d64661ab69d38d7de"
@@ -67,7 +67,6 @@ if [ -z "$PLATFORM_REPO_PATHS" ];then
 fi
 
 # Define functions
-
 fetch_repo() {
     # URL for git repo to be cloned
     REPO_URL=$1
