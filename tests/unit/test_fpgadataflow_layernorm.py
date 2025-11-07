@@ -88,6 +88,13 @@ def create_layernorm_model(epsilon):
 
 def test_fpgadataflow_layernorm():
     model = create_layernorm_model(epsilon=9.999999960041972e-13)
+
+    # reference calculation
+    input = gen_finn_dt_tensor(DataType["FLOAT32"], [1, 128, 384])
+    input_t = {model.graph.input[0].name: input}
+
+    y_ref = oxe.execute_onnx(model, input_t)[model.graph.output[0].name]
+
     model = model.transform(ExpandNorms())
     model = model.transform(InferShapes())
     model = model.transform(InferDataTypes())
@@ -103,9 +110,8 @@ def test_fpgadataflow_layernorm():
     model = model.transform(HLSSynthIP())
     model = model.transform(PrepareRTLSim())
 
-    input = gen_finn_dt_tensor(DataType["FLOAT32"], [1, 128, 384])
-    in_name = model.graph.input[0].name
-    input_t = {in_name: input}
+    input_t = {model.graph.input[0].name: input}
 
     y_hw = oxe.execute_onnx(model, input_t)[model.graph.output[0].name]
-    import pdb; pdb.set_trace()
+
+    assert np.allclose(y_ref, y_hw, rtol=1e-3, atol=2**-4)
