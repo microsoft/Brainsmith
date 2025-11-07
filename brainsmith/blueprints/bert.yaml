@@ -31,14 +31,15 @@ design_space:
     - "bert_streamlining"
     # Core FINN steps
     - "infer_kernels" # Brainsmith dynamic kernel inference
+    - "infer_shuffle"
     - "create_dataflow_partition"
     - "specialize_layers"
     - "loop_rolling"
     - "target_fps_parallelization"
     - "apply_folding_config"
     - "minimize_bit_width"
-    - "generate_estimate_reports"
     - "transpose_decomposition"
+    - "generate_estimate_reports"
     - "hw_codegen"
     - "hw_ipgen"
     - "set_fifo_depths"

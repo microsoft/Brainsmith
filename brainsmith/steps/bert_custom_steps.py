@@ -156,3 +156,20 @@ def bert_streamlining_step(model, cfg):
     model = model.transform(GiveUniqueNodeNames())
 
     return model
+
+# === Infer Shuffle ===
+
+@step(
+    name="infer_shuffle",
+    category="infer",
+    dependencies=[],
+    description="Infers Shuffle node",
+)
+def infer_shuffle_step(model: Any, cfg: Any) -> Any:
+    """Infers Shuffle node."""
+
+    InferShuffle = get_transform('InferShuffle')
+    model = model.transform(InferShuffle())
+
+    return model
+
