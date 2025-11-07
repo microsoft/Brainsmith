@@ -251,6 +251,136 @@ class KernelParityTest(KernelTestBase_v2):
         pass
 
     # ========================================================================
+    # Reference-Based API (v6.0) - New Asymmetric Design
+    # ========================================================================
+
+    def infer_kernel_reference(
+        self,
+        model: ModelWrapper,
+        target_node: str,
+    ) -> Tuple[HWCustomOp, ModelWrapper]:
+        """Execute kernel inference for reference implementation (v6.0).
+
+        New asymmetric API. Primary implementation uses inherited infer_kernel(),
+        reference implementation uses this method.
+
+        Default: Delegates to infer_kernel_a() for backward compatibility.
+        Override: Implement reference-specific inference logic.
+
+        Args:
+            model: Stage 1 model
+            target_node: Target node name
+
+        Returns:
+            (op, model): Reference kernel and model
+
+        Example:
+            def infer_kernel_reference(self, model, target_node):
+                # FINN inference
+                from finn.transformation.fpgadataflow.convert_to_hw_layers import (
+                    InferElementwiseBinaryOperation,
+                )
+                model = model.transform(InferElementwiseBinaryOperation())
+                nodes = model.get_nodes_by_op_type("ElementwiseAdd")
+                from qonnx.custom_op.registry import getCustomOp
+                return getCustomOp(nodes[0]), model
+        """
+        # Default: delegate to old API for compatibility
+        if hasattr(self, "infer_kernel_a"):
+            return self.infer_kernel_a(model, target_node)
+        else:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} must implement infer_kernel_reference()"
+            )
+
+    def get_backend_variants_reference(self) -> List[Type]:
+        """Return backend variants for reference implementation (v6.0).
+
+        New asymmetric API. Primary uses inherited get_backend_variants(),
+        reference uses this method.
+
+        Default: Delegates to get_backend_variants_a() for backward compatibility.
+        Override: Return reference backend classes explicitly.
+
+        Returns:
+            List of backend classes
+
+        Example:
+            def get_backend_variants_reference(self):
+                from finn.custom_op.fpgadataflow.hls.elementwise_binary_hls import (
+                    ElementwiseAdd_hls,
+                )
+                return [ElementwiseAdd_hls]
+        """
+        # Default: delegate to old API for compatibility
+        if hasattr(self, "get_backend_variants_a"):
+            return self.get_backend_variants_a()
+        else:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} must implement get_backend_variants_reference()"
+            )
+
+    def configure_kernel_reference(
+        self,
+        op: HWCustomOp,
+        model: ModelWrapper,
+        stage: int,
+        config: "KernelTestConfig",
+    ):
+        """Configure reference kernel parameters (v6.0).
+
+        New asymmetric API. Primary uses inherited configure_kernel(),
+        reference uses this method.
+
+        Default: Delegates to configure_kernel_a() for backward compatibility.
+        Override: Implement reference-specific configuration.
+
+        Args:
+            op: Reference operator
+            model: Model
+            stage: Pipeline stage (2=kernel, 3=backend)
+            config: Test configuration
+        """
+        # Default: delegate to old API for compatibility
+        if hasattr(self, "configure_kernel_a"):
+            return self.configure_kernel_a(op, model, stage, config)
+        else:
+            self.auto_configure_from_fixture(op, model, stage, config)
+
+    def specialize_to_backend_reference(
+        self,
+        op: HWCustomOp,
+        model: ModelWrapper,
+        config: "KernelTestConfig",
+    ) -> Tuple[HWCustomOp, ModelWrapper]:
+        """Specialize reference to backend (v6.0).
+
+        New asymmetric API. Uses explicit backend variants (no method swapping!).
+
+        Default: Uses get_backend_variants_reference() and shared logic.
+        Override: Custom specialization for reference implementation.
+
+        Args:
+            op: Reference operator (Stage 2)
+            model: Model
+            config: Configuration
+
+        Returns:
+            (backend_op, model): Specialized reference and model
+        """
+        import pytest
+
+        fpgapart = config.get_fpgapart()
+        if fpgapart is None:
+            pytest.skip("Backend testing skipped (no FPGA part configured)")
+
+        backend_variants = self.get_backend_variants_reference()
+
+        from tests.support.backend_utils import specialize_to_backend
+
+        return specialize_to_backend(op, model, fpgapart, backend_variants)
+
+    # ========================================================================
     # Optional Overrides - Kernel B Inference (with default)
     # ========================================================================
 
@@ -751,6 +881,134 @@ class KernelParityTest(KernelTestBase_v2):
             return op, model
 
         cache_key = f"{kernel_test_config.test_id}_kernel_b"
+        return model_cache.get_stage3_model(cache_key, fpgapart, builder)
+
+    # ========================================================================
+    # Reference-Based Fixtures (v6.0) - New Naming Convention
+    # ========================================================================
+
+    @pytest.fixture(scope="function")
+    def stage2_model(
+        self,
+        kernel_test_config: "KernelTestConfig",
+        stage1_model: ModelWrapper,
+        model_cache,
+    ) -> Tuple:
+        """Stage 2 primary model (v6.0 - unqualified).
+
+        Uses inherited infer_kernel() from base class.
+        For compatibility, delegates to stage2_model_b.
+
+        Args:
+            kernel_test_config: Test configuration
+            stage1_model: Annotated model
+            model_cache: Cache
+
+        Returns:
+            (op, model): Primary kernel and model
+        """
+        return self.stage2_model_b(kernel_test_config, stage1_model, model_cache)
+
+    @pytest.fixture(scope="function")
+    def stage2_model_reference(
+        self,
+        kernel_test_config: "KernelTestConfig",
+        stage1_model: ModelWrapper,
+        model_cache,
+    ) -> Tuple:
+        """Stage 2 reference model (v6.0).
+
+        Uses infer_kernel_reference() method.
+
+        Args:
+            kernel_test_config: Test configuration
+            stage1_model: Annotated model
+            model_cache: Cache
+
+        Returns:
+            (op, model): Reference kernel and model
+        """
+
+        def builder():
+            model = stage1_model
+            target_node = model.graph.node[0].name
+
+            op, model = self.infer_kernel_reference(model, target_node)
+            self.configure_kernel_reference(
+                op, model, stage=2, config=kernel_test_config
+            )
+
+            return op, model
+
+        cache_key = f"{kernel_test_config.test_id}_reference"
+        return model_cache.get_stage2_model(cache_key, builder)
+
+    @pytest.fixture(scope="function")
+    def stage3_model(
+        self,
+        kernel_test_config: "KernelTestConfig",
+        stage2_model: Tuple,
+        model_cache,
+    ) -> Tuple:
+        """Stage 3 primary model (v6.0 - unqualified).
+
+        Uses inherited specialize_to_backend() from base class.
+
+        Args:
+            kernel_test_config: Test configuration
+            stage2_model: Stage 2 primary model
+            model_cache: Cache
+
+        Returns:
+            (op, model): Primary backend and model
+        """
+        fpgapart = kernel_test_config.get_fpgapart()
+
+        def builder():
+            base_op, base_model = stage2_model
+            op, model = self.specialize_to_backend(
+                base_op, base_model, kernel_test_config
+            )
+
+            # Configure backend
+            self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
+
+            return op, model
+
+        return model_cache.get_stage3_model(kernel_test_config.test_id, fpgapart, builder)
+
+    @pytest.fixture(scope="function")
+    def stage3_model_reference(
+        self,
+        kernel_test_config: "KernelTestConfig",
+        stage2_model_reference: Tuple,
+        model_cache,
+    ) -> Tuple:
+        """Stage 3 reference model (v6.0).
+
+        Uses specialize_to_backend_reference() method.
+
+        Args:
+            kernel_test_config: Test configuration
+            stage2_model_reference: Stage 2 reference model
+            model_cache: Cache
+
+        Returns:
+            (op, model): Reference backend and model
+        """
+        fpgapart = kernel_test_config.get_fpgapart()
+
+        def builder():
+            base_op, base_model = stage2_model_reference
+            op, model = self.specialize_to_backend_reference(
+                base_op, base_model, kernel_test_config
+            )
+            self.configure_kernel_reference(
+                op, model, stage=3, config=kernel_test_config
+            )
+            return op, model
+
+        cache_key = f"{kernel_test_config.test_id}_reference"
         return model_cache.get_stage3_model(cache_key, fpgapart, builder)
 
     # ========================================================================
