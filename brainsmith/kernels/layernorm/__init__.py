@@ -5,6 +5,7 @@
 # Components auto-register via decorators
 from .layernorm import LayerNorm
 from .layernorm_hls import LayerNorm_hls as LayerNormHLS
+from .layernorm_rtl import LayerNorm_rtl as LayerNormRTL
 from .infer_layernorm import InferLayerNorm
 
-__all__ = ["LayerNorm", "LayerNormHLS", "InferLayerNorm"]
+__all__ = ["LayerNorm", "LayerNormHLS", "LayerNormRTL", "InferLayerNorm"]
