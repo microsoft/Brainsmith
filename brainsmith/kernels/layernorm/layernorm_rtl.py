@@ -41,9 +41,8 @@ class LayerNorm_rtl(LayerNorm, RTLBackend):
 
 
     def generate_hdl(self, model, fpgapart, clk):
-        # wrapper file is in the same directory as this file
-        rtlsrc = os.path.dirname(os.path.abspath(__file__))
-        template_path = rtlsrc + "/layernorm_wrapper_template.v"
+        rtlsrc = os.environ["BSMITH_DIR"] + "/deps/finn/finn-rtllib/layernorm/"
+        template_path = rtlsrc + "layernorm_wrapper_template.v"
         simd = self.get_nodeattr("SIMD")
         topname = self.get_verilog_top_module_name()
         code_gen_dict = {
@@ -70,7 +69,7 @@ class LayerNorm_rtl(LayerNorm, RTLBackend):
 
         sv_files = ["layernorm.sv", "queue.sv", "accuf.sv", "binopf.sv", "rsqrtf.sv"]
         for sv_file in sv_files:
-            shutil.copy(rtlsrc + "/" + sv_file, code_gen_dir)
+            shutil.copy(rtlsrc + sv_file, code_gen_dir)
         # set ipgen_path and ip_path so that HLS-Synth transformation
         # and stich_ip transformation do not complain
         self.set_nodeattr("ipgen_path", code_gen_dir)
@@ -79,17 +78,17 @@ class LayerNorm_rtl(LayerNorm, RTLBackend):
     def get_rtl_file_list(self, abspath=False):
         if abspath:
             code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen") + "/"
-            rtllib_dir = os.path.dirname(os.path.abspath(__file__))
+            rtllib_dir = rtlsrc = os.environ["BSMITH_DIR"] + "/deps/finn/finn-rtllib/layernorm/"
         else:
             code_gen_dir = ""
             rtllib_dir = ""
 
         verilog_files = [
-            rtllib_dir + "/layernorm.sv",
-            rtllib_dir + "/queue.sv",
-            rtllib_dir + "/accuf.sv",
-            rtllib_dir + "/binopf.sv",
-            rtllib_dir + "/rsqrtf.sv",
+            rtllib_dir + "layernorm.sv",
+            rtllib_dir + "queue.sv",
+            rtllib_dir + "accuf.sv",
+            rtllib_dir + "binopf.sv",
+            rtllib_dir + "rsqrtf.sv",
             code_gen_dir + self.get_nodeattr("gen_top_module") + ".v",
         ]
         return verilog_files
