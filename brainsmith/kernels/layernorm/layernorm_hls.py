@@ -80,60 +80,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         ]
 
     def execute_node(self, context, graph):
-        # Get the configured execution mode
-        mode = self.get_nodeattr("exec_mode")
-        node = self.onnx_node
-        folded_ishape = self.get_folded_input_shape()
-        export_idt = self.get_input_datatype()
-
-        # Generate input
-        inp = context[node.input[0]]
-        inp = inp.reshape(folded_ishape)
-        inp = inp.astype(np.float32)
-
-        if mode == "python":
-            self._execute_node_python(context, graph)
-        elif mode == "cppsim":
-            code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
-            # Execute the precompiled model
-            super().exec_precompiled_singlenode_model()
-            # Load output npy file
-            super().npy_to_dynamic_output(context)
-        elif mode == "rtlsim":
-            # Generate & format input
-            code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
-            np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
-            nbits = self.get_instream_width()
-            rtlsim_inp = npy_to_rtlsim_input(
-                "{}/input_0.npy".format(code_gen_dir), export_idt, nbits
-            )
-            # Setup RTLsim
-            sim = self.get_rtlsim()
-            super().reset_rtlsim(sim)
-            super().toggle_clk(sim)
-            io_dict = {
-                "inputs": {"in0": rtlsim_inp},
-                "outputs":{"out0": []}
-                    }
-            self.rtlsim_multi_io(sim, io_dict)
-            out = io_dict["outputs"]["out0"]
-
-            odt = self.get_output_datatype()
-            target_bits = odt.bitwidth()
-            packed_bits = self.get_outstream_width()
-            out_npy_path = "{}/output_0.npy".format(code_gen_dir)
-            out_shape = self.get_folded_output_shape()
-            rtlsim_output_to_npy(out, out_npy_path, odt, out_shape, packed_bits, target_bits)
-
-            # load and reshape output
-            output = np.load(out_npy_path)
-            oshape = self.get_normal_output_shape()
-            output = np.asarray([output], dtype=np.float32).reshape(*oshape)
-            context[node.output[0]] = output
-
-        else:
-            raise Exception(f"Unsupported execution mode: {mode}")
+        HLSBackend.execute_node(self, context, graph)
 
     def get_exp_cycles(self):
         oshape = self.get_normal_output_shape()
