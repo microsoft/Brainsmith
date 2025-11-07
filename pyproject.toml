@@ -80,7 +80,7 @@ extend-safe-fixes = [
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = ["-ra"]  # Show all test outcomes
-testpaths = ["tests"]
+testpaths = ["tests", "brainsmith"]
 markers = [
     # Test Framework Type
     "single_kernel: marks tests using SingleKernelTest framework",

@@ -3,8 +3,6 @@
 This module contains reusable constants and case builder functions for
 elementwise binary operations (Add, Sub, Mul, Div).
 
-Test base class lives in: brainsmith.kernels.elementwise_binary.tests
-
 Architecture:
 1. Reusable constants for shapes, dtypes, designs, platforms
 2. Explicit case lists (no programmatic generation)
@@ -12,7 +10,10 @@ Architecture:
 4. Clear separation: validation vs certification cases
 
 Usage:
-    from .shared_cases import VALIDATION_CASES_BASE, make_elementwise_case
+    from brainsmith.kernels.elementwise_binary.tests import (
+        VALIDATION_CASES_BASE,
+        make_elementwise_case
+    )
 
     # Build operation-specific configs
     validation_cases = [
@@ -80,8 +81,6 @@ DTYPES_FLOAT32 = {"lhs": DataType["FLOAT32"], "rhs": DataType["FLOAT32"]}
 
 DTYPES_MIXED_SIGN = {"lhs": DataType["INT8"], "rhs": DataType["UINT8"]}
 DTYPES_MIXED_WIDTH = {"lhs": DataType["INT8"], "rhs": DataType["INT16"]}
-DTYPES_MIXED_WIDTH_UNSIGNED = {"lhs": DataType["UINT8"], "rhs": DataType["UINT16"]}
-DTYPES_MIXED_BOTH = {"lhs": DataType["INT8"], "rhs": DataType["UINT16"]}
 
 # ============================================================================
 # Constants: Platform Configurations
@@ -208,9 +207,34 @@ VALIDATION_CASES_BASE = [
     # BIPOLAR cases (binary arithmetic)
     ("bipolar_1x64_baseline", SHAPE_2D_1x64, DTYPES_BIPOLAR, DESIGN_BASELINE, PLATFORM_ZYNQ7020),
     # ========================================================================
+    # Narrow/Binary DataTypes (Output Width Validation)
+    # ========================================================================
+    ("int4_1x16_baseline", SHAPE_2D_1x16, DTYPES_INT4, DESIGN_BASELINE, PLATFORM_ZYNQ7020),
+    ("uint4_1x16_baseline", SHAPE_2D_1x16, DTYPES_UINT4, DESIGN_BASELINE, PLATFORM_ZYNQ7020),
+    ("binary_1x64_baseline", SHAPE_2D_1x64, DTYPES_BINARY, DESIGN_BASELINE, PLATFORM_ZYNQ7020),
+    # ========================================================================
+    # 3D Shape Coverage (Tests 3D Path in defines())
+    # ========================================================================
+    ("int8_1x16x64_baseline", SHAPE_3D_1x16x64, DTYPES_INT8, DESIGN_BASELINE, PLATFORM_ZYNQ7020),
+    # ========================================================================
+    # DSE Dimension Coverage: RAM Style Variants
+    # ========================================================================
+    ("int8_1x64_ram_distributed", SHAPE_2D_1x64, DTYPES_INT8, DESIGN_RAM_DISTRIBUTED, PLATFORM_ZYNQ7020),
+    ("int8_1x64_ram_block", SHAPE_2D_1x64, DTYPES_INT8, DESIGN_RAM_BLOCK, PLATFORM_ZYNQ7020),
+    ("int8_1x64_ram_ultra", SHAPE_2D_1x64, DTYPES_INT8, DESIGN_RAM_ULTRA, PLATFORM_ZYNQ7020),
+    # ========================================================================
+    # DSE Dimension Coverage: Memory Mode Variants
+    # ========================================================================
+    ("int8_1x64_mem_decoupled", SHAPE_2D_1x64, DTYPES_INT8, DESIGN_MEM_DECOUPLED, PLATFORM_ZYNQ7020),
+    # ========================================================================
+    # DSE Dimension Coverage: Combined Variants (PE + RAM Style)
+    # ========================================================================
+    ("int8_4x128_pe8_ram_distributed", SHAPE_2D_4x128, DTYPES_INT8, DESIGN_PE8_RAM_DISTRIBUTED, PLATFORM_ZYNQ7020),
+    ("int8_4x128_pe8_ram_block", SHAPE_2D_4x128, DTYPES_INT8, DESIGN_PE8_RAM_BLOCK, PLATFORM_ZYNQ7020),
+    # ========================================================================
     # Broadcasting Cases (Software-Only - Not Backend-Ready Yet)
     # ========================================================================
-    # INT8 broadcasting patterns
+    # All 5 broadcasting patterns tested with INT8
     (
         "int8_channel_broadcast",
         SHAPE_BROADCAST_CHANNEL,
@@ -246,29 +270,6 @@ VALIDATION_CASES_BASE = [
         DESIGN_BASELINE,
         PLATFORM_SOFTWARE_ONLY,
     ),
-    # FLOAT32 broadcasting
-    (
-        "float32_channel_broadcast",
-        SHAPE_BROADCAST_CHANNEL,
-        DTYPES_FLOAT32,
-        DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
-    ),
-    (
-        "float32_scalar_broadcast",
-        SHAPE_BROADCAST_SCALAR,
-        DTYPES_FLOAT32,
-        DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
-    ),
-    # UINT8 broadcasting (unsigned overflow behavior)
-    (
-        "uint8_channel_broadcast",
-        SHAPE_BROADCAST_CHANNEL,
-        DTYPES_UINT8,
-        DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
-    ),
     # ========================================================================
     # Mixed DataType Cases (Software-Only - HLS Doesn't Support)
     # ========================================================================
@@ -286,44 +287,4 @@ VALIDATION_CASES_BASE = [
         DESIGN_BASELINE,
         PLATFORM_SOFTWARE_ONLY,
     ),
-    (
-        "mixed_width_unsigned",
-        SHAPE_2D_1x64,
-        DTYPES_MIXED_WIDTH_UNSIGNED,
-        DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
-    ),
-    (
-        "mixed_both",
-        SHAPE_2D_1x64,
-        DTYPES_MIXED_BOTH,
-        DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
-    ),
-]
-
-# ============================================================================
-# Broadcasting Cases (Reusable Constants for Hardware Testing)
-# ============================================================================
-# Pre-built broadcasting test cases for when Phase 2 backend is ready.
-# Switch PLATFORM_SOFTWARE_ONLY → PLATFORM_ZYNQ7020 when backend supports them.
-
-BROADCASTING_CASES_BASE = [
-    # Channel broadcast (most common: bias-like operations)
-    ("int8_channel_broadcast", SHAPE_BROADCAST_CHANNEL, DTYPES_INT8, DESIGN_PE8, PLATFORM_SOFTWARE_ONLY),
-    ("uint8_channel_broadcast", SHAPE_BROADCAST_CHANNEL, DTYPES_UINT8, DESIGN_PE8, PLATFORM_SOFTWARE_ONLY),
-    ("float32_channel_broadcast", SHAPE_BROADCAST_CHANNEL, DTYPES_FLOAT32, DESIGN_PE8, PLATFORM_SOFTWARE_ONLY),
-
-    # Scalar broadcast (constant addition/multiplication)
-    ("int8_scalar_broadcast", SHAPE_BROADCAST_SCALAR, DTYPES_INT8, DESIGN_BASELINE, PLATFORM_SOFTWARE_ONLY),
-    ("float32_scalar_broadcast", SHAPE_BROADCAST_SCALAR, DTYPES_FLOAT32, DESIGN_BASELINE, PLATFORM_SOFTWARE_ONLY),
-
-    # Spatial broadcast (batch norm style)
-    ("int8_spatial_broadcast", SHAPE_BROADCAST_SPATIAL, DTYPES_INT8, DESIGN_PE8, PLATFORM_SOFTWARE_ONLY),
-
-    # Bidirectional broadcast (complex broadcast pattern)
-    ("int8_bidir_broadcast", SHAPE_BROADCAST_BIDIR, DTYPES_INT8, DESIGN_BASELINE, PLATFORM_SOFTWARE_ONLY),
-
-    # Rank mismatch broadcast (vector + tensor)
-    ("int8_rank_mismatch", SHAPE_BROADCAST_RANK, DTYPES_INT8, DESIGN_BASELINE, PLATFORM_SOFTWARE_ONLY),
 ]

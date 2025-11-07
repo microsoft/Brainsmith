@@ -15,10 +15,12 @@ Usage:
 
 import pytest
 
-from brainsmith.kernels.elementwise_binary.tests import ElementwiseBinaryTestBase
+from brainsmith.kernels.elementwise_binary.tests import (
+    ElementwiseBinaryTestBase,
+    VALIDATION_CASES_BASE,
+    make_elementwise_case,
+)
 from tests.frameworks.test_config import KernelTestConfig
-
-from .shared_cases import VALIDATION_CASES_BASE, make_elementwise_case
 
 # ============================================================================
 # Test Case Generation

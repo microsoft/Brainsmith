@@ -5,16 +5,14 @@
     - **[Vivado Design Suite](https://www.xilinx.com/support/download.html) 2024.2** (migration to 2025.1 in process)
     - **[Optional]** Cmake for BERT example V80 shell integration
 
-## Installation Options
+---
 
-### Clone the Repository
+## Installation Options
 
 ```bash
 git clone https://github.com/microsoft/brainsmith.git ./brainsmith
 cd brainsmith
 ```
-
-### Setup Environment
 
 ### (Option A): Local Development with Poetry
 

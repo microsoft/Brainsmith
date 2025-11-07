@@ -9,6 +9,7 @@ output: "bitfile"                   # estimates | rtl | bitfile
 # Direct override FINN configuration options
 finn_config:
   # Quicktest-specific optimizations
-  target_fps: 1                    # Low FPS for quick test (vs 3000 in demo)
+  target_fps: 1                     # Low FPS for quick test (vs 3000 in demo)
   folding_config_file: "${BSMITH_DIR}/examples/bert/configs/quicktest_folding.json"  # Quicktest-specific folding
+  fifosim_n_inferences: 2           # Speed up FIFO sizing
   verbose: false
