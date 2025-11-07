@@ -244,6 +244,9 @@ FINN_KERNELS = [
     # Other kernels with corrected names
     ('StreamingConcat', f'{FK}.concat.StreamingConcat'),
     ('StreamingSplit', f'{FK}.split.StreamingSplit'),
+    ('Shuffle', f'{FK}.shuffle.Shuffle'),
+    ('InnerShuffle', f'{FK}.inner_shuffle.InnerShuffle'),
+    ('OuterShuffle', f'{FK}.outer_shuffle.OuterShuffle'),
     ('UpsampleNearestNeighbour', f'{FK}.upsampler.UpsampleNearestNeighbour'),
 ]
 
@@ -304,6 +307,8 @@ FINN_BACKENDS = [
     ('StreamingFIFO_rtl', f'{FK}.rtl.streamingfifo_rtl.StreamingFIFO_rtl', 'StreamingFIFO', 'rtl'),
     ('Thresholding_rtl', f'{FK}.rtl.thresholding_rtl.Thresholding_rtl', 'Thresholding', 'rtl'),
     ('VVAU_rtl', f'{FK}.rtl.vectorvectoractivation_rtl.VVAU_rtl', 'VVAU', 'rtl'),
+    ('InnerShuffle_rtl', f'{FK}.inner_shuffle_rtl.InnerShuffle_rtl'),
+    ('OuterShuffle_hls', f'{FK}.outer_shuffle_hls.OuterShuffle_hls'),
 ]
 
 
