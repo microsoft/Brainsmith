@@ -59,57 +59,6 @@ template<typename T>
 struct is_floating_point_or_ap_float
     : std::integral_constant<bool, std::is_floating_point<T>::value || is_ap_float<T>::value> {};
 
-template<int  W>
-class std::numeric_limits<ap_uint<W>> : public std::numeric_limits<void> {
-public:
-        static constexpr bool  is_specialized = true;
-        static constexpr bool  is_signed = false;
-        static constexpr bool  is_integer = true;
-        static constexpr bool  is_exact = true;
-        static constexpr bool  is_bounded = true;
-        static constexpr bool  is_modulo = true;
-        static constexpr unsigned  digits = W;
-        static constexpr unsigned  radix  = 2;
-
-        static ap_uint<W> min   () { return  0; }
-        static ap_uint<W> lowest() { return  0; }
-        static ap_uint<W> max   () { return  ap_uint<W>(0) - 1; }
-};
-
-template<int  W>
-class std::numeric_limits<ap_int<W>> : public std::numeric_limits<void> {
-public:
-        static constexpr bool  is_specialized = true;
-        static constexpr bool  is_signed = true;
-        static constexpr bool  is_integer = true;
-        static constexpr bool  is_exact = true;
-        static constexpr bool  is_bounded = true;
-        static constexpr bool  is_modulo = true;
-        static constexpr unsigned  digits = W;
-        static constexpr unsigned  radix  = 2;
-
-        static ap_int<W> min   () { ap_int<W>  res = 0; res[W - 1] = 1; return  res; }
-        static ap_int<W> lowest() { ap_int<W>  res = 0; res[W - 1] = 1; return  res; }
-        static ap_int<W> max   () { ap_int<W>  res = 0; res[W - 1] = 1; return ~res; }
-};
-
-//- Streaming Flit with `last` Marking --------------------------------------
-template<typename T>
-struct flit_t {
-	bool  last;
-	T     data;
-
-public:
-	flit_t(bool  last_, T const &data_) : last(last_), data(data_) {}
-	~flit_t() {}
-};
-
-//- Streaming Copy ----------------------------------------------------------
-template<typename T>
-void move(hls::stream<T> &src, hls::stream<T> &dst) {
-#pragma HLS pipeline II=1 style=flp
-	if(!src.empty())  dst.write(src.read());
-}
 
 //- Tree Reduce -------------------------------------------------------------
 template<
