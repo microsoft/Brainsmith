@@ -9,7 +9,7 @@ import shutil
 import numpy as np
 from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
-from finn.util.mlo_sim import dat_file_to_numpy_array
+#from finn.util.mlo_sim import dat_file_to_numpy_array
 from brainsmith.core.plugins import transform
 
 @transform(
@@ -53,9 +53,9 @@ class ExtractShellIntegrationMetadata(Transformation):
                         )
 
                         # Save the weights as a numpy file
-                        np_dat = dat_file_to_numpy_array(datfile)
-                        mvau_hbm_weights[idx]["weight_npy"] = f"memblock_MVAU_rtl_id_{idx}.npy"
-                        np.save(f"{dirname}/{mvau_hbm_weights[idx]['weight_npy']}", np_dat) 
+                        #np_dat = dat_file_to_numpy_array(datfile)
+                        #mvau_hbm_weights[idx]["weight_npy"] = f"memblock_MVAU_rtl_id_{idx}.npy"
+                        #np.save(f"{dirname}/{mvau_hbm_weights[idx]['weight_npy']}", np_dat) 
 
                         # Copy to the destination dir
                         mvau_hbm_weights[idx]["extern_idx"] = extern_idx

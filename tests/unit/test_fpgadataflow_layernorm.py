@@ -35,7 +35,7 @@ from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 from finn.transformation.fpgadataflow.create_dataflow_partition import (
     CreateDataflowPartition,
 )
-from brainsmith.primitives.transforms.expand_norms import ExpandNorms
+from brainsmith.transforms.cleanup.expand_norms import ExpandNorms
 
 # Debugging dependencies, to remove
 import os

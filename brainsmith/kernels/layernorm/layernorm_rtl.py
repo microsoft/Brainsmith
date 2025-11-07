@@ -12,10 +12,14 @@ import shutil
 
 from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
 from brainsmith.kernels.layernorm.layernorm import LayerNorm
-from brainsmith.registry import backend
+from brainsmith.core.plugins import backend
 
-
-@backend(name='LayerNorm_rtl', target_kernel='brainsmith:LayerNorm', language='rtl')
+@backend(
+    name="LayerNorm_rtl",
+    kernel="LayerNorm",
+    language="rtl",
+    author="FINN"
+        )
 class LayerNorm_rtl(LayerNorm, RTLBackend):
     """RTL backend implementation for LayerNorm kernel.
 
