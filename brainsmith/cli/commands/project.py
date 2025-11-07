@@ -64,8 +64,8 @@ def project():
 @project.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--finn", is_flag=True, help="Include FINN-specific configuration settings")
 @click.pass_obj
-def show(ctx: ApplicationContext, finn: bool) -> None:
-    """Display current configuration with source information."""
+def info(ctx: ApplicationContext, finn: bool) -> None:
+    """Display current project configuration with source information."""
     try:
         logger.debug(f"Showing config with finn={finn}")
         config = ctx.get_effective_config()

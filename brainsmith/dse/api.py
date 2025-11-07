@@ -31,7 +31,8 @@ def explore_design_space(
     blueprint_path: str,
     output_dir: Optional[str] = None,
     start_step_override: Optional[str] = None,
-    stop_step_override: Optional[str] = None
+    stop_step_override: Optional[str] = None,
+    verbosity: str = "normal"
 ) -> TreeExecutionResult:
     """
     Explore design space and synthesize FPGA accelerator from neural network model.
@@ -42,6 +43,7 @@ def explore_design_space(
         output_dir: Output directory (defaults to $BSMITH_BUILD_DIR/dfc_YYYYMMDD_HHMMSS)
         start_step_override: Override blueprint start_step
         stop_step_override: Override blueprint stop_step
+        verbosity: Logging verbosity (quiet | normal | verbose | debug)
 
     Returns:
         TreeExecutionResult containing build artifacts and statistics
@@ -71,6 +73,11 @@ def explore_design_space(
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
+
+    # Configure logging with output directory for file logging
+    from brainsmith._internal.logging import setup_logging
+    config = get_config()
+    setup_logging(level=verbosity, output_dir=output_path, config=config.logging)
 
     logger.info(f"Exploring design space for FPGA accelerator:")
     logger.info(f"  Model: {model_path}")

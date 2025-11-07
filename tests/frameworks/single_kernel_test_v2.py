@@ -113,12 +113,14 @@ class SingleKernelTest(KernelTestBase_v2):
     """Test one kernel with fixture-based parameterization.
 
     Subclasses implement (2 methods only!):
-    - make_test_model(input_shapes): Create model with symbolic shapes
-    - get_kernel_inference_transform(): Return transform class
+    - make_test_model(kernel_test_config): Create Stage 1 ONNX model
+    - get_kernel_op(): Return the kernel class to test
+
+    get_kernel_inference_transform() has a default implementation using get_kernel_op().
+    Override only if you need custom transform logic.
 
     Pytest fixtures provide:
-    - input_shapes: Dict[str, Tuple[int, ...]] from fixture
-    - input_datatypes: Dict[str, DataType] from fixture
+    - kernel_test_config: Unified test configuration (v4.0+)
 
     Framework automatically:
     - Annotates inputs with QONNX DataTypes (NO Quant nodes inserted)
@@ -137,6 +139,43 @@ class SingleKernelTest(KernelTestBase_v2):
     5. test_cppsim_execution_vs_golden: HLS C++ simulation matches golden
     6. test_rtlsim_execution_vs_golden: RTL simulation matches golden
     """
+
+    # ========================================================================
+    # Abstract methods - must implement in subclass
+    # ========================================================================
+
+    def get_kernel_op(self):
+        """Return the kernel class to test.
+
+        Returns:
+            Kernel class (e.g., ElementwiseBinaryOp, AddStreams)
+
+        Example:
+            def get_kernel_op(self):
+                from brainsmith.kernels.elementwise_binary import ElementwiseBinaryOp
+                return ElementwiseBinaryOp
+        """
+        raise NotImplementedError("Subclass must implement get_kernel_op()")
+
+    def get_kernel_inference_transform(self):
+        """Return the kernel inference transform.
+
+        Default implementation uses InferKernels([get_kernel_op()]).
+        Override only if you need custom transform logic.
+
+        Returns:
+            Transformation instance (not callable!)
+
+        Example (using default):
+            # No need to override - default uses get_kernel_op()
+
+        Example (custom):
+            def get_kernel_inference_transform(self):
+                from my_package import CustomInferenceTransform
+                return CustomInferenceTransform(special_config=True)
+        """
+        from brainsmith.primitives.transforms.infer_kernels import InferKernels
+        return InferKernels([self.get_kernel_op()])
 
     # ========================================================================
     # Internal helpers - use fixtures and Phase 1 utilities
@@ -296,64 +335,10 @@ class SingleKernelTest(KernelTestBase_v2):
         return execute_onnx(quant_model, inputs, return_full_exec_context=False)
 
     # ========================================================================
-    # Pipeline execution
+    # Pipeline execution (REMOVED - use fixtures instead)
     # ========================================================================
-
-    def run_inference_pipeline(
-        self,
-        kernel_test_config: 'KernelTestConfig',
-        to_backend: bool = False,
-    ) -> Tuple[HWCustomOp, ModelWrapper]:
-        """Run inference pipeline to Stage 2 (base kernel) or Stage 3 (backend).
-
-        Pipeline stages:
-            Stage 1: ONNX Node (Add, Mul, etc.)
-            Stage 2: Base Kernel (AddStreams, no backend) ← to_backend=False
-            Stage 3: Backend (AddStreams_hls, with HLSBackend) ← to_backend=True
-
-        Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-                Contains input_shapes, input_dtypes, operation, etc.
-                Provides declarative DSE configuration via auto_configure_from_fixture()
-            to_backend: If True, specialize to backend (Stage 3).
-                       If False, return base kernel (Stage 2).
-
-        Returns:
-            (op, model): Hardware op instance and model
-                        - Stage 2: Base kernel (e.g., AddStreams)
-                        - Stage 3: Backend (e.g., AddStreams_hls)
-
-        Raises:
-            RuntimeError: If pipeline fails to create HW node
-            pytest.skip: If to_backend=True but backend not configured
-        """
-        # Prepare model with QONNX annotations
-        model, target_node = self._prepare_model_with_annotations(kernel_test_config)
-
-        # Stage 1 → Stage 2: ONNX → Base Kernel
-        runner = PipelineRunner()
-
-        def configure_stage_2(op, m):
-            # Apply imperative configuration (backward compatible)
-            self.configure_parameters(op, m, stage=2)
-            # Apply declarative configuration from fixture (v3.0)
-            self.auto_configure_from_fixture(op, m, stage=2, config=kernel_test_config)
-
-        op, model = runner.run(
-            model_factory=lambda: (model, target_node),
-            transform=self.get_kernel_inference_transform(),
-            configure_fn=configure_stage_2,
-        )
-
-        # Stage 2 → Stage 3: Base Kernel → Backend (optional)
-        if to_backend:
-            op, model = self._specialize_to_backend_stage(op, model, kernel_test_config)
-            # Configure backend-specific parameters
-            self.configure_parameters(op, model, stage=3)
-            # Apply declarative configuration from fixture (v3.0)
-            self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
-
-        return op, model
+    # run_inference_pipeline() was removed in v5.0
+    # Use stage2_model and stage3_model fixtures instead
 
 
     # ========================================================================
@@ -398,8 +383,7 @@ class SingleKernelTest(KernelTestBase_v2):
 
     @pytest.fixture(scope="function")
     def stage1_model(
-        self,
-        kernel_test_config: "KernelTestConfig"
+        self, kernel_test_config: "KernelTestConfig", model_cache
     ) -> ModelWrapper:
         """Stage 1 model with QONNX annotations (before kernel inference).
 
@@ -407,58 +391,185 @@ class SingleKernelTest(KernelTestBase_v2):
         but BEFORE any kernel inference transforms. This is the model we
         compute golden reference from.
 
+        Uses session-scoped model_cache for computational reuse across tests
+        with the same test_id.
+
         Args:
             kernel_test_config: Unified test configuration (auto-injected by pytest)
+            model_cache: Session-scoped cache for model artifacts
 
         Returns:
             Stage 1 model (ONNX + annotations, no kernel inference, no Quant nodes)
         """
-        model, _ = self._prepare_model_with_annotations(kernel_test_config)
 
-        # Run shape/datatype inference (required for QONNX execution)
-        from qonnx.transformation.infer_shapes import InferShapes
-        from qonnx.transformation.infer_datatypes import InferDataTypes
+        def builder():
+            model, _ = self._prepare_model_with_annotations(kernel_test_config)
 
-        model = model.transform(InferShapes())
-        model = model.transform(InferDataTypes())
+            # Run shape/datatype inference (required for QONNX execution)
+            from qonnx.transformation.infer_datatypes import InferDataTypes
+            from qonnx.transformation.infer_shapes import InferShapes
 
-        return model
+            model = model.transform(InferShapes())
+            model = model.transform(InferDataTypes())
+
+            return model
+
+        return model_cache.get_stage1_model(kernel_test_config.test_id, builder)
 
     @pytest.fixture(scope="function")
     def test_inputs(
-        self,
-        kernel_test_config: "KernelTestConfig"
+        self, kernel_test_config: "KernelTestConfig", model_cache
     ) -> Dict[str, np.ndarray]:
         """Generate test inputs with deterministic seed (v3.0).
+
+        Uses session-scoped model_cache for computational reuse across tests
+        with the same test_id.
 
         Args:
             kernel_test_config: Unified test configuration (auto-injected by pytest)
                 Contains input_shapes, input_dtypes for test data generation
+            model_cache: Session-scoped cache for model artifacts
 
         Returns:
             Dict mapping input names to test data arrays (pre-quantized)
         """
-        return self._generate_test_inputs(kernel_test_config)
+
+        def builder():
+            return self._generate_test_inputs(kernel_test_config)
+
+        return model_cache.get_test_inputs(kernel_test_config.test_id, builder)
 
     @pytest.fixture(scope="function")
     def golden_outputs(
         self,
+        kernel_test_config: "KernelTestConfig",
         stage1_model: ModelWrapper,
-        test_inputs: Dict[str, np.ndarray]
+        test_inputs: Dict[str, np.ndarray],
+        model_cache,
     ) -> Dict[str, np.ndarray]:
         """Golden reference computed from Stage 1 ONNX model.
 
         This is computed ONCE per test configuration and shared across all
         execution tests (Python, cppsim, rtlsim).
 
+        Uses session-scoped model_cache for computational reuse across tests
+        with the same test_id.
+
         Args:
+            kernel_test_config: Unified test configuration (auto-injected by pytest)
             stage1_model: Stage 1 model fixture (ONNX + Quant)
             test_inputs: Test inputs fixture
+            model_cache: Session-scoped cache for model artifacts
 
         Returns:
             Expected outputs from QONNX execution on Stage 1 model
         """
-        return self._compute_golden_reference(stage1_model, test_inputs)
+
+        def builder():
+            return self._compute_golden_reference(stage1_model, test_inputs)
+
+        return model_cache.get_golden_reference(kernel_test_config.test_id, builder)
+
+    @pytest.fixture(scope="function")
+    def stage2_model(
+        self,
+        kernel_test_config: "KernelTestConfig",
+        stage1_model: ModelWrapper,
+        model_cache,
+    ) -> Tuple:
+        """Stage 2 model (base kernel, no backend specialization).
+
+        Runs kernel inference transform on Stage 1 model to produce base kernel
+        (e.g., ONNX Add → AddStreams).
+
+        Uses session-scoped model_cache for computational reuse across tests
+        with the same test_id. Enables sharing between python/cppsim/rtlsim tests.
+
+        Args:
+            kernel_test_config: Unified test configuration
+            stage1_model: Cached Stage 1 model fixture
+            model_cache: Session-scoped cache for model artifacts
+
+        Returns:
+            (kernel_op, model) tuple for Python execution
+        """
+
+        def builder():
+            # Reuse cached Stage 1 model
+            model = stage1_model
+            target_node = model.graph.node[0].name  # Assume first node
+
+            # Stage 1 → Stage 2: ONNX → Base Kernel
+            from tests.support.pipeline import PipelineRunner
+
+            runner = PipelineRunner()
+
+            def configure_stage_2(op, m):
+                # Apply imperative configuration (backward compatible)
+                self.configure_parameters(op, m, stage=2)
+                # Apply declarative configuration from fixture (v3.0)
+                self.auto_configure_from_fixture(
+                    op, m, stage=2, config=kernel_test_config
+                )
+
+            op, model = runner.run(
+                model_factory=lambda: (model, target_node),
+                transform=self.get_kernel_inference_transform(),
+                configure_fn=configure_stage_2,
+            )
+
+            return op, model
+
+        return model_cache.get_stage2_model(kernel_test_config.test_id, builder)
+
+    @pytest.fixture(scope="function")
+    def stage3_model(
+        self,
+        kernel_test_config: "KernelTestConfig",
+        stage2_model: Tuple,
+        model_cache,
+    ) -> Tuple:
+        """Stage 3 model (backend-specialized kernel).
+
+        Specializes Stage 2 base kernel to backend (e.g., AddStreams → AddStreams_hls).
+
+        Uses session-scoped model_cache for computational reuse. Cache key includes
+        fpgapart for platform-specific backend models.
+
+        Skips test if fpgapart not configured in kernel_test_config.
+
+        Args:
+            kernel_test_config: Unified test configuration
+            stage2_model: Cached Stage 2 model fixture
+            model_cache: Session-scoped cache for model artifacts
+
+        Returns:
+            (backend_op, model) tuple for cppsim/rtlsim execution
+
+        Raises:
+            pytest.skip: If fpgapart not configured for this test
+        """
+        fpgapart = kernel_test_config.get_fpgapart()
+        if fpgapart is None:
+            pytest.skip("Backend testing skipped (no FPGA part configured for this test)")
+
+        def builder():
+            # Reuse cached Stage 2 model
+            base_op, base_model = stage2_model
+
+            # Stage 2 → Stage 3: Base Kernel → Backend
+            op, model = self._specialize_to_backend_stage(
+                base_op, base_model, kernel_test_config
+            )
+
+            # Configure backend-specific parameters
+            self.configure_parameters(op, model, stage=3)
+            # Apply declarative configuration from fixture (v3.0)
+            self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
+
+            return op, model
+
+        return model_cache.get_stage3_model(kernel_test_config.test_id, fpgapart, builder)
 
     # ========================================================================
     # Test Suite (6 tests) - Parameterized via fixtures
@@ -467,12 +578,13 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.mark.pipeline
     @pytest.mark.single_kernel
     def test_pipeline_creates_hw_node(
-        self, kernel_test_config: "KernelTestConfig"
+        self, kernel_test_config: "KernelTestConfig", stage2_model: Tuple
     ):
         """Validate that kernel inference creates hardware node.
 
         Args:
             kernel_test_config: Unified test configuration (v3.0, required)
+            stage2_model: Cached Stage 2 model fixture
 
         Pipeline:
         1. Create ONNX node with Quant nodes
@@ -480,7 +592,7 @@ class SingleKernelTest(KernelTestBase_v2):
         3. Verify HW node was created
         4. Verify it's a HWCustomOp instance
         """
-        op, model = self.run_inference_pipeline(kernel_test_config)
+        op, model = stage2_model
 
         # Verify op is HWCustomOp
         assert isinstance(
@@ -499,14 +611,15 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.mark.pipeline
     @pytest.mark.single_kernel
     def test_shapes_preserved_through_pipeline(
-        self, kernel_test_config: "KernelTestConfig"
+        self, kernel_test_config: "KernelTestConfig", stage2_model: Tuple
     ):
         """Validate tensor shapes remain correct through inference pipeline.
 
         Args:
             kernel_test_config: Unified test configuration (v3.0, required)
+            stage2_model: Cached Stage 2 model fixture
         """
-        op, model = self.run_inference_pipeline(kernel_test_config)
+        op, model = stage2_model
 
         # Extract config data for validation
         input_shapes = kernel_test_config.input_shapes
@@ -546,14 +659,15 @@ class SingleKernelTest(KernelTestBase_v2):
     @pytest.mark.pipeline
     @pytest.mark.single_kernel
     def test_datatypes_preserved_through_pipeline(
-        self, kernel_test_config: "KernelTestConfig"
+        self, kernel_test_config: "KernelTestConfig", stage2_model: Tuple
     ):
         """Validate tensor datatypes remain correct through inference pipeline.
 
         Args:
             kernel_test_config: Unified test configuration (v3.0, required)
+            stage2_model: Cached Stage 2 model fixture
         """
-        op, model = self.run_inference_pipeline(kernel_test_config)
+        op, model = stage2_model
 
         # Extract config data for validation
         input_datatypes = kernel_test_config.input_dtypes
@@ -595,13 +709,18 @@ class SingleKernelTest(KernelTestBase_v2):
     def test_python_execution_vs_golden(
         self,
         kernel_test_config: "KernelTestConfig",
+        stage2_model: Tuple,
         test_inputs: Dict[str, np.ndarray],
-        golden_outputs: Dict[str, np.ndarray]
+        golden_outputs: Dict[str, np.ndarray],
     ):
         """Test Python execution (execute_node) matches QONNX golden reference.
 
+        Uses cached Stage 2 model from fixture for computational reuse across
+        test depths (python/cppsim/rtlsim).
+
         Args:
             kernel_test_config: Unified test configuration (v3.0, required)
+            stage2_model: Cached Stage 2 model fixture (NEW: replaces run_inference_pipeline)
             test_inputs: From fixture (generated test data)
             golden_outputs: From fixture (Stage 1 golden reference)
 
@@ -610,8 +729,8 @@ class SingleKernelTest(KernelTestBase_v2):
         2. Python execution produces correct results
         3. Results match Stage 1 QONNX golden reference (quantized) within tolerance
         """
-        # Run pipeline to Stage 2 (base kernel)
-        op, model = self.run_inference_pipeline(kernel_test_config)
+        # Use cached Stage 2 model (reused across python/cppsim/rtlsim)
+        op, model = stage2_model
 
         # Execute via Python backend (uses Stage 2 model)
         executor = PythonExecutor()
@@ -619,7 +738,9 @@ class SingleKernelTest(KernelTestBase_v2):
 
         # Validate against golden (from Stage 1 fixture)
         tolerance = kernel_test_config.get_tolerance_python()
-        self.validate_against_golden(actual_outputs, golden_outputs, "Python execution", tolerance)
+        self.validate_against_golden(
+            actual_outputs, golden_outputs, "Python execution", tolerance
+        )
 
     @pytest.mark.pipeline
     @pytest.mark.golden
@@ -629,19 +750,24 @@ class SingleKernelTest(KernelTestBase_v2):
     def test_cppsim_execution_vs_golden(
         self,
         kernel_test_config: "KernelTestConfig",
+        stage3_model: Tuple,
         test_inputs: Dict[str, np.ndarray],
-        golden_outputs: Dict[str, np.ndarray]
+        golden_outputs: Dict[str, np.ndarray],
     ):
         """Test HLS C++ simulation matches QONNX golden reference.
 
+        Uses cached Stage 3 model from fixture for computational reuse.
+        Stage 2 model is reused from test_python_execution_vs_golden.
+
         Args:
             kernel_test_config: Unified test configuration (v3.0, required)
+            stage3_model: Cached Stage 3 model fixture (NEW: replaces run_inference_pipeline)
             test_inputs: From fixture (generated test data)
             golden_outputs: From fixture (Stage 1 golden reference)
 
         Validates complete code generation pipeline (3 stages):
-        1. ONNX → Base Kernel (Stage 1 → 2)
-        2. Base Kernel → HLS Backend (Stage 2 → 3)
+        1. ONNX → Base Kernel (Stage 1 → 2) [cached from stage2_model]
+        2. Base Kernel → HLS Backend (Stage 2 → 3) [cached here]
         3. HLS Backend → C++ code → Compilation → Simulation
 
         Results must match Stage 1 QONNX golden reference (quantized) within tolerance.
@@ -652,11 +778,11 @@ class SingleKernelTest(KernelTestBase_v2):
             - HLS backend available for kernel
 
         Skips:
-            - If backend not configured (get_backend_fpgapart() returns None)
+            - If backend not configured (handled by stage3_model fixture)
             - If VITIS_PATH not set (handled by CppSimExecutor)
         """
-        # Run pipeline to Stage 3 (backend)
-        op, model = self.run_inference_pipeline(kernel_test_config, to_backend=True)
+        # Use cached Stage 3 model (reused for rtlsim test)
+        op, model = stage3_model
 
         # Execute via cppsim (uses Stage 3 backend model)
         executor = CppSimExecutor()
@@ -664,7 +790,9 @@ class SingleKernelTest(KernelTestBase_v2):
 
         # Validate against golden (from Stage 1 fixture)
         tolerance = kernel_test_config.get_tolerance_cppsim()
-        self.validate_against_golden(actual_outputs, golden_outputs, "HLS simulation (cppsim)", tolerance)
+        self.validate_against_golden(
+            actual_outputs, golden_outputs, "HLS simulation (cppsim)", tolerance
+        )
 
     @pytest.mark.pipeline
     @pytest.mark.golden
@@ -674,19 +802,25 @@ class SingleKernelTest(KernelTestBase_v2):
     def test_rtlsim_execution_vs_golden(
         self,
         kernel_test_config: "KernelTestConfig",
+        stage3_model: Tuple,
         test_inputs: Dict[str, np.ndarray],
-        golden_outputs: Dict[str, np.ndarray]
+        golden_outputs: Dict[str, np.ndarray],
     ):
         """Test RTL simulation matches QONNX golden reference.
 
+        Uses cached Stage 3 model from fixture for computational reuse.
+        Stage 2 model reused from test_python_execution_vs_golden,
+        Stage 3 model reused from test_cppsim_execution_vs_golden.
+
         Args:
             kernel_test_config: Unified test configuration (v3.0, required)
+            stage3_model: Cached Stage 3 model fixture (NEW: replaces run_inference_pipeline)
             test_inputs: From fixture (generated test data)
             golden_outputs: From fixture (Stage 1 golden reference)
 
         Validates complete HDL generation pipeline (3 stages):
-        1. ONNX → Base Kernel (Stage 1 → 2)
-        2. Base Kernel → Backend (Stage 2 → 3, HLS or RTL)
+        1. ONNX → Base Kernel (Stage 1 → 2) [cached from stage2_model]
+        2. Base Kernel → Backend (Stage 2 → 3) [cached from stage3_model]
         3. Backend → HDL → Synthesis → Simulation
 
         For HLS backends: Synthesizes HLS → RTL using Vitis HLS first
@@ -696,15 +830,15 @@ class SingleKernelTest(KernelTestBase_v2):
 
         Requires:
             - Vivado installation with XSim
-            - Backend configured (get_backend_fpgapart() returns FPGA part)
+            - Backend configured (handled by stage3_model fixture)
             - Backend available for kernel (HLS or RTL)
 
         Skips:
-            - If backend not configured (get_backend_fpgapart() returns None)
+            - If backend not configured (handled by stage3_model fixture)
             - If Vivado not found (handled by RTLSimExecutor)
         """
-        # Run pipeline to Stage 3 (backend)
-        op, model = self.run_inference_pipeline(kernel_test_config, to_backend=True)
+        # Use cached Stage 3 model (same as cppsim test)
+        op, model = stage3_model
 
         # Execute via rtlsim (uses Stage 3 backend model)
         executor = RTLSimExecutor()
@@ -712,5 +846,7 @@ class SingleKernelTest(KernelTestBase_v2):
 
         # Validate against golden (from Stage 1 fixture)
         tolerance = kernel_test_config.get_tolerance_rtlsim()
-        self.validate_against_golden(actual_outputs, golden_outputs, "RTL simulation (rtlsim)", tolerance)
+        self.validate_against_golden(
+            actual_outputs, golden_outputs, "RTL simulation (rtlsim)", tolerance
+        )
 

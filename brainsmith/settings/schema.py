@@ -194,6 +194,42 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
         return data
 
 
+class LoggingConfig(BaseModel):
+    """Logging configuration with progressive disclosure.
+
+    Simple defaults for CLI use, advanced customization via config file.
+    """
+
+    # Simple (exposed in CLI)
+    level: str = Field(
+        default="normal",
+        description="Console verbosity level: quiet | normal | verbose | debug"
+    )
+
+    # Advanced (config file only)
+    finn_tools: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Per-tool log levels for FINN tools (e.g., {'vivado': 'WARNING', 'hls': 'INFO'})"
+    )
+
+    suppress_patterns: Optional[List[str]] = Field(
+        default=None,
+        description="Regex patterns to suppress from console output (file logs unaffected)"
+    )
+
+    max_log_size_mb: int = Field(
+        default=0,
+        description="Maximum log file size in MB (0 = no rotation)"
+    )
+
+    keep_backups: int = Field(
+        default=3,
+        description="Number of rotated log backups to keep"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class SystemConfig(BaseSettings):
     """Configuration schema with hierarchical priority.
 
@@ -305,6 +341,11 @@ class SystemConfig(BaseSettings):
             "Default number of workers for parallel operations "
             "(exports to NUM_DEFAULT_WORKERS for FINN)"
         )
+    )
+
+    logging: LoggingConfig = Field(
+        default_factory=LoggingConfig,
+        description="Logging configuration (verbosity, filters, rotation)"
     )
 
     finn_root: Path | None = Field(

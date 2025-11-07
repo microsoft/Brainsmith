@@ -306,7 +306,7 @@ if [ $? -eq 0 ]; then
     fi
     echo ""
     echo "Then verify setup:"
-    echo "  brainsmith project show"
+    echo "  brainsmith project info"
 
 else
     echo ""

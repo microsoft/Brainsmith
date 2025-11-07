@@ -6,26 +6,13 @@ Brainsmith compiles ONNX models to optimized FPGA accelerators, intelligently ex
 
 ---
 
-## Why Brainsmith?
-
-**From Hours to Minutes**
-Traditional FPGA development requires iterative manual configuration. Brainsmith's segment-based design space exploration (DSE) reuses computation across similar configurations.
-
-**Extensible by Design**
-Add custom hardware kernels, optimization transforms, or build steps through a component registry. Your accelerator isn't limited to built-in operations.
-
-**Production-Ready Workflow**
-Built on industry-proven tools (FINN, QONNX, Brevitas) with support for major FPGA platforms. Goes from PyTorch to synthesizable RTL with resource estimates, performance metrics, and bitstream generation.
-
----
-
 ## See It In Action
 
-Define your design space in YAML:
+Declarative design space `blueprint` in YAML:
 
 ```yaml
 name: "BERT Accelerator"
-fpga_part: "xczu3eg-sbva484-1-e"
+board: V80
 clock_ns: 5.0  # 200MHz
 output: "estimates"
 

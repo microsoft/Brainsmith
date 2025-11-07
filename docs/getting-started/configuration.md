@@ -119,7 +119,7 @@ build_dir: /tmp/finn_dev_${USER}
 
 ```bash
 # Show effective configuration
-brainsmith project show
+brainsmith project info
 
 # More detailed view
 brainsmith config show --verbose
@@ -273,7 +273,7 @@ source .brainsmith/env.sh
 
 ### Configuration Not Loading
 
-**Symptom:** `brainsmith project show` displays empty or default values
+**Symptom:** `brainsmith project info` displays empty or default values
 
 **Solutions:**
 
@@ -300,7 +300,7 @@ source .brainsmith/env.sh
 
 1. Verify Vivado path in config:
    ```bash
-   brainsmith project show | grep xilinx_path
+   brainsmith project info | grep xilinx_path
    ```
 
 2. Check Vivado is installed at specified path:

@@ -64,6 +64,9 @@ def load_config(
     3. Project config file (.brainsmith/config.yaml)
     4. Built-in defaults
 
+    Special handling:
+    - BSMITH_LOG_LEVEL env var overrides logging.level (shorthand for BSMITH_LOGGING__LEVEL)
+
     Path Resolution:
     - Absolute paths: Used as-is
     - Relative CLI paths: Resolve to current working directory
@@ -78,6 +81,11 @@ def load_config(
     """
     try:
         cli_overrides = _resolve_cli_paths(cli_overrides)
+
+        # Handle BSMITH_LOG_LEVEL shorthand (if not overridden by CLI)
+        if 'logging' not in cli_overrides and 'BSMITH_LOG_LEVEL' in os.environ:
+            log_level = os.environ['BSMITH_LOG_LEVEL']
+            cli_overrides['logging'] = {'level': log_level}
 
         if project_file:
             cli_overrides['_project_file'] = project_file

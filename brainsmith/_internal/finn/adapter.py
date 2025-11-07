@@ -110,9 +110,12 @@ class FINNAdapter:
             # This is not user-configurable - it's a required workaround.
             finn_config["save_intermediate_models"] = True
 
-            # CRITICAL: Set True to prevent FINN from redirecting stdout/stderr
-            # which conflicts with Rich console logging, causing hangs
-            finn_config["verbose"] = True
+            # Use Brainsmith's logging orchestration
+            # This prevents FINN from adding its own handlers, allowing us to control
+            # all logging through the Brainsmith logging system
+            from brainsmith._internal.logging import get_finn_config
+            logging_config = get_finn_config()
+            finn_config.update(logging_config)
 
             # Disable pdb debugger for automated builds (pytest captures stdin/stdout)
             finn_config["enable_build_pdb_debug"] = False

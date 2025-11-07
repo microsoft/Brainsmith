@@ -41,7 +41,7 @@ from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
 from qonnx.util.basic import get_by_name
 
-from brainsmith.dataflow import KernelOp, FULL_DIM
+from brainsmith.dataflow import KernelOp, FULL_SHAPE
 import brainsmith.dataflow as df
 from brainsmith.registry import kernel
 
@@ -222,7 +222,7 @@ SHUFFLE_SCHEMA = df.KernelSchema(
     inputs=[
         df.InputSchema(
             name="input",
-            block_tiling=[FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM],
+            block_tiling=FULL_SHAPE,
             stream_tiling=["SIMD"],  # Stream last dimension with SIMD
         )
     ],

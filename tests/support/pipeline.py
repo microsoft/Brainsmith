@@ -178,7 +178,7 @@ class PipelineRunner:
         model = model.transform(InferDataTypes())
 
         # Apply kernel transform
-        model = model.transform(transform())
+        model = model.transform(transform)
 
         # Apply standard FINN optimizations
         # These are no-ops if the kernel doesn't support them

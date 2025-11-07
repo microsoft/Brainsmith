@@ -77,10 +77,84 @@ def pytest_configure(config):
     """
     # Validate environment is sourced before running tests
     from brainsmith.settings.validation import ensure_environment_sourced
+
     ensure_environment_sourced()
 
-    # Markers already defined in pytest.ini
-    pass
+    # Register v5.0 markers programmatically (also defined in pytest.ini)
+    config.addinivalue_line(
+        "markers",
+        "certification: Comprehensive test sweep across all supported configurations (v5.0)",
+    )
+    config.addinivalue_line(
+        "markers", "validation_v5: Tactical corner case tests for CI/CD (v5.0)"
+    )
+
+
+# ============================================================================
+# v5.0 Session-Scoped Fixtures (Orthogonal Parameterization)
+# ============================================================================
+
+
+@pytest.fixture(scope="session")
+def model_cache():
+    """Session-scoped model cache for computational reuse.
+
+    Provides lazy caching of:
+    - Stage 1 Models: f(test_id)
+    - Golden References: f(test_id)
+    - Stage 2 Models: f(test_id)
+    - Stage 3 Models: f(test_id, fpgapart)
+
+    Cache is shared across all tests in session, enabling
+    reuse when running multiple depths for same test case.
+
+    Scope: session (entire pytest run)
+    Lifetime: Cleared when pytest exits
+    """
+    from tests.fixtures.model_cache import ModelCache
+
+    cache = ModelCache()
+
+    # Optional: Print stats at end of session
+    yield cache
+
+    # Uncomment to see cache statistics
+    # cache.print_stats()
+
+
+@pytest.fixture
+def platform_config():
+    """Default platform configuration.
+
+    Validation tests use this default (single platform).
+    Certification tests override with @pytest.fixture(params=[...]).
+
+    Default: ZYNQ_7020 (xc7z020clg400-1)
+    Override: Define in kernel-specific conftest.py or test file
+    """
+    from tests.frameworks.test_config import PlatformConfig
+
+    return PlatformConfig(fpgapart="xc7z020clg400-1")
+
+
+@pytest.fixture
+def validation_config():
+    """Default validation configuration.
+
+    Provides standard tolerances for most tests.
+    Individual tests can override for specific needs.
+
+    Default: VALIDATION_STANDARD (standard tolerances)
+    Override: Define in test file for custom tolerances
+    """
+    from tests.frameworks.test_config import ValidationConfig
+
+    return ValidationConfig()  # Uses defaults: rtol=1e-7, atol=1e-9
+
+
+# ============================================================================
+# Original Fixtures
+# ============================================================================
 
 
 @pytest.fixture(scope="session")

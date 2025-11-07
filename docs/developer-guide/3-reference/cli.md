@@ -156,12 +156,12 @@ brainsmith project init
 brainsmith project init ~/my-fpga-project
 ```
 
-### `brainsmith project show`
+### `brainsmith project info`
 
 Display current project configuration.
 
 ```bash
-brainsmith project show
+brainsmith project info
 ```
 
 Shows effective configuration for the current project, including:

@@ -79,7 +79,7 @@ def _create_smith_subcommand() -> click.Command:
         Provides access to dataflow accelerator and kernel generation tools.
         Inherits configuration from parent brainsmith command.
 
-        Example: brainsmith --logs debug smith dfc model.onnx blueprint.yaml
+        Example: brainsmith --log-level debug smith dfc model.onnx blueprint.yaml
         """
         smith_cli = create_cli(CLI_NAME_SMITH, include_admin=False)
 
@@ -107,7 +107,7 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         ctx: click.Context,
         build_dir: Path | None,
         config: Path | None,
-        logs: str,
+        log_level: str,
         no_progress: bool
     ) -> None:
         # Bootstrap commands (like project init) don't need environment or config
@@ -122,7 +122,7 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
             ctx.obj = ApplicationContext.from_cli_args(
                 config_file=config,
                 build_dir_override=build_dir,
-                log_level=logs,
+                log_level=log_level,
                 no_progress=no_progress,
                 cli_name=name
             )
@@ -146,11 +146,11 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         help="Override configuration file"
     ))
     cli.params.append(click.Option(
-        ["-l", "--logs"],
-        type=click.Choice(["error", "warning", "info", "debug"]),
-        default="warning",
+        ["-l", "--log-level"],
+        type=click.Choice(["quiet", "normal", "verbose", "debug"]),
+        default="normal",
         metavar="LEVEL",
-        help="Set log level (error|warning|info|debug)"
+        help="Set log verbosity (quiet|normal|verbose|debug)"
     ))
     cli.params.append(click.Option(
         ["--no-progress"],

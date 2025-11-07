@@ -8,8 +8,8 @@ Polymorphic hardware kernel for elementwise binary operations (arithmetic,
 logical, comparison, bitwise) with PE parallelism.
 """
 
-from .elementwise_binary import ElementwiseBinaryOp, ELEMENTWISE_BINARY_SCHEMA
+from .elementwise_binary import ElementwiseBinaryOp
 from .elementwise_binary_hls import ElementwiseBinaryOp_hls
 from .operations import BinaryOperations
 
-__all__ = ["ElementwiseBinaryOp", "ELEMENTWISE_BINARY_SCHEMA", "ElementwiseBinaryOp_hls", "BinaryOperations"]
+__all__ = ["ElementwiseBinaryOp", "ElementwiseBinaryOp_hls", "BinaryOperations"]

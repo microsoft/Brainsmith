@@ -47,7 +47,7 @@ cd .
 source .venv/bin/activate && source .brainsmith/env.sh
 
 # Verify setup
-brainsmith project show
+brainsmith project info
 ```
 
 #### Option B: Docker-based Development
@@ -62,10 +62,10 @@ export XILINXD_LICENSE_FILE=/path/to/your/license.lic
 
 # Open interactive shell and verify setup
 ./ctl-docker.sh shell
-brainsmith project show
+brainsmith project info
 
 # OR run one-off command
-./ctl-docker.sh "brainsmith project show"
+./ctl-docker.sh "brainsmith project info"
 ```
 
 ### 2. Working with Multiple Projects

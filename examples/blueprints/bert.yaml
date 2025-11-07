@@ -13,7 +13,7 @@ design_space:
     - LayerNorm
     - finn:DuplicateStreams
     - ElementwiseBinaryOp
-    - LegacyShuffle
+    - Shuffle
     - Softmax
     - finn:Thresholding
     - finn:MVAU

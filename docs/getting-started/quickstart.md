@@ -252,7 +252,7 @@ smith dfc model.onnx blueprint_fast.yaml --output-dir ./results_fast
 **Error:** `vivado: command not found`
 
 **Solution:**
-1. Check config: `brainsmith project show`
+1. Check config: `brainsmith project info`
 2. Re-activate environment: `source .brainsmith/env.sh`
 3. Verify Vivado path: `ls $XILINX_PATH`
 
