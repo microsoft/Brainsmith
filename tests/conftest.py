@@ -296,7 +296,7 @@ def setup_parity_imports():
 
     New framework usage:
         from tests.frameworks.single_kernel_test import SingleKernelTest
-        from tests.frameworks.dual_kernel_test import DualKernelTest
+        from tests.frameworks.kernel_parity_test import KernelParityTest
 
     This eliminates brittle sys.path manipulation in individual test files.
     """

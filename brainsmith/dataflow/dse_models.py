@@ -27,7 +27,10 @@ from abc import ABC
 import math
 
 from .types import Shape, ShapeHierarchy, prod
-from .ordered_dimension import OrderedDimension
+from .ordered_parameter import OrderedParameter
+
+# Backward compatibility alias (will be removed in future)
+OrderedDimension = OrderedParameter
 from qonnx.core.datatype import BaseDataType
 
 if TYPE_CHECKING:
@@ -212,7 +215,7 @@ class KernelDesignSpace:
         outputs: Output interface design spaces (by name)
         internal_datatypes: Internal datatypes (e.g., accumulator)
         optimization_constraints: Parametric constraints validated at configure()
-        dimensions: Explorable dimensions - OrderedDimension (with navigation) or
+        parameters: Explorable parameters - OrderedParameter (with navigation) or
                    frozenset (discrete categories like ram_style)
     """
     name: str
@@ -220,7 +223,7 @@ class KernelDesignSpace:
     outputs: Dict[str, InterfaceDesignSpace]
     internal_datatypes: Dict[str, BaseDataType]
     optimization_constraints: List['Constraint']
-    dimensions: Dict[str, Union[OrderedDimension, FrozenSet]]  # OrderedDimension for ordered, frozenset for discrete
+    parameters: Dict[str, Union['OrderedParameter', FrozenSet]]  # OrderedParameter for ordered, frozenset for discrete
 
     @property
     def input_list(self) -> List[InterfaceDesignSpace]:
@@ -244,113 +247,113 @@ class KernelDesignSpace:
     # Dimension Query Methods
     # =========================================================================
 
-    def get_dimension(self, name: str) -> Union[OrderedDimension, FrozenSet]:
-        """Get dimension by name.
+    def get_parameter(self, name: str) -> Union['OrderedParameter', FrozenSet]:
+        """Get parameter by name.
 
         Args:
-            name: Dimension name
+            name: Parameter name
 
         Returns:
-            OrderedDimension for ordered dimensions, frozenset for discrete
+            OrderedParameter for ordered parameters, frozenset for discrete
 
         Raises:
-            KeyError: If dimension not found
+            KeyError: If parameter not found
         """
-        return self.dimensions[name]
+        return self.parameters[name]
 
-    def get_ordered(self, name: str) -> OrderedDimension:
-        """Get ordered dimension by name.
+    def get_ordered_parameter(self, name: str) -> 'OrderedParameter':
+        """Get ordered parameter by name.
 
         Args:
-            name: Dimension name
+            name: Parameter name
 
         Returns:
-            OrderedDimension instance
+            OrderedParameter instance
 
         Raises:
-            KeyError: If dimension not found
-            TypeError: If dimension is discrete (not ordered)
+            KeyError: If parameter not found
+            TypeError: If parameter is discrete (not ordered)
         """
-        dim = self.dimensions[name]
-        if not isinstance(dim, OrderedDimension):
+        param = self.parameters[name]
+        if not isinstance(param, OrderedDimension):  # Using alias
             raise TypeError(
-                f"Dimension '{name}' is discrete (frozenset), not ordered. "
-                f"Use get_dimension() for type-agnostic access."
+                f"Parameter '{name}' is discrete (frozenset), not ordered. "
+                f"Use get_parameter() for type-agnostic access."
             )
-        return dim
+        return param
 
-    def is_ordered(self, name: str) -> bool:
-        """Check if dimension is ordered.
+    def is_ordered_parameter(self, name: str) -> bool:
+        """Check if parameter is ordered.
 
         Args:
-            name: Dimension name
+            name: Parameter name
 
         Returns:
-            True if dimension is OrderedDimension, False if discrete (frozenset)
+            True if parameter is OrderedParameter, False if discrete (frozenset)
 
         Raises:
-            KeyError: If dimension not found
+            KeyError: If parameter not found
         """
-        return isinstance(self.dimensions[name], OrderedDimension)
+        return isinstance(self.parameters[name], OrderedDimension)  # Using alias
 
-    def is_discrete(self, name: str) -> bool:
-        """Check if dimension is discrete.
+    def is_discrete_parameter(self, name: str) -> bool:
+        """Check if parameter is discrete.
 
         Args:
-            name: Dimension name
+            name: Parameter name
 
         Returns:
-            True if dimension is discrete (frozenset), False if ordered
+            True if parameter is discrete (frozenset), False if ordered
 
         Raises:
-            KeyError: If dimension not found
+            KeyError: If parameter not found
         """
-        return isinstance(self.dimensions[name], frozenset)
+        return isinstance(self.parameters[name], frozenset)
 
     # =========================================================================
-    # Delegation Methods (for OrderedDimension navigation)
+    # Delegation Methods (for OrderedParameter navigation)
     # =========================================================================
 
-    def dim_min(self, name: str) -> int:
-        """Get minimum value of ordered dimension.
+    def param_min(self, name: str) -> int:
+        """Get minimum value of ordered parameter.
 
         Args:
-            name: Dimension name
+            name: Parameter name
 
         Returns:
             Minimum value
 
         Raises:
-            KeyError: If dimension not found
-            TypeError: If dimension is discrete
+            KeyError: If parameter not found
+            TypeError: If parameter is discrete
         """
-        return self.get_ordered(name).min()
+        return self.get_ordered_parameter(name).min()
 
-    def dim_max(self, name: str) -> int:
-        """Get maximum value of ordered dimension.
+    def param_max(self, name: str) -> int:
+        """Get maximum value of ordered parameter.
 
         Args:
-            name: Dimension name
+            name: Parameter name
 
         Returns:
             Maximum value
 
         Raises:
-            KeyError: If dimension not found
-            TypeError: If dimension is discrete
+            KeyError: If parameter not found
+            TypeError: If parameter is discrete
         """
-        return self.get_ordered(name).max()
+        return self.get_ordered_parameter(name).max()
 
-    def dim_at_percentage(
+    def param_at_percentage(
         self,
         name: str,
         percentage: float,
         rounding: str = 'natural'
     ) -> int:
-        """Get value at percentage position in ordered dimension.
+        """Get value at percentage position in ordered parameter.
 
         Args:
-            name: Dimension name
+            name: Parameter name
             percentage: Position in range [0.0, 1.0]
             rounding: 'natural', 'down', or 'up'
 
@@ -358,28 +361,28 @@ class KernelDesignSpace:
             Value at percentage position
 
         Raises:
-            KeyError: If dimension not found
-            TypeError: If dimension is discrete
+            KeyError: If parameter not found
+            TypeError: If parameter is discrete
             ValueError: If percentage out of range or invalid rounding
         """
-        return self.get_ordered(name).at_percentage(percentage, rounding)
+        return self.get_ordered_parameter(name).at_percentage(percentage, rounding)
 
-    def dim_at_index(self, name: str, idx: int) -> int:
-        """Get value at index in ordered dimension.
+    def param_at_index(self, name: str, idx: int) -> int:
+        """Get value at index in ordered parameter.
 
         Args:
-            name: Dimension name
+            name: Parameter name
             idx: Index position (supports negative indexing)
 
         Returns:
             Value at index
 
         Raises:
-            KeyError: If dimension not found
-            TypeError: If dimension is discrete
+            KeyError: If parameter not found
+            TypeError: If parameter is discrete
             IndexError: If index out of range
         """
-        return self.get_ordered(name).at_index(idx)
+        return self.get_ordered_parameter(name).at_index(idx)
 
     def configure(self, config: Dict[str, Union[int, str]]) -> 'KernelDesignPoint':
         """Instantiate kernel at specified point in design space.
@@ -416,37 +419,37 @@ class KernelDesignSpace:
     def _validate_params(self, params: Dict[str, Union[int, str]]) -> None:
         """Validate parameters specify valid point in design space."""
         for param_name, value in params.items():
-            if param_name not in self.dimensions:
+            if param_name not in self.parameters:
                 raise ValueError(
-                    f"Unknown dimension: {param_name}. "
-                    f"Known: {list(self.dimensions.keys())}"
+                    f"Unknown parameter: {param_name}. "
+                    f"Known: {list(self.parameters.keys())}"
                 )
 
-            dim = self.dimensions[param_name]
+            param = self.parameters[param_name]
 
-            # Handle OrderedDimension
-            if isinstance(dim, OrderedDimension):
-                if value not in dim.values:
+            # Handle OrderedParameter
+            if isinstance(param, OrderedDimension):
+                if value not in param.values:
                     raise ValueError(
                         f"Invalid {param_name}={value}. "
-                        f"Valid range: [{dim.min()}, {dim.max()}], "
-                        f"values: {dim.values}"
+                        f"Valid range: [{param.min()}, {param.max()}], "
+                        f"values: {param.values}"
                     )
             # Handle discrete (frozenset)
-            elif isinstance(dim, frozenset):
-                if value not in dim:
+            elif isinstance(param, frozenset):
+                if value not in param:
                     raise ValueError(
                         f"Invalid {param_name}={value}. "
-                        f"Valid: {sorted(dim)}"
+                        f"Valid: {sorted(param)}"
                     )
             else:
                 # Fallback for backward compatibility (shouldn't happen)
-                if value not in dim:
-                    raise ValueError(f"Invalid {param_name}={value}. Valid: {dim}")
+                if value not in param:
+                    raise ValueError(f"Invalid {param_name}={value}. Valid: {param}")
 
-        missing = set(self.dimensions.keys()) - set(params.keys())
+        missing = set(self.parameters.keys()) - set(params.keys())
         if missing:
-            raise ValueError(f"Missing dimensions: {missing}")
+            raise ValueError(f"Missing parameters: {missing}")
 
     def _instantiate_interfaces(
         self,
@@ -911,114 +914,6 @@ class KernelDesignPoint:
 
         return self.with_dimension(param, value)
 
-    def increase_input_stream(self, index: int, n: int = 1) -> 'KernelDesignPoint':
-        """Increase input stream parallelism by n steps.
-
-        Args:
-            index: Input interface index (0-based)
-            n: Number of steps to increase (default 1)
-
-        Returns:
-            New KernelDesignPoint with increased parallelism
-
-        Raises:
-            IndexError: If index out of range
-            ValueError: If interface has no parallelism parameter
-        """
-        if index < 0 or index >= len(self.input_list):
-            raise IndexError(
-                f"Input index {index} out of range [0, {len(self.input_list)})"
-            )
-
-        param = self.input_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Input interface {index} has no stream parallelism parameter"
-            )
-
-        return self.increase(param, n)
-
-    def decrease_input_stream(self, index: int, n: int = 1) -> 'KernelDesignPoint':
-        """Decrease input stream parallelism by n steps.
-
-        Args:
-            index: Input interface index (0-based)
-            n: Number of steps to decrease (default 1)
-
-        Returns:
-            New KernelDesignPoint with decreased parallelism
-
-        Raises:
-            IndexError: If index out of range
-            ValueError: If interface has no parallelism parameter
-        """
-        if index < 0 or index >= len(self.input_list):
-            raise IndexError(
-                f"Input index {index} out of range [0, {len(self.input_list)})"
-            )
-
-        param = self.input_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Input interface {index} has no stream parallelism parameter"
-            )
-
-        return self.decrease(param, n)
-
-    def increase_output_stream(self, index: int, n: int = 1) -> 'KernelDesignPoint':
-        """Increase output stream parallelism by n steps.
-
-        Args:
-            index: Output interface index (0-based)
-            n: Number of steps to increase (default 1)
-
-        Returns:
-            New KernelDesignPoint with increased parallelism
-
-        Raises:
-            IndexError: If index out of range
-            ValueError: If interface has no parallelism parameter
-        """
-        if index < 0 or index >= len(self.output_list):
-            raise IndexError(
-                f"Output index {index} out of range [0, {len(self.output_list)})"
-            )
-
-        param = self.output_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Output interface {index} has no stream parallelism parameter"
-            )
-
-        return self.increase(param, n)
-
-    def decrease_output_stream(self, index: int, n: int = 1) -> 'KernelDesignPoint':
-        """Decrease output stream parallelism by n steps.
-
-        Args:
-            index: Output interface index (0-based)
-            n: Number of steps to decrease (default 1)
-
-        Returns:
-            New KernelDesignPoint with decreased parallelism
-
-        Raises:
-            IndexError: If index out of range
-            ValueError: If interface has no parallelism parameter
-        """
-        if index < 0 or index >= len(self.output_list):
-            raise IndexError(
-                f"Output index {index} out of range [0, {len(self.output_list)})"
-            )
-
-        param = self.output_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Output interface {index} has no stream parallelism parameter"
-            )
-
-        return self.decrease(param, n)
-
     def with_input_stream_percentage(
         self,
         index: int,
@@ -1084,138 +979,6 @@ class KernelDesignPoint:
             )
 
         return self.with_percentage(param, percentage, rounding)
-
-    def sweep_input_stream(
-        self,
-        index: int,
-        start: Optional[int] = None,
-        stop: Optional[int] = None
-    ) -> Iterator['KernelDesignPoint']:
-        """Sweep input stream parallelism dimension.
-
-        Args:
-            index: Input interface index (0-based)
-            start: Starting value (default: minimum)
-            stop: Ending value inclusive (default: maximum)
-
-        Yields:
-            KernelDesignPoint for each parallelism value in range
-
-        Raises:
-            IndexError: If index out of range
-            ValueError: If interface has no parallelism parameter
-        """
-        if index < 0 or index >= len(self.input_list):
-            raise IndexError(
-                f"Input index {index} out of range [0, {len(self.input_list)})"
-            )
-
-        param = self.input_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Input interface {index} has no stream parallelism parameter"
-            )
-
-        yield from self.sweep_dimension(param, start, stop)
-
-    def sweep_output_stream(
-        self,
-        index: int,
-        start: Optional[int] = None,
-        stop: Optional[int] = None
-    ) -> Iterator['KernelDesignPoint']:
-        """Sweep output stream parallelism dimension.
-
-        Args:
-            index: Output interface index (0-based)
-            start: Starting value (default: minimum)
-            stop: Ending value inclusive (default: maximum)
-
-        Yields:
-            KernelDesignPoint for each parallelism value in range
-
-        Raises:
-            IndexError: If index out of range
-            ValueError: If interface has no parallelism parameter
-        """
-        if index < 0 or index >= len(self.output_list):
-            raise IndexError(
-                f"Output index {index} out of range [0, {len(self.output_list)})"
-            )
-
-        param = self.output_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Output interface {index} has no stream parallelism parameter"
-            )
-
-        yield from self.sweep_dimension(param, start, stop)
-
-    def sweep_input_stream_percentage(
-        self,
-        index: int,
-        percentages: List[float],
-        rounding: Literal['natural', 'down', 'up'] = 'natural'
-    ) -> Iterator['KernelDesignPoint']:
-        """Sweep input stream parallelism at percentage points.
-
-        Args:
-            index: Input interface index (0-based)
-            percentages: List of percentage values (0.0 to 1.0)
-            rounding: How to round fractional indices
-
-        Yields:
-            KernelDesignPoint for each percentage
-
-        Raises:
-            IndexError: If index out of range
-            ValueError: If interface has no parallelism parameter
-        """
-        if index < 0 or index >= len(self.input_list):
-            raise IndexError(
-                f"Input index {index} out of range [0, {len(self.input_list)})"
-            )
-
-        param = self.input_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Input interface {index} has no stream parallelism parameter"
-            )
-
-        yield from self.sweep_percentage(param, percentages, rounding)
-
-    def sweep_output_stream_percentage(
-        self,
-        index: int,
-        percentages: List[float],
-        rounding: Literal['natural', 'down', 'up'] = 'natural'
-    ) -> Iterator['KernelDesignPoint']:
-        """Sweep output stream parallelism at percentage points.
-
-        Args:
-            index: Output interface index (0-based)
-            percentages: List of percentage values (0.0 to 1.0)
-            rounding: How to round fractional indices
-
-        Yields:
-            KernelDesignPoint for each percentage
-
-        Raises:
-            IndexError: If index out of range
-            ValueError: If interface has no parallelism parameter
-        """
-        if index < 0 or index >= len(self.output_list):
-            raise IndexError(
-                f"Output index {index} out of range [0, {len(self.output_list)})"
-            )
-
-        param = self.output_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Output interface {index} has no stream parallelism parameter"
-            )
-
-        yield from self.sweep_percentage(param, percentages, rounding)
 
     # =========================================================================
     # Interface Stream Query Helpers

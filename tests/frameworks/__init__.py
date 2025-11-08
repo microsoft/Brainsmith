@@ -1,9 +1,9 @@
-"""Test frameworks for kernel testing (v4.0).
+"""Test frameworks for kernel testing.
 
 This package provides Arete-compliant test frameworks with compositional
 configuration, eliminating bloat and complexity theater.
 
-Architecture (v4.0):
+Architecture:
 - Composition over inheritance
 - Config as data (ModelStructure, DesignParameters, PlatformConfig, ValidationConfig)
 - Property accessors for flat access to nested structure
@@ -11,10 +11,10 @@ Architecture (v4.0):
 - Support utilities via composition (not inheritance)
 
 Frameworks:
-- SingleKernelTest_v2: Test one kernel implementation vs golden reference
-- DualKernelTest_v2: Test FINN vs Brainsmith parity + both vs golden
+- SingleKernelTest: Test one kernel implementation vs golden reference
+- KernelParityTest: Test FINN vs Brainsmith parity + both vs golden (v6.0)
 
-Configuration (v4.0):
+Configuration:
 - KernelTestConfig: Compositional configuration with sub-configs
 - ModelStructure: What we're testing (operation, shapes, dtypes)
 - DesignParameters: How we configure it (PE, SIMD, backend variants)
@@ -26,8 +26,8 @@ Support Utilities (tests.support):
 - GoldenValidator: Output validation against golden reference
 - Executors: Backend execution (Python, cppsim, rtlsim)
 
-Example (SingleKernelTest_v2):
-    from tests.frameworks.single_kernel_test_v2 import SingleKernelTest
+Example (SingleKernelTest):
+    from tests.frameworks.single_kernel_test import SingleKernelTest
     from tests.frameworks.test_config import (
         KernelTestConfig,
         ModelStructure,
@@ -71,20 +71,30 @@ Example (SingleKernelTest_v2):
             from brainsmith.kernels.elementwise_binary import ElementwiseBinaryOp
             return lambda: InferKernels([ElementwiseBinaryOp])
 
-Example (DualKernelTest_v2):
-    from tests.frameworks.dual_kernel_test_v2 import DualKernelTest_v2
+Example (KernelParityTest):
+    from tests.frameworks.kernel_parity_test import KernelParityTest
 
-    class TestAddStreamsParity(DualKernelTest_v2):
+    class TestAddStreamsParity(KernelParityTest):
         # Same make_test_model and kernel_test_config as above
 
-        def get_kernel_inference_transform(self):
-            # Brainsmith automatic inference
-            from brainsmith.primitives.transforms.infer_kernels import InferKernels
-            return InferKernels
+        def infer_kernel_reference(self, model, target_node):
+            # Reference (FINN) implementation
+            from finn.transformation.fpgadataflow.convert_to_hw_layers import InferElementwiseBinaryOperation
+            model = model.transform(InferElementwiseBinaryOperation())
+            nodes = model.get_nodes_by_op_type("ElementwiseAdd")
+            from qonnx.custom_op.registry import getCustomOp
+            return getCustomOp(nodes[0]), model
 
-        def get_manual_backend_variants(self):
-            # FINN manual backend selection
-            return ("hls",)
+        def get_backend_variants_reference(self):
+            # Reference backend variants
+            from finn.custom_op.fpgadataflow.hls.elementwise_binary_hls import ElementwiseAdd_hls
+            return [ElementwiseAdd_hls]
+
+        def get_kernel_inference_transform(self):
+            # Primary (Brainsmith) implementation
+            from brainsmith.primitives.transforms.infer_kernels import InferKernels
+            from brainsmith.kernels.elementwise_binary import ElementwiseBinaryOp
+            return lambda: InferKernels([ElementwiseBinaryOp])
 """
 
 from tests.frameworks.test_config import (
@@ -94,9 +104,9 @@ from tests.frameworks.test_config import (
     PlatformConfig,
     ValidationConfig,
 )
-from tests.frameworks.kernel_test_base_v2 import KernelTestBase_v2
-from tests.frameworks.single_kernel_test_v2 import SingleKernelTest
-from tests.frameworks.dual_kernel_test_v2 import DualKernelTest_v2
+from tests.frameworks.kernel_test_base import KernelTestBase
+from tests.frameworks.single_kernel_test import SingleKernelTest
+from tests.frameworks.kernel_parity_test import KernelParityTest
 
 __all__ = [
     "KernelTestConfig",
@@ -104,7 +114,7 @@ __all__ = [
     "DesignParameters",
     "PlatformConfig",
     "ValidationConfig",
-    "KernelTestBase_v2",
+    "KernelTestBase",
     "SingleKernelTest",
-    "DualKernelTest_v2",
+    "KernelParityTest",
 ]

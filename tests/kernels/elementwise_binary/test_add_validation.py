@@ -1,4 +1,4 @@
-"""Validation tests for Add elementwise operation (v5.0).
+"""Validation tests for Add elementwise operation.
 
 Tactical validation tests covering representative cases for CI/CD:
 - Basic dtypes (INT8, UINT8, FLOAT32, INT16, UINT16, etc.)

@@ -79,10 +79,10 @@ CHANNELWISE_SCHEMA = df.KernelSchema(
             "func": ("s", True, "Add", {"Add", "Mul", "LessOrEqual", "GreaterOrEqual"}),
         },
 
-        # DSE DIMENSIONS (explorable resource parameters)
-        dse_dimensions={
+        # DSE PARAMETERS (explorable resource parameters)
+        dse_parameters={
             # RAM style for parameter storage (HLS-specific)
-            "ram_style": df.DSEDimension(
+            "ram_style": df.ParameterSpec(
                 name="ram_style",
                 values={"distributed", "block"},
                 default="distributed"

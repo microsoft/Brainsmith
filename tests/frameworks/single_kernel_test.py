@@ -1,51 +1,42 @@
-"""SingleKernelTest framework with fixture-based parameterization (v2.3).
+"""SingleKernelTest framework with fixture-based parameterization.
 
-This module provides SingleKernelTest, a fixture-driven test framework that replaces
-the v1.0 hardcoded approach with pytest fixtures for maximum flexibility.
+This module provides SingleKernelTest, a fixture-driven test framework using
+pytest fixtures for maximum flexibility.
 
-Design Philosophy (v2.3):
+Design Philosophy:
 - Pytest fixtures control shapes and datatypes (NOT test methods)
 - Tests define operations once, fixtures parameterize automatically
-- **Stage 1 golden reference** - computed ONCE from ONNX model with annotations (v2.2)
-- **Direct DataType annotations** - NO Quant nodes inserted (v2.3)
-- **Shared utilities** - Inherits from KernelTestBase_v2 (NEW in Phase 2)
-- Automatic test data generation (pre-quantized, using Phase 1 utilities)
+- **Stage 1 golden reference** - computed ONCE from ONNX model with annotations
+- **Direct DataType annotations** - NO Quant nodes inserted
+- **Shared utilities** - Inherits from KernelTestBase
+- Automatic test data generation (pre-quantized)
 
-Inheritance Chain (v2.3):
+Inheritance Chain:
     KernelTestConfig (abstract interface)
         ↓
-    KernelTestBase_v2 (shared utilities)
+    KernelTestBase (shared utilities)
         ↓
     SingleKernelTest (fixture-based testing) ← THIS CLASS
 
-Inherited from KernelTestBase_v2:
+Inherited from KernelTestBase:
 - validate_against_golden() - GoldenValidator-based output validation
 - _auto_detect_backends() - Registry-based backend lookup
 - _specialize_to_backend_stage() - Stage 2→3 specialization with overrides
 
-Key Improvements (v2.3):
+Key Features:
 - **Direct annotations replace Quant nodes** - Simpler architecture, same semantics
-- **Fixes rtlsim** - No Quant nodes to synthesize (v2.3)
+- **Supports rtlsim** - No Quant nodes to synthesize
 - **Simpler graph structure** - Metadata (annotations) separate from operations (Quant nodes)
 - **Pre-quantized test data** - Generated directly in target DataType range
-- **Shared utilities** - Zero code duplication with DualKernelTest_v2
-
-Key Improvements (v2.2):
-- **Golden reference computed from Stage 1 ONLY** - No more Stage 2/3 confusion
+- **Shared utilities** - Zero code duplication with KernelParityTest
+- **Golden reference from Stage 1** - No Stage 2/3 confusion
 - **Shared golden fixture** - Computed once, used by all execution tests
 - **Clear stage separation** - Stage 1 (golden) → Stage 2 (Python) → Stage 3 (backends)
-- Fixes cppsim/rtlsim golden computation bug (was using backend model)
-
-Key Improvements (v2.1):
-- 70% less code per test (25 lines vs 80 lines)
-- Zero TensorProto vs DataType confusion
-- Zero Stage 1/Stage 2 confusion
-- Zero manual golden reference implementation
-- Maximum parameterization flexibility
-- Deterministic test data with fixed seed (reproducible failures)
+- **70% less code per test** - Fixture-based approach reduces boilerplate
+- **Deterministic test data** - Fixed seed for reproducible failures
 
 Usage:
-    from tests.frameworks.single_kernel_test_v2 import SingleKernelTest
+    from tests.frameworks.single_kernel_test import SingleKernelTest
 
     # Define fixtures
     @pytest.fixture(params=[
@@ -100,13 +91,13 @@ from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
 # Import base utilities
-from tests.frameworks.kernel_test_base_v2 import KernelTestBase_v2
+from tests.frameworks.kernel_test_base import KernelTestBase
 
 # Import Phase 1 utilities
 from tests.support.pipeline import PipelineRunner
 
 
-class SingleKernelTest(KernelTestBase_v2):
+class SingleKernelTest(KernelTestBase):
     """Test one kernel with fixture-based parameterization.
 
     Subclasses implement (2 methods only!):
@@ -179,7 +170,7 @@ class SingleKernelTest(KernelTestBase_v2):
     # ========================================================================
 
     # Note: _prepare_model_with_annotations and _generate_test_inputs moved to
-    # KernelTestBase_v2 to eliminate duplication with KernelParityTest (v6.0)
+    # KernelTestBase to eliminate duplication with KernelParityTest (v6.0)
 
     def get_use_custom_golden_reference(self) -> bool:
         """Override to use custom golden reference instead of QONNX execution.

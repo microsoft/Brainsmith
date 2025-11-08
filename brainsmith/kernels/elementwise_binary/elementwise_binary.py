@@ -271,16 +271,16 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
         ),
     },
 
-    # DSE DIMENSIONS (explorable resource parameters)
-    dse_dimensions={
+    # DSE PARAMETERS (explorable resource parameters)
+    dse_parameters={
         # RAM style for parameter storage (HLS-specific, only for static inputs)
-        "ram_style": df.DSEDimension(
+        "ram_style": df.ParameterSpec(
             name="ram_style",
             values={"auto", "distributed", "block", "ultra"},
             default="auto"
         ),
         # Memory mode for constant parameters
-        "mem_mode": df.DSEDimension(
+        "mem_mode": df.ParameterSpec(
             name="mem_mode",
             values={"internal_embedded", "internal_decoupled"},
             default="internal_embedded"

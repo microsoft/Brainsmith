@@ -1,5 +1,27 @@
 # Getting Started
 
+- [Installation](#installation)
+  - [Local Development with Poetry](#option-a-local-development-with-poetry)
+  - [Docker-based Development](#option-b-docker-based-development)
+- [Project Management](#project-management)
+  - [Creating Projects](#creating-projects)
+  - [Configuration](#configuration)
+    - [Core Paths](#core-paths)
+    - [Xilinx Configuration](#xilinx-configuration)
+    - [Runtime Configuration](#runtime-configuration)
+    - [Logging Configuration](#logging-configuration)
+- [Validate Installation](#validate-installation)
+- [Quick Start](#quick-start)
+  - [Run Your First DSE](#run-your-first-dse)
+  - [Explore Results](#explore-results)
+  - [Customize the Design](#customize-the-design)
+  - [Understanding Blueprints](#understanding-blueprints)
+  - [Troubleshooting](#troubleshooting)
+  - [Getting Help](#getting-help)
+- [Next Steps](#next-steps)
+  - [Explore Design Space](#explore-design-space)
+  - [Try Custom Models](#try-custom-models)
+  - [Learn the Tools](#learn-the-tools)
 
 ---
 
@@ -84,11 +106,12 @@ Or send one-off commands to the container
 
 ## Project Management
 
-While Brainsmith operates from a single poetry `venv` from the repostiory root, you can create isolated workspaces via
-the *project* system with independent configurations, build artifacts, and component registries.
+Brainsmith operates from a single poetry `venv` from the repostiory root, but
+you can create isolated workspaces via the *project* system with independent configurations,
+build artifacts, and component registries.
 
 
-### Create a New Project
+### Creating Projects
 
 ```bash
 # Activate brainsmith venv if not in an active project
@@ -99,10 +122,10 @@ brainsmith project init ~/my-fpga-project
 cd ~/my-fpga-project
 ```
 
-Each project has its own configuration:
+Edit the default generated config file
 
 ```bash
-vim brainsmith.yaml
+vim ~/my-fpga-project/brainsmith.yaml
 ```
 
 [Optional] Enable auto-activation if using direnv

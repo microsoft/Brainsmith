@@ -1,4 +1,4 @@
-"""Test parity between Brainsmith ElementwiseBinary and FINN ElementwiseAdd (v6.0).
+"""Test parity between Brainsmith ElementwiseBinary and FINN ElementwiseAdd.
 
 This test demonstrates the KernelParityTest framework by comparing two implementations:
 - Primary (Brainsmith): InferKernels → ElementwiseBinaryOp → ElementwiseBinaryOp_hls
@@ -192,7 +192,7 @@ class TestAddParity(KernelParityTest):
         # Return lambda that creates configured InferKernels instance
         return lambda: InferKernels([ElementwiseBinaryOp])
 
-    # Primary implementation uses inherited defaults from KernelTestBase_v2:
+    # Primary implementation uses inherited defaults from KernelTestBase:
     # - infer_kernel() (via get_kernel_inference_transform() above)
     # - get_backend_variants() (auto-detect from registry)
     # - configure_kernel() (auto_configure_from_fixture)

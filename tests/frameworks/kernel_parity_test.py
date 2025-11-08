@@ -1,24 +1,24 @@
-"""KernelParityTest framework for comparing two kernel implementations (v5.0).
+"""KernelParityTest framework for comparing two kernel implementations.
 
 This module provides KernelParityTest, a fixture-driven test framework for comparing
 two kernel implementations (e.g., FINN vs Brainsmith, version A vs B, platform A vs B).
 
-Design Philosophy (v5.0):
-- Generalizes DualKernelTest_v2 "manual" vs "auto" to "kernel_a" vs "kernel_b"
-- Leverages Phase 1 v5.0 shared utilities (74% code reduction in golden tests)
+Design Philosophy:
+- Generalizes test framework to compare "reference" vs "primary" implementations
+- Leverages shared utilities (74% code reduction in golden tests)
 - Per-kernel methods enable 90/10 configuration rule (90% shared, 10% custom)
 - Consistent override pattern across all 4 pipeline stages
-- Maximum code reuse from SingleKernelTest and KernelTestBase_v2
+- Maximum code reuse from SingleKernelTest and KernelTestBase
 
-Inheritance Chain (v5.0):
+Inheritance Chain:
     KernelTestConfig (abstract interface)
         ↓
-    KernelTestBase_v2 (v5.0 shared utilities)
+    KernelTestBase (shared utilities)
         ↓
     KernelParityTest (dual-kernel parity testing) ← THIS CLASS
 
-Inherited from KernelTestBase_v2 (v5.0):
-- infer_kernel() - Default implementation for kernel_b
+Inherited from KernelTestBase:
+- infer_kernel() - Default implementation for primary
 - specialize_to_backend() - Default backend specialization
 - _execute_and_validate_golden() - Shared golden validation (74% reduction)
 - _find_hw_node() - Helper to locate transformed nodes
@@ -117,13 +117,13 @@ from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
 # Import base utilities
-from tests.frameworks.kernel_test_base_v2 import KernelTestBase_v2
+from tests.frameworks.kernel_test_base import KernelTestBase
 
 # Import Phase 1 utilities
 from tests.support.pipeline import PipelineRunner
 
 
-class KernelParityTest(KernelTestBase_v2):
+class KernelParityTest(KernelTestBase):
     """Test two kernel implementations for parity (v5.0).
 
     This class provides a comprehensive test framework for comparing two kernel
@@ -307,7 +307,7 @@ class KernelParityTest(KernelTestBase_v2):
     # ========================================================================
 
     # Note: _prepare_model_with_annotations and _generate_test_inputs moved to
-    # KernelTestBase_v2 to eliminate duplication with SingleKernelTest (v6.0)
+    # KernelTestBase to eliminate duplication with SingleKernelTest (v6.0)
 
     def _compute_golden_reference(
         self, quant_model: ModelWrapper, inputs: Dict[str, np.ndarray]

@@ -5,16 +5,16 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-"""Ordered dimension for Design Space Exploration (DSE) navigation.
+"""Ordered parameter for Design Space Exploration (DSE) navigation.
 
-This module provides OrderedDimension, a container for ordered sequences
-of dimension values that supports navigation operations like stepping,
+This module provides OrderedParameter, a container for ordered sequences
+of parameter values that supports navigation operations like stepping,
 percentage-based indexing, and min/max access.
 
-OrderedDimension is used for parallelization parameters (PE, SIMD, MW, MH)
-and other explorable dimensions with natural ordering (depth, num_layers, etc.).
+OrderedParameter is used for parallelization parameters (PE, SIMD, MW, MH)
+and other explorable parameters with natural ordering (depth, num_layers, etc.).
 
-Contrasts with discrete (unordered) dimensions which are validated by FINN's
+Contrasts with discrete (unordered) parameters which are validated by FINN's
 nodeattr system and stored as frozensets.
 """
 
@@ -24,22 +24,22 @@ from typing import Iterator, Literal, Optional, Tuple
 
 
 @dataclass(frozen=True)
-class OrderedDimension:
-    """Ordered dimension for DSE navigation.
+class OrderedParameter:
+    """Ordered parameter for DSE navigation.
 
     Stores discrete values in sorted order, enabling navigation operations
     like stepping, percentage-based indexing, and min/max access.
 
     Used for parallelization parameters (PE, SIMD, MW, MH) and other
-    explorable dimensions with natural ordering.
+    explorable parameters with natural ordering (depth, num_layers, etc.).
 
     Attributes:
-        name: Dimension name (e.g., "SIMD", "PE", "depth")
+        name: Parameter name (e.g., "SIMD", "PE", "depth")
         values: Sorted tuple of valid values
         default: Default value (None = minimum)
 
     Examples:
-        >>> simd = OrderedDimension("SIMD", (1, 2, 4, 8, 16, 32, 64))
+        >>> simd = OrderedParameter("SIMD", (1, 2, 4, 8, 16, 32, 64))
         >>> simd.min()
         1
         >>> simd.at_percentage(0.5)
@@ -55,7 +55,7 @@ class OrderedDimension:
     def __post_init__(self):
         """Validate invariants: sorted, unique, non-empty."""
         if not self.values:
-            raise ValueError(f"OrderedDimension '{self.name}' has empty values")
+            raise ValueError(f"OrderedParameter '{self.name}' has empty values")
 
         # Ensure tuple (not list)
         if not isinstance(self.values, tuple):
@@ -64,7 +64,7 @@ class OrderedDimension:
         # Validate sorted
         if self.values != tuple(sorted(self.values)):
             raise ValueError(
-                f"OrderedDimension '{self.name}' values must be sorted ascending. "
+                f"OrderedParameter '{self.name}' values must be sorted ascending. "
                 f"Got: {self.values}"
             )
 
@@ -72,13 +72,13 @@ class OrderedDimension:
         if len(self.values) != len(set(self.values)):
             duplicates = [v for v in self.values if self.values.count(v) > 1]
             raise ValueError(
-                f"OrderedDimension '{self.name}' has duplicate values: {set(duplicates)}"
+                f"OrderedParameter '{self.name}' has duplicate values: {set(duplicates)}"
             )
 
         # Validate default (if specified)
         if self.default is not None and self.default not in self.values:
             raise ValueError(
-                f"Default value {self.default} not in dimension '{self.name}'. "
+                f"Default value {self.default} not in parameter '{self.name}'. "
                 f"Valid values: {self.values}"
             )
 
@@ -91,7 +91,7 @@ class OrderedDimension:
         return self.default if self.default is not None else self.values[0]
 
     def validate(self, value: int) -> bool:
-        """Check if value is valid for this dimension."""
+        """Check if value is valid for this parameter."""
         return value in self.values
 
     # =========================================================================
@@ -119,17 +119,17 @@ class OrderedDimension:
             IndexError: If index out of range
 
         Examples:
-            >>> dim = OrderedDimension("PE", (1, 2, 4, 8, 16))
-            >>> dim.at_index(0)
+            >>> param = OrderedParameter("PE", (1, 2, 4, 8, 16))
+            >>> param.at_index(0)
             1
-            >>> dim.at_index(-1)
+            >>> param.at_index(-1)
             16
-            >>> dim.at_index(2)
+            >>> param.at_index(2)
             4
         """
         if not -len(self.values) <= idx < len(self.values):
             raise IndexError(
-                f"Index {idx} out of range for dimension '{self.name}' "
+                f"Index {idx} out of range for parameter '{self.name}' "
                 f"(length {len(self.values)})"
             )
         return self.values[idx]
@@ -144,20 +144,20 @@ class OrderedDimension:
             Zero-based index of value
 
         Raises:
-            ValueError: If value not in dimension
+            ValueError: If value not in parameter
 
         Examples:
-            >>> dim = OrderedDimension("SIMD", (1, 2, 4, 8, 16))
-            >>> dim.index_of(4)
+            >>> param = OrderedParameter("SIMD", (1, 2, 4, 8, 16))
+            >>> param.index_of(4)
             2
-            >>> dim.index_of(16)
+            >>> param.index_of(16)
             4
         """
         try:
             return self.values.index(value)
         except ValueError:
             raise ValueError(
-                f"Value {value} not in dimension '{self.name}'. "
+                f"Value {value} not in parameter '{self.name}'. "
                 f"Valid range: [{self.min()}, {self.max()}], "
                 f"values: {self.values}"
             )
@@ -172,22 +172,22 @@ class OrderedDimension:
         Clamps at maximum if n steps would exceed bounds.
 
         Args:
-            current: Current value (must be in dimension)
+            current: Current value (must be in parameter)
             n: Number of steps to move up (positive integer)
 
         Returns:
             New value n steps up (clamped at max)
 
         Raises:
-            ValueError: If current value not in dimension or n < 0
+            ValueError: If current value not in parameter or n < 0
 
         Examples:
-            >>> dim = OrderedDimension("PE", (1, 2, 4, 8, 16, 32, 64))
-            >>> dim.step_up(4, 1)
+            >>> param = OrderedParameter("PE", (1, 2, 4, 8, 16, 32, 64))
+            >>> param.step_up(4, 1)
             8
-            >>> dim.step_up(4, 2)
+            >>> param.step_up(4, 2)
             16
-            >>> dim.step_up(32, 10)
+            >>> param.step_up(32, 10)
             64  # Clamped at max
         """
         if n < 0:
@@ -203,22 +203,22 @@ class OrderedDimension:
         Clamps at minimum if n steps would go below bounds.
 
         Args:
-            current: Current value (must be in dimension)
+            current: Current value (must be in parameter)
             n: Number of steps to move down (positive integer)
 
         Returns:
             New value n steps down (clamped at min)
 
         Raises:
-            ValueError: If current value not in dimension or n < 0
+            ValueError: If current value not in parameter or n < 0
 
         Examples:
-            >>> dim = OrderedDimension("SIMD", (1, 2, 4, 8, 16, 32, 64))
-            >>> dim.step_down(16, 1)
+            >>> param = OrderedParameter("SIMD", (1, 2, 4, 8, 16, 32, 64))
+            >>> param.step_down(16, 1)
             8
-            >>> dim.step_down(16, 2)
+            >>> param.step_down(16, 2)
             4
-            >>> dim.step_down(4, 10)
+            >>> param.step_down(4, 10)
             1  # Clamped at min
         """
         if n < 0:
@@ -240,7 +240,7 @@ class OrderedDimension:
         """Get value at percentage position in ordered sequence (0.0-1.0).
 
         Maps percentage to continuous index space, then rounds to discrete index.
-        Useful for sweeping through dimension at regular intervals regardless
+        Useful for sweeping through parameter at regular intervals regardless
         of actual vector length.
 
         Args:
@@ -260,23 +260,23 @@ class OrderedDimension:
             ValueError: If percentage not in [0.0, 1.0] or invalid rounding mode
 
         Examples:
-            >>> dim = OrderedDimension("PE", (1, 2, 4, 8, 16))  # 5 values
-            >>> dim.at_percentage(0.0)
+            >>> param = OrderedParameter("PE", (1, 2, 4, 8, 16))  # 5 values
+            >>> param.at_percentage(0.0)
             1
-            >>> dim.at_percentage(1.0)
+            >>> param.at_percentage(1.0)
             16
-            >>> dim.at_percentage(0.5, rounding='natural')
+            >>> param.at_percentage(0.5, rounding='natural')
             4  # Middle value (index 2 of 0-4)
-            >>> dim.at_percentage(0.75, rounding='down')
+            >>> param.at_percentage(0.75, rounding='down')
             8  # 0.75 * 4 = 3.0 → floor(3.0) = 3 → values[3] = 8
 
             >>> # With 4 values, percentages map cleanly to indices
-            >>> dim4 = OrderedDimension("X", (10, 20, 30, 40))
-            >>> dim4.at_percentage(0.0)
+            >>> param4 = OrderedParameter("X", (10, 20, 30, 40))
+            >>> param4.at_percentage(0.0)
             10  # 0.0 * 3 = 0
-            >>> dim4.at_percentage(0.333, rounding='natural')
+            >>> param4.at_percentage(0.333, rounding='natural')
             20  # 0.333 * 3 ≈ 1.0 → round(1.0) = 1
-            >>> dim4.at_percentage(1.0)
+            >>> param4.at_percentage(1.0)
             40  # 1.0 * 3 = 3
         """
         if not 0.0 <= percentage <= 1.0:
@@ -319,7 +319,7 @@ class OrderedDimension:
         return iter(self.values)
 
     def __contains__(self, value: int) -> bool:
-        """Check if value in dimension (for 'value in dim' syntax)."""
+        """Check if value in parameter (for 'value in param' syntax)."""
         return value in self.values
 
     # =========================================================================
@@ -334,7 +334,7 @@ class OrderedDimension:
             vals = f"({self.values[0]}, {self.values[1]}, ..., {self.values[-1]})"
 
         default_str = f", default={self.default}" if self.default else ""
-        return f"OrderedDimension('{self.name}', {vals}{default_str})"
+        return f"OrderedParameter('{self.name}', {vals}{default_str})"
 
 
-__all__ = ['OrderedDimension']
+__all__ = ['OrderedParameter']

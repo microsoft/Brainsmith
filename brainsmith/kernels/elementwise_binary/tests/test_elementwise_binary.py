@@ -22,7 +22,7 @@ from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import qonnx_make_model
 
-from tests.frameworks.single_kernel_test_v2 import SingleKernelTest
+from tests.frameworks.single_kernel_test import SingleKernelTest
 from tests.frameworks.test_config import KernelTestConfig
 
 

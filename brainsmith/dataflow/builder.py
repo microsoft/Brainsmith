@@ -33,7 +33,10 @@ from qonnx.core.datatype import BaseDataType
 from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith._internal.math import divisors
-from .ordered_dimension import OrderedDimension
+from .ordered_parameter import OrderedParameter
+
+# Backward compatibility alias
+OrderedDimension = OrderedParameter
 from .schemas import KernelSchema
 from .template_resolution import resolve_template, normalize_template
 from .types import VALUE_OPTIMIZED, ShapeHierarchy
@@ -645,11 +648,11 @@ class DesignSpaceBuilder:
             → OrderedDimension("SIMD", (1, 2, 3, 4, 6, 8, 12, 16, ..., 768))
 
         Example (ordered DSE):
-            dse_dimensions={"depth": DSEDimension("depth", [128, 256, 512, 1024])}
+            dse_dimensions={"depth": DimensionSpec("depth", [128, 256, 512, 1024])}
             → OrderedDimension("depth", (128, 256, 512, 1024))
 
         Example (discrete DSE):
-            dse_dimensions={"ram_style": DSEDimension("ram_style", {"distributed", "block"})}
+            dse_dimensions={"ram_style": DimensionSpec("ram_style", {"distributed", "block"})}
             → frozenset({"distributed", "block"})
 
         Args:

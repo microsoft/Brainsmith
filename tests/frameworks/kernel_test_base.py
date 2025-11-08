@@ -1,30 +1,30 @@
 """Test framework base class with compositional config (v4.0).
 
 This module provides:
-1. KernelTestBase_v2: Abstract base class for kernel tests with composition-based config
+1. KernelTestBase: Abstract base class for kernel tests with composition-based config
 
 Design Philosophy:
 - Composition over inheritance (config as parameter, not inheritance)
 - Pytest fixtures control parameterization
 - Tests define operations with symbolic shapes (concrete from fixtures)
-- Direct DataType annotations (NO Quant nodes) in v2.3+
+- Direct DataType annotations (NO Quant nodes) in current framework
 - Automatic test data generation with correct types
-- Shared utilities for SingleKernelTest and DualKernelTest_v2
+- Shared utilities for SingleKernelTest and KernelParityTest
 
 Architecture (v4.0):
-    KernelTestBase_v2 (abstract base class + shared utilities)
+    KernelTestBase (abstract base class + shared utilities)
         ↓ inherits
     ┌───────────────────┬──────────────────┐
-    SingleKernelTest    DualKernelTest_v2
-    (fixture-based)     (attribute-based)
+    SingleKernelTest    KernelParityTest
+    (fixture-based)     (fixture-based)
 
     KernelTestConfig (dataclass from test_config.py)
         ↓ passed as parameter to methods
     Test methods receive config, not inherit from it
 
 Usage:
-    from tests.frameworks.kernel_test_base_v2 import KernelTestBase_v2
-    from tests.frameworks.single_kernel_test_v2 import SingleKernelTest
+    from tests.frameworks.kernel_test_base import KernelTestBase
+    from tests.frameworks.single_kernel_test import SingleKernelTest
 
     # Define fixtures in test file
     @pytest.fixture(params=[
@@ -72,23 +72,22 @@ from tests.support.backend_utils import specialize_to_backend
 # Import validation utilities
 from tests.support.validator import GoldenValidator
 
-# Import compositional config (v4.0)
-from tests.frameworks.test_config import KernelTestConfig
+# Import compositional configfrom tests.frameworks.test_config import KernelTestConfig
 
 
-class KernelTestBase_v2(ABC):
+class KernelTestBase(ABC):
     """Abstract base class for kernel tests with compositional config (v4.0).
 
     This base class provides:
     1. Abstract methods that subclasses MUST implement
-    2. Shared utilities for SingleKernelTest and DualKernelTest_v2
+    2. Shared utilities for SingleKernelTest and KernelParityTest
     3. Configuration hooks for parameterization
 
     Architecture (v4.0):
-        KernelTestBase_v2 (abstract base class) ← THIS CLASS
+        KernelTestBase (abstract base class) ← THIS CLASS
             ↓ inherits
         ┌───────────────────┬──────────────────┐
-        SingleKernelTest    DualKernelTest_v2
+        SingleKernelTest    KernelParityTest
 
         KernelTestConfig (dataclass, passed as parameter)
             ↓ composition (not inheritance)
@@ -126,8 +125,7 @@ class KernelTestBase_v2(ABC):
         Framework automatically annotates tensors based on config.input_dtypes.
 
         Args:
-            kernel_test_config: Unified test configuration (v4.0)
-                Access via properties:
+            kernel_test_config: Unified test configuration                Access via properties:
                 - config.input_shapes: Dict[str, Tuple[int, ...]]
                 - config.input_dtypes: Dict[str, DataType]
                 - config.operation: str (for polymorphic models)
@@ -249,7 +247,7 @@ class KernelTestBase_v2(ABC):
         model: ModelWrapper,
         target_node: str,
     ) -> Tuple[HWCustomOp, ModelWrapper]:
-        """Execute Stage 1 → Stage 2 kernel inference (v5.0).
+        """Execute Stage 1 → Stage 2 kernel inference.
 
         Default implementation uses get_kernel_inference_transform() for
         backward compatibility with existing tests.
@@ -328,7 +326,7 @@ class KernelTestBase_v2(ABC):
         This produces identical InferDataTypes results with simpler graph structure.
 
         Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
+            kernel_test_config: Unified test configuration (required)
                 Contains input_shapes, input_dtypes, operation, etc.
 
         Returns:
@@ -469,7 +467,7 @@ class KernelTestBase_v2(ABC):
 
         Shared by:
         - SingleKernelTest: 3 execution tests (Python/cppsim/rtlsim)
-        - DualKernelTest_v2: 6 execution tests (manual+auto × Python/cppsim/rtlsim)
+        - KernelParityTest: 6 execution tests (reference+primary × Python/cppsim/rtlsim)
 
         Args:
             actual_outputs: Outputs from backend execution
@@ -493,13 +491,13 @@ class KernelTestBase_v2(ABC):
             ...     self.validate_against_golden(actual_outputs, golden_outputs,
             ...                                   "Python execution", tolerance)
 
-        Example (DualKernelTest_v2):
-            >>> def test_manual_cppsim_vs_golden(self):
-            ...     manual_op, manual_model = self.run_manual_pipeline(to_backend=True)
+        Example (KernelParityTest):
+            >>> def test_reference_cppsim_vs_golden(self):
+            ...     reference_op, reference_model = self.run_reference_pipeline(to_backend=True)
             ...     actual_outputs = cppsim_executor.execute(...)
             ...     tolerance = self.get_tolerance_cppsim()
             ...     self.validate_against_golden(actual_outputs, golden_outputs,
-            ...                                   "Manual cppsim", tolerance)
+            ...                                   "Reference cppsim", tolerance)
         """
         validator = GoldenValidator()
         validator.validate(
@@ -519,7 +517,7 @@ class KernelTestBase_v2(ABC):
         backend_label: str,
         config: KernelTestConfig,
     ) -> None:
-        """Execute kernel and validate against golden reference (v5.0).
+        """Execute kernel and validate against golden reference.
 
         Common logic shared by:
         - SingleKernelTest: 3 golden tests (python/cppsim/rtlsim)
@@ -601,7 +599,7 @@ class KernelTestBase_v2(ABC):
 
         Shared by:
         - SingleKernelTest: Auto-detect for single implementation
-        - DualKernelTest_v2: Auto-detect for auto pipeline (Brainsmith)
+        - KernelParityTest: Auto-detect for primary pipeline (Brainsmith)
 
         Args:
             op: HWCustomOp instance to find backends for
@@ -613,8 +611,8 @@ class KernelTestBase_v2(ABC):
             pytest.skip: If no backends found
 
         Note:
-            This uses Brainsmith's registry. For FINN backends in DualKernelTest,
-            use get_manual_backend_variants() to specify explicitly.
+            This uses Brainsmith's registry. For FINN backends in KernelParityTest,
+            use get_backend_variants_reference() to specify explicitly.
 
         Example (SingleKernelTest):
             >>> # Auto-detect backend for AddStreams
@@ -622,10 +620,10 @@ class KernelTestBase_v2(ABC):
             >>> backend_variants = self._auto_detect_backends(op)
             >>> # Returns: [AddStreams_hls]
 
-        Example (DualKernelTest_v2 auto pipeline):
+        Example (KernelParityTest primary pipeline):
             >>> # Auto-detect Brainsmith backend
-            >>> auto_op, auto_model = self.run_auto_pipeline()
-            >>> backend_variants = self._auto_detect_backends(auto_op)
+            >>> primary_op, primary_model = self.run_primary_pipeline()
+            >>> backend_variants = self._auto_detect_backends(primary_op)
             >>> # Used automatically by _specialize_to_backend_stage()
         """
         from brainsmith.registry import get_backend, list_backends_for_kernel

@@ -6,6 +6,30 @@ Brainsmith compiles ONNX models to optimized FPGA accelerators, intelligently ex
 
 ---
 
+## From ONNX to Dataflow Accelerator
+
+Brainsmith transforms your neural network into a streaming dataflow architecture optimized for FPGA execution:
+
+=== "Input: ONNX Graph"
+
+    Your quantized neural network model:
+
+    ![ONNX Graph Structure](images/simple_mha.png)
+
+    *Multi-head attention layer represented as standard ONNX operations (MatMul, Reshape, Transpose, Softmax)*
+
+=== "Output: Dataflow Accelerator"
+
+    Optimized hardware pipeline with streaming kernels:
+
+    ![Generated Dataflow Accelerator](images/bert_dfc.png)
+
+    *Synthesizable RTL with specialized kernels (MVAU, Thresholding) connected via AXI-Stream FIFOs*
+
+Each kernel executes concurrently in hardware, processing data as it streams through the pipeline—no instruction fetch overhead, minimal memory access, maximum throughput.
+
+---
+
 ## See It In Action
 
 Declarative design space `blueprint` in YAML:
