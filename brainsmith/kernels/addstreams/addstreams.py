@@ -22,7 +22,8 @@ from typing import Optional
 
 from brainsmith.dataflow import KernelOp, FULL_SHAPE
 import brainsmith.dataflow as df
-from brainsmith.dataflow.spec_helpers import add_datatype
+from brainsmith.dataflow.spec_helpers import add_datatype, derive_dim
+from brainsmith.dataflow.types import ShapeHierarchy
 from brainsmith.registry import kernel
 from qonnx.core.modelwrapper import ModelWrapper
 
@@ -47,7 +48,7 @@ ADDSTREAMS_SCHEMA = df.KernelSchema(
         df.OutputSchema(
             name="output",
             block_tiling=FULL_SHAPE,  # Rank-agnostic: works with any tensor rank
-            stream_tiling=[("input0", -1)],  # Auto-pads to match rank
+            stream_tiling=[derive_dim("input0", ShapeHierarchy.STREAM, -1)],  # Auto-pads to match rank
             datatype=add_datatype("input0", "input1"),  # INT8 + INT8 → INT9 (prevents overflow)
             required_layout="NHWC",  # Embedded layout requirement
         )

@@ -868,9 +868,11 @@ class NodeAttributeEquals:
         _SENTINEL = object()  # Distinguishes "not found" from "value is None"
 
         try:
-            actual_value = ctx.get_node_attribute(self.attribute_name, default=_SENTINEL)
-        except RuntimeError:
-            return None  # Kernel context - gracefully skip
+            actual_value = ctx.get_param(self.attribute_name)
+        except (RuntimeError, KeyError):
+            # RuntimeError: no param_getter (kernel context)
+            # KeyError: param not found in ONNX context
+            actual_value = _SENTINEL
 
         if actual_value is _SENTINEL:
             if None in self.expected_values:
@@ -954,9 +956,11 @@ class AttrCompare:
         _SENTINEL = object()
 
         try:
-            actual_value = ctx.get_node_attribute(self.attribute_name, default=_SENTINEL)
-        except RuntimeError:
-            return None  # Kernel context - gracefully skip
+            actual_value = ctx.get_param(self.attribute_name)
+        except (RuntimeError, KeyError):
+            # RuntimeError: no param_getter (kernel context)
+            # KeyError: param not found in ONNX context
+            actual_value = _SENTINEL
 
         if actual_value is _SENTINEL:
             return f"Node attribute '{self.attribute_name}' not found"
@@ -1034,10 +1038,6 @@ class CustomConstraint:
     @property
     def evaluation_phase(self) -> str:
         return 'structural'
-
-
-# Alias for backward compatibility
-Custom = CustomConstraint
 
 
 __all__ = [

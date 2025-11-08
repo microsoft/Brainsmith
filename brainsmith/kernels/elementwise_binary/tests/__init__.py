@@ -46,7 +46,6 @@ from .test_cases import (
     DTYPES_UINT8,
     DTYPES_UINT16,
     DTYPES_UINT32,
-    PLATFORM_SOFTWARE_ONLY,
     PLATFORM_ZYNQ7020,
     SHAPE_2D_1x16,
     SHAPE_2D_1x64,
@@ -97,7 +96,6 @@ __all__ = [
     "DTYPES_MIXED_WIDTH",
     # Platform constants
     "PLATFORM_ZYNQ7020",
-    "PLATFORM_SOFTWARE_ONLY",
     # Design constants
     "DESIGN_BASELINE",
     "DESIGN_PE8",

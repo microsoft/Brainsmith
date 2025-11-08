@@ -28,9 +28,6 @@ import math
 
 from .types import Shape, ShapeHierarchy, prod
 from .ordered_parameter import OrderedParameter
-
-# Backward compatibility alias (will be removed in future)
-OrderedDimension = OrderedParameter
 from qonnx.core.datatype import BaseDataType
 
 if TYPE_CHECKING:
@@ -62,7 +59,7 @@ class InterfaceDesignSpace:
         datatype: Interface datatype
         is_weight: Whether this is a weight tensor (constant)
         tensor_name: ONNX tensor name for initializer lookups
-        parallelism_dimension: OrderedDimension for stream parameter (None if no parallelism)
+        parallelism_dimension: OrderedParameter for stream parameter (None if no parallelism)
         parallelism_param: Parameter name for stream dimension (e.g., "SIMD", "PE")
     """
     name: str
@@ -74,7 +71,7 @@ class InterfaceDesignSpace:
     tensor_name: Optional[str] = None  # ONNX tensor name for initializer lookups
 
     # Parallelism metadata (None if no stream parameters)
-    parallelism_dimension: Optional[OrderedDimension] = None
+    parallelism_dimension: Optional[OrderedParameter] = None
     parallelism_param: Optional[str] = None
 
 
@@ -275,7 +272,7 @@ class KernelDesignSpace:
             TypeError: If parameter is discrete (not ordered)
         """
         param = self.parameters[name]
-        if not isinstance(param, OrderedDimension):  # Using alias
+        if not isinstance(param, OrderedParameter):
             raise TypeError(
                 f"Parameter '{name}' is discrete (frozenset), not ordered. "
                 f"Use get_parameter() for type-agnostic access."
@@ -294,7 +291,7 @@ class KernelDesignSpace:
         Raises:
             KeyError: If parameter not found
         """
-        return isinstance(self.parameters[name], OrderedDimension)  # Using alias
+        return isinstance(self.parameters[name], OrderedParameter)
 
     def is_discrete_parameter(self, name: str) -> bool:
         """Check if parameter is discrete.
@@ -309,80 +306,6 @@ class KernelDesignSpace:
             KeyError: If parameter not found
         """
         return isinstance(self.parameters[name], frozenset)
-
-    # =========================================================================
-    # Delegation Methods (for OrderedParameter navigation)
-    # =========================================================================
-
-    def param_min(self, name: str) -> int:
-        """Get minimum value of ordered parameter.
-
-        Args:
-            name: Parameter name
-
-        Returns:
-            Minimum value
-
-        Raises:
-            KeyError: If parameter not found
-            TypeError: If parameter is discrete
-        """
-        return self.get_ordered_parameter(name).min()
-
-    def param_max(self, name: str) -> int:
-        """Get maximum value of ordered parameter.
-
-        Args:
-            name: Parameter name
-
-        Returns:
-            Maximum value
-
-        Raises:
-            KeyError: If parameter not found
-            TypeError: If parameter is discrete
-        """
-        return self.get_ordered_parameter(name).max()
-
-    def param_at_percentage(
-        self,
-        name: str,
-        percentage: float,
-        rounding: str = 'natural'
-    ) -> int:
-        """Get value at percentage position in ordered parameter.
-
-        Args:
-            name: Parameter name
-            percentage: Position in range [0.0, 1.0]
-            rounding: 'natural', 'down', or 'up'
-
-        Returns:
-            Value at percentage position
-
-        Raises:
-            KeyError: If parameter not found
-            TypeError: If parameter is discrete
-            ValueError: If percentage out of range or invalid rounding
-        """
-        return self.get_ordered_parameter(name).at_percentage(percentage, rounding)
-
-    def param_at_index(self, name: str, idx: int) -> int:
-        """Get value at index in ordered parameter.
-
-        Args:
-            name: Parameter name
-            idx: Index position (supports negative indexing)
-
-        Returns:
-            Value at index
-
-        Raises:
-            KeyError: If parameter not found
-            TypeError: If parameter is discrete
-            IndexError: If index out of range
-        """
-        return self.get_ordered_parameter(name).at_index(idx)
 
     def configure(self, config: Dict[str, Union[int, str]]) -> 'KernelDesignPoint':
         """Instantiate kernel at specified point in design space.
@@ -428,7 +351,7 @@ class KernelDesignSpace:
             param = self.parameters[param_name]
 
             # Handle OrderedParameter
-            if isinstance(param, OrderedDimension):
+            if isinstance(param, OrderedParameter):
                 if value not in param.values:
                     raise ValueError(
                         f"Invalid {param_name}={value}. "
@@ -479,8 +402,7 @@ class KernelDesignSpace:
                     lambda name: params[name],
                     interface_lookup,
                     model=None,  # Not available during configure (optional)
-                    tensor_name=None,  # Not available during configure (optional)
-                    hierarchy=ShapeHierarchy.STREAM  # Explicit: tuple shorthand uses STREAM hierarchy
+                    tensor_name=None  # Resolves at STREAM hierarchy level
                 )
             )
 
@@ -649,7 +571,7 @@ class KernelDesignPoint:
             >>> point2.config["SIMD"]
             1
         """
-        min_val = self.design_space.dim_min(name)
+        min_val = self.design_space.get_ordered_parameter(name).min()
         return self.with_dimension(name, min_val)
 
     def with_max(self, name: str) -> 'KernelDesignPoint':
@@ -671,7 +593,7 @@ class KernelDesignPoint:
             >>> point2.config["SIMD"]
             64
         """
-        max_val = self.design_space.dim_max(name)
+        max_val = self.design_space.get_ordered_parameter(name).max()
         return self.with_dimension(name, max_val)
 
     def with_percentage(
@@ -701,7 +623,7 @@ class KernelDesignPoint:
             >>> point2.config["SIMD"]
             8
         """
-        value = self.design_space.dim_at_percentage(name, percentage, rounding)
+        value = self.design_space.get_ordered_parameter(name).at_percentage(percentage, rounding)
         return self.with_dimension(name, value)
 
     def with_step_up(self, name: str, n: int = 1) -> 'KernelDesignPoint':
@@ -727,7 +649,7 @@ class KernelDesignPoint:
             >>> point2.config["SIMD"]
             16
         """
-        dim = self.design_space.get_ordered(name)
+        dim = self.design_space.get_ordered_parameter(name)
         current = self.config[name]
         new_val = dim.step_up(current, n)
         return self.with_dimension(name, new_val)
@@ -755,7 +677,7 @@ class KernelDesignPoint:
             >>> point2.config["SIMD"]
             8
         """
-        dim = self.design_space.get_ordered(name)
+        dim = self.design_space.get_ordered_parameter(name)
         current = self.config[name]
         new_val = dim.step_down(current, n)
         return self.with_dimension(name, new_val)
@@ -799,9 +721,9 @@ class KernelDesignPoint:
             >>> for point in base.sweep_dimension("ram_style"):
             ...     evaluate(point)
         """
-        dim = self.design_space.get_dimension(name)
+        dim = self.design_space.get_parameter(name)
 
-        if isinstance(dim, OrderedDimension):
+        if isinstance(dim, OrderedParameter):
             # Ordered: sweep in order from start to stop
             start_idx = 0 if start is None else dim.index_of(start)
             stop_idx = len(dim) - 1 if stop is None else dim.index_of(stop)
@@ -1052,14 +974,14 @@ class KernelDesignPoint:
         param = self.get_output_stream_param(index)
         return self.config.get(param) if param else None
 
-    def get_input_stream_dimension(self, index: int) -> Optional['OrderedDimension']:
+    def get_input_stream_dimension(self, index: int) -> Optional['OrderedParameter']:
         """Get parallelism dimension for input interface.
 
         Args:
             index: Input interface index (0-based)
 
         Returns:
-            OrderedDimension or None if no parallelism
+            OrderedParameter or None if no parallelism
 
         Raises:
             IndexError: If index out of range
@@ -1071,14 +993,14 @@ class KernelDesignPoint:
 
         return self.input_list[index].design_space.parallelism_dimension
 
-    def get_output_stream_dimension(self, index: int) -> Optional['OrderedDimension']:
+    def get_output_stream_dimension(self, index: int) -> Optional['OrderedParameter']:
         """Get parallelism dimension for output interface.
 
         Args:
             index: Output interface index (0-based)
 
         Returns:
-            OrderedDimension or None if no parallelism
+            OrderedParameter or None if no parallelism
 
         Raises:
             IndexError: If index out of range

@@ -33,8 +33,9 @@ from brainsmith.dataflow import KernelOp, FULL_DIM
 from brainsmith.dataflow.types import VALUE_OPTIMIZED
 from brainsmith.dataflow.transformation import TransformationResult
 from brainsmith.dataflow.spec_helpers import (
-    add_datatype, sub_datatype, smallest_datatype_for_range
+    add_datatype, sub_datatype, smallest_datatype_for_range, derive_dim
 )
+from brainsmith.dataflow.types import ShapeHierarchy
 import brainsmith.dataflow as df
 from brainsmith.registry import kernel
 from .operations import BinaryOperations
@@ -246,7 +247,7 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
         df.OutputSchema(
             name="output",
             block_tiling=[FULL_DIM],                      # Full tensor
-            stream_tiling=[("lhs", -1)],                  # Match LHS PE
+            stream_tiling=[derive_dim("lhs", ShapeHierarchy.STREAM, -1)],  # Match LHS PE
             datatype=_elementwise_binary_output_datatype(),  # Polymorphic dispatch
             required_layout=None,
         )

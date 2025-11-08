@@ -28,7 +28,8 @@ from qonnx.util.basic import interleave_matrix_outer_dim_from_partitions
 import qonnx.core.data_layout as DataLayout
 
 from brainsmith.dataflow import KernelOp, FULL_DIM
-from brainsmith.dataflow.types import VALUE_OPTIMIZED
+from brainsmith.dataflow.spec_helpers import derive_dim
+from brainsmith.dataflow.types import VALUE_OPTIMIZED, ShapeHierarchy
 from brainsmith.registry import kernel
 import brainsmith.dataflow as df
 from typing import Optional
@@ -62,7 +63,7 @@ THRESHOLDING_SCHEMA = df.KernelSchema(
         df.OutputSchema(
             name="output",
             block_tiling=[FULL_DIM],          # Same as input
-            stream_tiling=[("input", -1)],    # Match input PE
+            stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],    # Match input PE
             datatype=None,  # Datatype comes from ONNX graph (set via node attrs)
             required_layout="NHWC",
         )

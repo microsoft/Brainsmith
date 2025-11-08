@@ -71,7 +71,7 @@ class TestAddValidation(ElementwiseBinaryTestBase):
     - make_test_model(): Builds ONNX model with broadcasting support
     - get_kernel_op(): Returns ElementwiseBinaryOp
 
-    Inherits 6 tests automatically from SingleKernelTest:
+    Inherits 6 tests automatically from KernelTest:
     1. test_stage1_model_structure - Validates ONNX model structure
     2. test_stage2_kernel_inference - Validates kernel inference transform
     3. test_python_execution_vs_golden - Python execution parity
@@ -87,7 +87,7 @@ class TestAddValidation(ElementwiseBinaryTestBase):
     # ========================================================================
     # Inherited Tests (6 total)
     # ========================================================================
-    # The following tests are inherited from SingleKernelTest and run
+    # The following tests are inherited from KernelTest and run
     # automatically for each test case in VALIDATION_CASES:
     #
     # 1. test_stage1_model_structure(kernel_test_config, stage1_model)

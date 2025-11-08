@@ -17,7 +17,6 @@ from finn.util.basic import CppBuilder
 from brainsmith.registry import backend
 
 @backend(
-    name="CropHLS",
     target_kernel="brainsmith:Crop",
     language="hls",
     author="Josh Monson"

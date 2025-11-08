@@ -13,9 +13,23 @@ import os
 import pytest
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 from brainsmith.settings.schema import LoggingConfig
 from brainsmith.settings.loader import load_config
+
+
+# ============================================================================
+# Test Helpers
+# ============================================================================
+
+def minimal_config(logging_level: str = "normal") -> str:
+    """Minimal valid brainsmith.yaml with logging config."""
+    return f"""xilinx_path: /tools/Xilinx
+xilinx_version: '2024.2'
+logging:
+  level: {logging_level}
+"""
 
 
 # ============================================================================
@@ -35,19 +49,17 @@ class TestLoggingConfigEssentials:
         assert config.max_log_size_mb == 0
         assert config.keep_backups == 3
 
-    def test_valid_log_levels(self):
+    @pytest.mark.parametrize("level", ["quiet", "normal", "verbose", "debug"])
+    def test_valid_log_levels(self, level):
         """All valid log levels are accepted."""
-        valid_levels = ["quiet", "normal", "verbose", "debug"]
-
-        for level in valid_levels:
-            config = LoggingConfig(level=level)
-            assert config.level == level
+        config = LoggingConfig(level=level)
+        assert config.level == level
 
     def test_system_config_includes_logging(self):
         """SystemConfig includes logging field with default factory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "brainsmith.yaml"
-            config_file.write_text("xilinx_path: /tools/Xilinx\nxilinx_version: '2024.2'\n")
+            config_file.write_text(minimal_config())
 
             config = load_config(project_file=config_file)
 
@@ -59,14 +71,7 @@ class TestLoggingConfigEssentials:
         """Load logging section from YAML config."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "brainsmith.yaml"
-
-            yaml_content = """
-xilinx_path: /tools/Xilinx
-xilinx_version: '2024.2'
-logging:
-  level: verbose
-"""
-            config_file.write_text(yaml_content)
+            config_file.write_text(minimal_config("verbose"))
 
             config = load_config(project_file=config_file)
 
@@ -76,24 +81,8 @@ logging:
         """BSMITH_LOG_LEVEL env var overrides YAML (validates precedence)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "brainsmith.yaml"
+            config_file.write_text(minimal_config("normal"))
 
-            yaml_content = """
-xilinx_path: /tools/Xilinx
-xilinx_version: '2024.2'
-logging:
-  level: normal
-"""
-            config_file.write_text(yaml_content)
-
-            # Set environment variable
-            old_env = os.environ.get('BSMITH_LOG_LEVEL')
-            try:
-                os.environ['BSMITH_LOG_LEVEL'] = 'debug'
+            with mock.patch.dict(os.environ, {'BSMITH_LOG_LEVEL': 'debug'}):
                 config = load_config(project_file=config_file)
-
                 assert config.logging.level == "debug"
-            finally:
-                if old_env:
-                    os.environ['BSMITH_LOG_LEVEL'] = old_env
-                else:
-                    os.environ.pop('BSMITH_LOG_LEVEL', None)

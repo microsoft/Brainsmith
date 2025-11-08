@@ -10,9 +10,7 @@ Template Syntax (DimSpec union type):
   FULL_DIM                -> Copy dimension from reference shape (full dimension)
   1                       -> Singleton dimension (only literal allowed)
   str                     -> Parameter name to look up
-  (interface, dim_idx)    -> Tuple shorthand (uses context hierarchy: BLOCK or STREAM)
-  (interface, dim_idx, hierarchy) -> Tuple shorthand with explicit hierarchy override
-  Callable[[Dict, Callable, Any, Optional[str]], int] -> Custom dimension computation function
+  Callable                -> Custom dimension computation (4-param signature)
 
 TilingSpec Syntax:
   [DimSpec, ...]          -> List of dimension specifications (standard)
@@ -29,9 +27,9 @@ logger = logging.getLogger(__name__)
 
 
 def normalize_template(
-    template: Union[List[Union[int, str, Tuple[str, int], Callable, type]], type],
+    template: Union[List[Union[int, str, type]], type],
     reference_shape: Tuple[int, ...]
-) -> List[Union[int, str, Tuple[str, int], Callable, type]]:
+) -> List[Union[int, str, type]]:
     """Normalize template structure to match reference rank (no value resolution).
 
     Handles both list-based templates and FULL_SHAPE sentinel. Pads templates
@@ -59,8 +57,6 @@ def normalize_template(
         [1, "PE"]
         >>> normalize_template([FULL_DIM, "PE", 1], (128, 768, 64))
         [FULL_DIM, "PE", 1]
-        >>> normalize_template([("input", -1)], (1, 1, 64))
-        [1, 1, ("input", -1)]
         >>> normalize_template(FULL_SHAPE, (1, 224, 224, 64))
         [FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM]
     """
@@ -95,14 +91,114 @@ def normalize_template(
     return template
 
 
+def _resolve_full_dim(ref_dim: int) -> int:
+    """Copy full dimension from reference shape.
+
+    Args:
+        ref_dim: Reference dimension value
+
+    Returns:
+        The reference dimension value unchanged
+    """
+    return ref_dim
+
+
+def _resolve_parameter(
+    param_name: str,
+    ref_dim: int,
+    param_getter: Callable[[str], Any]
+) -> int:
+    """Resolve parameter name to value with divisibility validation.
+
+    Args:
+        param_name: Parameter name to look up
+        ref_dim: Reference dimension that must be divisible by parameter value
+        param_getter: Function to retrieve parameter values
+
+    Returns:
+        Parameter value
+
+    Raises:
+        ValueError: If parameter not found or doesn't divide reference dimension
+    """
+    try:
+        value = param_getter(param_name)
+    except (AttributeError, KeyError):
+        raise ValueError(f"parameter '{param_name}' not found")
+
+    if ref_dim % value != 0:
+        raise ValueError(
+            f"parameter '{param_name}' value {value} does not divide "
+            f"parent dimension {ref_dim}"
+        )
+    return value
+
+
+def _resolve_literal(value: int) -> int:
+    """Validate and return singleton literal.
+
+    Args:
+        value: Literal integer value
+
+    Returns:
+        The value (must be 1)
+
+    Raises:
+        ValueError: If value is not 1
+    """
+    if value != 1:
+        raise ValueError(
+            f"Only singleton (1) allowed for literals, got {value}. "
+            f"Use parameters for other values."
+        )
+    return value
+
+
+def _resolve_callable(
+    func: Callable,
+    interfaces: Dict[str, Any],
+    param_getter: Callable,
+    model: Optional[Any],
+    tensor_name: Optional[str]
+) -> int:
+    """Execute custom dimension computation function.
+
+    Args:
+        func: Callable dimension function
+        interfaces: Dict of interface models for dimension derivation
+        param_getter: Function to retrieve parameter values
+        model: ModelWrapper for ONNX graph access (optional)
+        tensor_name: Tensor name (optional)
+
+    Returns:
+        Computed dimension value
+
+    Raises:
+        ValueError: If interfaces not provided, computation fails, or result invalid
+    """
+    if interfaces is None:
+        raise ValueError("Callable dimension function requires interfaces dict")
+
+    try:
+        value = func(interfaces, param_getter, model, tensor_name)
+    except Exception as e:
+        raise ValueError(f"Callable dimension resolution failed: {e}") from e
+
+    if not isinstance(value, int) or value < 1:
+        raise ValueError(
+            f"Callable dimension function returned invalid value {value} "
+            f"(must be positive int)"
+        )
+    return value
+
+
 def resolve_template(
-    template: Union[List[Union[int, str, Tuple[str, int], Callable, type]], type],
+    template: Union[List[Union[int, str, Callable, type]], type],
     reference_shape: Tuple[int, ...],
     param_getter: Callable[[str], Any],
     interfaces: Optional[Dict[str, Any]] = None,
     model: Optional[Any] = None,
-    tensor_name: Optional[str] = None,
-    hierarchy: ShapeHierarchy = ShapeHierarchy.STREAM
+    tensor_name: Optional[str] = None
 ) -> Tuple[int, ...]:
     """Resolve template dimensions to concrete shape.
 
@@ -110,9 +206,6 @@ def resolve_template(
     DimSpec union type supports multiple resolution strategies:
     - int (1 only): Singleton dimension
     - str: Parameter lookup
-    - (interface, dim_idx): Tuple shorthand (uses context hierarchy)
-    - (interface, dim_idx, hierarchy): Tuple shorthand with explicit hierarchy override
-    - Callable: Custom dimension function (unified 4-param signature)
     - FULL_DIM: Copy from reference
 
     TilingSpec supports:
@@ -126,8 +219,6 @@ def resolve_template(
         interfaces: Dict of interface models for dimension derivation (optional)
         model: ModelWrapper for ONNX graph access (optional, for custom callbacks)
         tensor_name: Tensor name (optional, for custom callbacks)
-        hierarchy: Shape hierarchy for 2-tuple resolution (default: STREAM).
-                   3-tuple syntax can override: ("input", -1, BLOCK)
 
     Returns:
         Resolved concrete shape
@@ -140,12 +231,6 @@ def resolve_template(
         (128, 64)
         >>> resolve_template([1, FULL_DIM], (128, 768), lambda k: {})
         (1, 768)
-        >>> resolve_template([("input", -1)], (768,), lambda k: {},
-        ...                  interfaces={"input": input_model})
-        (768,)  # Copies input's last dim via tuple shorthand
-        >>> resolve_template([derive_dim("input", BLOCK, 1)], (768,), lambda k: {},
-        ...                  interfaces={"input": input_model})
-        (768,)  # Copies input[1] via callable
         >>> resolve_template(FULL_SHAPE, (1, 224, 224, 64), lambda k: {})
         (1, 224, 224, 64)  # Expands to full reference shape
     """
@@ -154,66 +239,17 @@ def resolve_template(
     # Step 1: Normalize structure (pad to match reference rank)
     template = normalize_template(template, reference_shape)
 
-    # Step 2: Resolve values
+    # Step 2: Resolve values using specialized resolvers
     resolved = []
     for i, (dim, ref) in enumerate(zip(template, reference_shape)):
         if dim is FULL_DIM:
-            # FULL_DIM: copy entire dimension from reference
-            value = ref
+            value = _resolve_full_dim(ref)
         elif isinstance(dim, str):
-            # Parameter lookup
-            try:
-                value = param_getter(dim)
-            except (AttributeError, KeyError):
-                raise ValueError(f"parameter '{dim}' not found")
-
-            # Validate divisibility
-            if ref % value != 0:
-                raise ValueError(
-                    f"parameter '{dim}' value {value} does not divide parent dimension {ref}"
-                )
+            value = _resolve_parameter(dim, ref, param_getter)
         elif isinstance(dim, int):
-            if dim != 1:
-                raise ValueError(
-                    f"Only singleton (1) allowed for literals, got {dim}. "
-                    f"Use parameters for other values."
-                )
-            value = dim
-        elif isinstance(dim, tuple):
-            # Tuple shorthand: ("input", -1) or ("input", -1, STREAM)
-            if interfaces is None:
-                raise ValueError(f"Tuple shorthand {dim} requires interfaces dict")
-
-            if len(dim) == 2:
-                # 2-tuple: use context hierarchy (from parameter)
-                interface_name, dim_idx = dim
-                effective_hierarchy = hierarchy
-            elif len(dim) == 3:
-                # 3-tuple: explicit hierarchy override
-                interface_name, dim_idx, explicit_hierarchy = dim
-                effective_hierarchy = explicit_hierarchy
-            else:
-                raise ValueError(f"Tuple shorthand must be 2 or 3 elements, got {len(dim)}")
-
-            try:
-                resolver = derive_dim(interface_name, effective_hierarchy, dim_idx)
-                value = resolver(interfaces, param_getter, model, tensor_name)
-            except ValueError as e:
-                raise ValueError(f"Tuple shorthand {dim} resolution failed: {e}") from e
+            value = _resolve_literal(dim)
         elif callable(dim):
-            # Callable: custom dimension computation function (unified 4-param signature)
-            if interfaces is None:
-                raise ValueError(f"Callable dimension function requires interfaces dict")
-
-            try:
-                value = dim(interfaces, param_getter, model, tensor_name)
-            except Exception as e:
-                raise ValueError(f"Callable dimension resolution failed: {e}") from e
-
-            if not isinstance(value, int) or value < 1:
-                raise ValueError(
-                    f"Callable dimension function returned invalid value {value} (must be positive int)"
-                )
+            value = _resolve_callable(dim, interfaces, param_getter, model, tensor_name)
         else:
             raise ValueError(f"invalid template element '{dim}' (type {type(dim).__name__})")
 

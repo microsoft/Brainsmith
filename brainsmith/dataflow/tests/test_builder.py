@@ -10,61 +10,54 @@
 import pytest
 from qonnx.core.datatype import DataType
 
+from brainsmith._internal.math import divisors
 from brainsmith.dataflow.builder import DesignSpaceBuilder
 from brainsmith.dataflow.dse_models import InterfaceDesignSpace
 
 
 # =============================================================================
-# Test _divisors() Helper
+# Test divisors() Helper
 # =============================================================================
 
 def test_divisors_small_numbers():
-    """Test _divisors() with small known values."""
-    builder = DesignSpaceBuilder()
-
+    """Test divisors() with small known values."""
     # Test 12: divisors are 1, 2, 3, 4, 6, 12
-    divisors_12 = builder._divisors(12)
+    divisors_12 = divisors(12)
     assert divisors_12 == {1, 2, 3, 4, 6, 12}
 
     # Test 1: only divisor is 1
-    divisors_1 = builder._divisors(1)
+    divisors_1 = divisors(1)
     assert divisors_1 == {1}
 
     # Test 2: divisors are 1, 2
-    divisors_2 = builder._divisors(2)
+    divisors_2 = divisors(2)
     assert divisors_2 == {1, 2}
 
 
 def test_divisors_prime_numbers():
-    """Test _divisors() with prime numbers."""
-    builder = DesignSpaceBuilder()
-
+    """Test divisors() with prime numbers."""
     # Prime numbers have exactly 2 divisors: 1 and themselves
-    divisors_7 = builder._divisors(7)
+    divisors_7 = divisors(7)
     assert divisors_7 == {1, 7}
 
-    divisors_13 = builder._divisors(13)
+    divisors_13 = divisors(13)
     assert divisors_13 == {1, 13}
 
 
 def test_divisors_perfect_square():
-    """Test _divisors() with perfect squares."""
-    builder = DesignSpaceBuilder()
-
+    """Test divisors() with perfect squares."""
     # 16 = 4^2: divisors are 1, 2, 4, 8, 16
-    divisors_16 = builder._divisors(16)
+    divisors_16 = divisors(16)
     assert divisors_16 == {1, 2, 4, 8, 16}
 
     # 64 = 8^2: divisors are 1, 2, 4, 8, 16, 32, 64
-    divisors_64 = builder._divisors(64)
+    divisors_64 = divisors(64)
     assert divisors_64 == {1, 2, 4, 8, 16, 32, 64}
 
 
 def test_divisors_768():
-    """Test _divisors(768) returns correct 18 divisors."""
-    builder = DesignSpaceBuilder()
-
-    divisors_768 = builder._divisors(768)
+    """Test divisors(768) returns correct 18 divisors."""
+    divisors_768 = divisors(768)
 
     # 768 = 2^8 * 3 has 18 divisors
     expected = {1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 768}
@@ -73,33 +66,27 @@ def test_divisors_768():
 
 
 def test_divisors_powers_of_two():
-    """Test _divisors() with powers of 2."""
-    builder = DesignSpaceBuilder()
-
+    """Test divisors() with powers of 2."""
     # 2^n has n+1 divisors: 1, 2, 4, 8, ..., 2^n
-    divisors_8 = builder._divisors(8)
+    divisors_8 = divisors(8)
     assert divisors_8 == {1, 2, 4, 8}
     assert len(divisors_8) == 4
 
-    divisors_32 = builder._divisors(32)
+    divisors_32 = divisors(32)
     assert divisors_32 == {1, 2, 4, 8, 16, 32}
     assert len(divisors_32) == 6
 
 
 def test_divisors_zero_raises_error():
-    """Test _divisors(0) raises ValueError."""
-    builder = DesignSpaceBuilder()
-
-    with pytest.raises(ValueError, match="non-positive"):
-        builder._divisors(0)
+    """Test divisors(0) raises ValueError."""
+    with pytest.raises(ValueError, match="must be positive"):
+        divisors(0)
 
 
 def test_divisors_negative_raises_error():
-    """Test _divisors() with negative number raises ValueError."""
-    builder = DesignSpaceBuilder()
-
-    with pytest.raises(ValueError, match="non-positive"):
-        builder._divisors(-10)
+    """Test divisors() with negative number raises ValueError."""
+    with pytest.raises(ValueError, match="must be positive"):
+        divisors(-10)
 
 
 # =============================================================================

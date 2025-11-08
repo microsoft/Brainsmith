@@ -26,20 +26,14 @@ from brainsmith.settings.schema import LoggingConfig
 # Test Utilities
 # ============================================================================
 
-def get_handler_count(logger_name: str) -> int:
-    """Count handlers on a logger."""
-    logger = logging.getLogger(logger_name)
-    return len(logger.handlers)
-
-
-def get_console_handlers(logger_name: str) -> list:
+def get_console_handlers(logger_name: str) -> list[logging.Handler]:
     """Get console handlers from a logger."""
     logger = logging.getLogger(logger_name)
     from rich.logging import RichHandler
     return [h for h in logger.handlers if isinstance(h, RichHandler)]
 
 
-def get_file_handlers(logger_name: str) -> list:
+def get_file_handlers(logger_name: str) -> list[logging.FileHandler]:
     """Get file handlers from a logger."""
     logger = logging.getLogger(logger_name)
     return [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
@@ -50,15 +44,16 @@ def clear_all_handlers():
     root = logging.getLogger()
     root.handlers.clear()
 
-    for logger_name in ['brainsmith', 'finn', 'finn.builder', 'finn.vivado', 'finn.hls']:
-        logger = logging.getLogger(logger_name)
-        logger.handlers.clear()
-        logger.setLevel(logging.NOTSET)
+    # Clear all existing loggers dynamically
+    for logger in logging.Logger.manager.loggerDict.values():
+        if isinstance(logger, logging.Logger):
+            logger.handlers.clear()
+            logger.setLevel(logging.NOTSET)
 
 
-@pytest.fixture(autouse=True)
-def reset_logging():
-    """Reset logging state before each test."""
+@pytest.fixture
+def clean_logging():
+    """Reset logging state for test isolation."""
     clear_all_handlers()
     yield
     clear_all_handlers()
@@ -71,35 +66,35 @@ def reset_logging():
 class TestVerbosityLevels:
     """Test handler attachment at each verbosity level."""
 
-    def test_quiet_no_console_handlers(self):
+    def test_quiet_no_console_handlers(self, clean_logging):
         """Quiet level: No console handlers attached."""
         setup_logging(level="quiet", output_dir=None)
 
-        assert get_handler_count("brainsmith") == 0
-        assert get_handler_count("finn.builder") == 0
-        assert get_handler_count("finn") == 0
+        assert len(logging.getLogger("brainsmith").handlers) == 0
+        assert len(logging.getLogger("finn.builder").handlers) == 0
+        assert len(logging.getLogger("finn").handlers) == 0
 
-    def test_normal_brainsmith_and_builder(self):
+    def test_normal_brainsmith_and_builder(self, clean_logging):
         """Normal level: brainsmith.* + finn.builder.* handlers (default behavior)."""
         setup_logging(level="normal", output_dir=None)
 
         # brainsmith handler attached
-        assert get_handler_count("brainsmith") > 0
+        assert len(logging.getLogger("brainsmith").handlers) > 0
         assert len(get_console_handlers("brainsmith")) > 0
 
         # finn.builder handler attached
-        assert get_handler_count("finn.builder") > 0
+        assert len(logging.getLogger("finn.builder").handlers) > 0
         assert len(get_console_handlers("finn.builder")) > 0
 
-    def test_verbose_includes_finn_tools(self):
+    def test_verbose_includes_finn_tools(self, clean_logging):
         """Verbose level: Above + finn.* handler."""
         setup_logging(level="verbose", output_dir=None)
 
-        assert get_handler_count("brainsmith") > 0
-        assert get_handler_count("finn.builder") > 0
-        assert get_handler_count("finn") > 0
+        assert len(logging.getLogger("brainsmith").handlers) > 0
+        assert len(logging.getLogger("finn.builder").handlers) > 0
+        assert len(logging.getLogger("finn").handlers) > 0
 
-    def test_debug_all_at_debug_level(self):
+    def test_debug_all_at_debug_level(self, clean_logging):
         """Debug level: All handlers with DEBUG level."""
         setup_logging(level="debug", output_dir=None)
 
@@ -112,7 +107,7 @@ class TestVerbosityLevels:
 class TestFileLogging:
     """Test file handler creation and comprehensive logging."""
 
-    def test_file_handler_created(self):
+    def test_file_handler_created(self, clean_logging):
         """File handler created when output_dir provided."""
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
@@ -127,7 +122,7 @@ class TestFileLogging:
             log_file = output_dir / "brainsmith.log"
             assert log_file.exists()
 
-    def test_file_captures_all_levels(self):
+    def test_file_captures_all_levels(self, clean_logging):
         """File handler captures DEBUG regardless of console level (critical for debugging)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
@@ -154,7 +149,7 @@ class TestFileLogging:
 class TestAdvancedFeatures:
     """Test pattern suppression and per-tool configuration."""
 
-    def test_suppress_filter_matches(self):
+    def test_suppress_filter_matches(self, clean_logging):
         """SuppressFilter suppresses matching patterns."""
         patterns = ["Compiling module", "Analyzing entity"]
         filter_obj = _SuppressFilter(patterns)
@@ -184,7 +179,7 @@ class TestAdvancedFeatures:
         assert filter_obj.filter(record_match) is False
         assert filter_obj.filter(record_no_match) is True
 
-    def test_per_tool_handlers(self):
+    def test_per_tool_handlers(self, clean_logging):
         """Separate handlers created for each FINN tool."""
         config = LoggingConfig(
             level="verbose",
@@ -197,8 +192,8 @@ class TestAdvancedFeatures:
         setup_logging(level="verbose", output_dir=None, config=config)
 
         # Check handlers on tool loggers
-        assert get_handler_count("finn.vivado") > 0
-        assert get_handler_count("finn.hls") > 0
+        assert len(logging.getLogger("finn.vivado").handlers) > 0
+        assert len(logging.getLogger("finn.hls").handlers) > 0
 
         # Verify correct levels
         vivado_handlers = get_console_handlers("finn.vivado")
@@ -214,7 +209,7 @@ class TestAdvancedFeatures:
 class TestFINNIntegration:
     """Test FINN integration configuration."""
 
-    def test_get_finn_config(self):
+    def test_get_finn_config(self, clean_logging):
         """get_finn_config returns correct values for FINN integration."""
         config = get_finn_config()
 

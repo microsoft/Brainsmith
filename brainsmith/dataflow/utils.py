@@ -72,21 +72,21 @@ def iter_valid_configurations(
         - Each configuration is guaranteed to work with configure()
     """
     # Get valid ranges from kernel
-    # Note: Returns Dict[str, Union[OrderedDimension, frozenset]] in new API
+    # Note: Returns Dict[str, Union[OrderedParameter, frozenset]] in new API
     dimensions = kernel_op.get_valid_ranges(model_w)
 
     # Early return if no parallelization parameters
     if not dimensions:
         return
 
-    # Extract values from dimensions (handle both OrderedDimension and frozenset)
+    # Extract values from dimensions (handle both OrderedParameter and frozenset)
     # Import here to avoid circular dependency
-    from .ordered_dimension import OrderedDimension
+    from .ordered_parameter import OrderedParameter
 
     valid_ranges = {}
     for name, dim in dimensions.items():
-        if isinstance(dim, OrderedDimension):
-            # OrderedDimension: extract values tuple
+        if isinstance(dim, OrderedParameter):
+            # OrderedParameter: extract values tuple
             valid_ranges[name] = set(dim.values)
         else:
             # frozenset: convert to set for filtering compatibility

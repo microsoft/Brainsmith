@@ -103,9 +103,6 @@ from .constraints import (
     CustomConstraint,
 )
 
-# Backwards compatibility alias
-Custom = CustomConstraint
-
 # Core architecture - unified schemas
 from .schemas import (
     ParameterSpec,
@@ -116,10 +113,6 @@ from .schemas import (
 
 # DSE navigation
 from .ordered_parameter import OrderedParameter
-
-# Backward compatibility aliases (will be removed in v8.0)
-DimensionSpec = ParameterSpec
-OrderedDimension = OrderedParameter
 
 # Immutable models (design space exploration)
 from .dse_models import (
@@ -172,10 +165,6 @@ __all__ = [
     'InterfaceDesignSpace',
     'InterfaceDesignPoint',
     'OrderedParameter',  # For ordered parameter navigation
-
-    # Backward compatibility (deprecated)
-    'DimensionSpec',
-    'OrderedDimension',
 
     # Validation
     'Constraint',

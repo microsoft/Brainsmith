@@ -1,82 +1,34 @@
+---
+hide:
+  - toc
+---
+
 # Brainsmith
 
 ## Open-source AI acceleration on FPGA: from ONNX to RTL
 
-Brainsmith compiles ONNX models to optimized FPGA accelerators, intelligently exploring hardware configurations to find designs that maximize performance within your resource constraints.
+Brainsmith compiles ONNX models to optimized dataflow accelerator designs for FPGAs, intelligently exploring hardware configurations to find designs that maximize performance within your resource constraints.
 
----
+<div class="grid" markdown style="display: grid; grid-template-columns: 1fr auto 2fr; gap: 2rem; align-items: center; margin-top: 0.5rem;">
 
-## From ONNX to Dataflow Accelerator
+<div markdown>
 
-Brainsmith transforms your neural network into a streaming dataflow architecture optimized for FPGA execution:
+<img src="images/mha_onnx.png" alt="ONNX Graph Structure" style="width: 100%; height: 500px; object-fit: contain;">
 
-=== "Input: ONNX Graph"
+</div>
 
-    Your quantized neural network model:
+<div style="font-size: 3rem; color: #666; text-align: center;">
+→
+</div>
 
-    ![ONNX Graph Structure](images/simple_mha.png)
+<div markdown>
 
-    *Multi-head attention layer represented as standard ONNX operations (MatMul, Reshape, Transpose, Softmax)*
+<img src="images/bert_dfc.png" alt="Generated Dataflow Accelerator" style="width: 100%; height: 500px; object-fit: contain;">
 
-=== "Output: Dataflow Accelerator"
+</div>
 
-    Optimized hardware pipeline with streaming kernels:
+</div>
 
-    ![Generated Dataflow Accelerator](images/bert_dfc.png)
-
-    *Synthesizable RTL with specialized kernels (MVAU, Thresholding) connected via AXI-Stream FIFOs*
-
-Each kernel executes concurrently in hardware, processing data as it streams through the pipeline—no instruction fetch overhead, minimal memory access, maximum throughput.
-
----
-
-## See It In Action
-
-Declarative design space `blueprint` in YAML:
-
-```yaml
-name: "BERT Accelerator"
-board: V80
-clock_ns: 5.0  # 200MHz
-output: "estimates"
-
-design_space:
-  kernels:
-    - MVAU
-    - LayerNorm: [LayerNorm_hls, LayerNorm_rtl]
-```
-
-Run design space exploration:
-
-```bash
-smith dfc bert_quantized.onnx blueprint.yaml
-```
-
-Get performance estimates across all configurations in 30-60 minutes. Choose your design point, generate RTL, synthesize to bitstream.
-
----
-
-## Get Started
-
-**New to FPGA acceleration?**
-
-→ [Quick Start](getting-started.md#quick-start) - Run the BERT example and explore results
-
-
-**Ready to build your own?**
-
-→ [Installation](getting-started.md) - Set up your development environment
-
-→ [Blueprints](developer-guide/3-reference/blueprints.md) - Learn the configuration format
-
-
-**Extending Brainsmith?**
-
-→ [Kernel Op Developer Guide](developer-guide/kernel_ops/README.md) - Complete guide to building FPGA hardware kernels
-
-→ [Component Registry](developer-guide/2-core-systems/component-registry.md) - Add custom kernels and transforms
-
-→ [Kernels](developer-guide/3-reference/kernels.md) - Understand kernel architecture and create custom operations
 
 ---
 

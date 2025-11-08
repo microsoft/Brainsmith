@@ -186,7 +186,7 @@ def test_design_point_creation():
         outputs=(output_inv,),
         internal_datatypes={},
         optimization_constraints=[],
-        dimensions={"SIMD": {1, 2, 4, 8, 16}},
+        parameters={"SIMD": {1, 2, 4, 8, 16}},
     )
 
     input_cfg = InterfaceDesignPoint(design_space=input_inv, stream_shape=(64,))
@@ -213,7 +213,7 @@ def test_design_point_property_delegation():
         outputs=(),
         internal_datatypes={"accumulator": DataType["INT32"]},
         optimization_constraints=[],
-        dimensions={},
+        parameters={},
     )
 
     configured_model = KernelDesignPoint(
@@ -236,7 +236,7 @@ def test_design_point_immutable():
         outputs=(),
         internal_datatypes={},
         optimization_constraints=[],
-        dimensions={},
+        parameters={},
     )
 
     configured_model = KernelDesignPoint(

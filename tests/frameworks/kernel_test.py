@@ -1,85 +1,17 @@
-"""SingleKernelTest framework with fixture-based parameterization.
+"""Test framework for single kernel implementation.
 
-This module provides SingleKernelTest, a fixture-driven test framework using
-pytest fixtures for maximum flexibility.
+Provides fixture-based testing of one kernel implementation against golden reference.
 
-Design Philosophy:
-- Pytest fixtures control shapes and datatypes (NOT test methods)
-- Tests define operations once, fixtures parameterize automatically
-- **Stage 1 golden reference** - computed ONCE from ONNX model with annotations
-- **Direct DataType annotations** - NO Quant nodes inserted
-- **Shared utilities** - Inherits from KernelTestBase
-- Automatic test data generation (pre-quantized)
+Provides 6 inherited tests per configuration:
+- 3 pipeline validation tests (HW node creation, shapes, datatypes)
+- 3 execution tests (Python, cppsim, rtlsim) vs golden reference
 
-Inheritance Chain:
-    KernelTestConfig (abstract interface)
-        ↓
-    KernelTestBase (shared utilities)
-        ↓
-    SingleKernelTest (fixture-based testing) ← THIS CLASS
+Subclasses must implement:
+- make_test_model(): Create ONNX model to test
+- get_kernel_op(): Return kernel class to test
 
-Inherited from KernelTestBase:
-- validate_against_golden() - GoldenValidator-based output validation
-- _auto_detect_backends() - Registry-based backend lookup
-- _specialize_to_backend_stage() - Stage 2→3 specialization with overrides
-
-Key Features:
-- **Direct annotations replace Quant nodes** - Simpler architecture, same semantics
-- **Supports rtlsim** - No Quant nodes to synthesize
-- **Simpler graph structure** - Metadata (annotations) separate from operations (Quant nodes)
-- **Pre-quantized test data** - Generated directly in target DataType range
-- **Shared utilities** - Zero code duplication with KernelParityTest
-- **Golden reference from Stage 1** - No Stage 2/3 confusion
-- **Shared golden fixture** - Computed once, used by all execution tests
-- **Clear stage separation** - Stage 1 (golden) → Stage 2 (Python) → Stage 3 (backends)
-- **70% less code per test** - Fixture-based approach reduces boilerplate
-- **Deterministic test data** - Fixed seed for reproducible failures
-
-Usage:
-    from tests.frameworks.single_kernel_test import SingleKernelTest
-
-    # Define fixtures
-    @pytest.fixture(params=[
-        {"input": DataType["INT8"]},
-        {"input": DataType["INT16"]},
-    ])
-    def input_datatypes(request):
-        return request.param
-
-    @pytest.fixture(params=[
-        {"input": (1, 64)},
-        {"input": (4, 128)},
-    ])
-    def input_shapes(request):
-        return request.param
-
-    # Test class - just operations
-    class TestMyKernel(SingleKernelTest):
-        def make_test_model(self, input_shapes):
-            # Build model with shapes from fixture
-            return model, ["input"]
-
-        def get_kernel_inference_transform(self):
-            return InferMyKernel
-
-Result: 2 dtypes × 2 shapes = 4 tests automatically!
-
-Inherited Tests (6 per configuration in v2.3):
-Pipeline Validation (3 tests):
-- test_pipeline_creates_hw_node
-- test_shapes_preserved_through_pipeline
-- test_datatypes_preserved_through_pipeline
-
-Backend Execution (3 tests):
-- test_python_execution_vs_golden (validates against Stage 1 golden)
-- test_cppsim_execution_vs_golden (validates against Stage 1 golden)
-- test_rtlsim_execution_vs_golden (validates against Stage 1 golden)
-
-v2.3 Changes (Architectural):
-- **Removed Quant node insertion** - Use direct DataType annotations instead
-- **Removed 3 Quant validation tests** - No longer applicable (no Quant nodes)
-- **Pre-quantized data generation** - Data generated directly in target DataType range
-- **Fixes rtlsim failures** - No Quant nodes to synthesize, all tests now work
+Framework handles: DataType annotations, test data generation, golden reference,
+backend specialization, and validation.
 """
 
 from typing import Dict, Tuple
@@ -89,133 +21,32 @@ import pytest
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.core.onnx_exec import execute_onnx
+from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.infer_shapes import InferShapes
 
-# Import base utilities
+from brainsmith.primitives.transforms.infer_kernels import InferKernels
+
 from tests.frameworks.kernel_test_base import KernelTestBase
-
-# Import Phase 1 utilities
 from tests.support.pipeline import PipelineRunner
 
 
-class SingleKernelTest(KernelTestBase):
-    """Test one kernel with fixture-based parameterization.
+class KernelTest(KernelTestBase):
+    """Test single kernel implementation against golden reference.
 
-    Subclasses implement (2 methods only!):
-    - make_test_model(kernel_test_config): Create Stage 1 ONNX model
-    - get_kernel_op(): Return the kernel class to test
+    Subclasses must implement:
+    - make_test_model(kernel_test_config): Create ONNX model
+    - get_kernel_op(): Return kernel class
 
-    get_kernel_inference_transform() has a default implementation using get_kernel_op().
-    Override only if you need custom transform logic.
-
-    Pytest fixtures provide:
-    - kernel_test_config: Unified test configuration (v4.0+)
-
-    Framework automatically:
-    - Annotates inputs with QONNX DataTypes (NO Quant nodes inserted)
-    - Generates test data (pre-quantized, using generate_test_data from Phase 1)
-    - Computes golden reference (QONNX execution on Stage 1 model with annotations)
-    - Validates Python/cppsim/rtlsim against golden
-
-    Provides 6 inherited tests per configuration (v2.3):
-    Pipeline Validation:
-    1. test_pipeline_creates_hw_node: Pipeline creates HW node
-    2. test_shapes_preserved_through_pipeline: Shapes remain correct
-    3. test_datatypes_preserved_through_pipeline: Datatypes remain correct
-
-    Backend Execution:
-    4. test_python_execution_vs_golden: Python execution matches golden
-    5. test_cppsim_execution_vs_golden: HLS C++ simulation matches golden
-    6. test_rtlsim_execution_vs_golden: RTL simulation matches golden
+    Provides 6 inherited tests: 3 pipeline validation + 3 execution (Python/cppsim/rtlsim)
     """
-
-    # ========================================================================
-    # Abstract methods - must implement in subclass
-    # ========================================================================
-
-    def get_kernel_op(self):
-        """Return the kernel class to test.
-
-        Returns:
-            Kernel class (e.g., ElementwiseBinaryOp, AddStreams)
-
-        Example:
-            def get_kernel_op(self):
-                from brainsmith.kernels.elementwise_binary import ElementwiseBinaryOp
-                return ElementwiseBinaryOp
-        """
-        raise NotImplementedError("Subclass must implement get_kernel_op()")
-
-    def get_kernel_inference_transform(self):
-        """Return the kernel inference transform.
-
-        Default implementation uses InferKernels([get_kernel_op()]).
-        Override only if you need custom transform logic.
-
-        Returns:
-            Transformation instance (not callable!)
-
-        Example (using default):
-            # No need to override - default uses get_kernel_op()
-
-        Example (custom):
-            def get_kernel_inference_transform(self):
-                from my_package import CustomInferenceTransform
-                return CustomInferenceTransform(special_config=True)
-        """
-        from brainsmith.primitives.transforms.infer_kernels import InferKernels
-        return InferKernels([self.get_kernel_op()])
-
-    # ========================================================================
-    # Internal helpers - use fixtures and Phase 1 utilities
-    # ========================================================================
-
-    # Note: _prepare_model_with_annotations and _generate_test_inputs moved to
-    # KernelTestBase to eliminate duplication with KernelParityTest (v6.0)
-
-    def get_use_custom_golden_reference(self) -> bool:
-        """Override to use custom golden reference instead of QONNX execution.
-
-        Returns:
-            bool: True to use compute_custom_golden_reference(), False for QONNX
-
-        Default:
-            False (use QONNX execution on quantized model)
-
-        Override when:
-            - Operation not supported by QONNX execution
-            - Need specific golden reference behavior
-            - Debugging quantization issues
-        """
-        return False
-
-    def compute_custom_golden_reference(
-        self, model: ModelWrapper, inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
-        """Override to provide custom golden reference implementation.
-
-        Only called when get_use_custom_golden_reference() returns True.
-
-        Args:
-            model: ModelWrapper WITH DataType annotations (NO Quant nodes)
-            inputs: Dict of input tensors (pre-quantized, input names as keys)
-
-        Returns:
-            Dict of output tensors
-
-        Raises:
-            NotImplementedError: Must override when using custom golden reference
-        """
-        raise NotImplementedError(
-            "Must implement compute_custom_golden_reference() when "
-            "get_use_custom_golden_reference() returns True"
-        )
 
     def _compute_golden_reference(
         self,
         quant_model: ModelWrapper,
         inputs: Dict[str, np.ndarray],
     ) -> Dict[str, np.ndarray]:
-        """Compute golden reference using QONNX execution on annotated model.
+        """Compute golden reference using QONNX execution on Stage 1 model.
 
         This is an internal helper. Tests should not call directly.
 
@@ -224,6 +55,8 @@ class SingleKernelTest(KernelTestBase):
         - Executes ONNX operations with pre-quantized input data
         - Uses quantized values as golden reference (not floating-point)
 
+        All Stage 1 models contain standard ONNX operations that QONNX can execute.
+
         Args:
             quant_model: ModelWrapper WITH DataType annotations (NO Quant nodes)
             inputs: Test data (pre-quantized, input names as keys)
@@ -231,61 +64,7 @@ class SingleKernelTest(KernelTestBase):
         Returns:
             Expected outputs from QONNX execution
         """
-        # Check for custom golden reference
-        if self.get_use_custom_golden_reference():
-            return self.compute_custom_golden_reference(quant_model, inputs)
-
-        # Default: Execute annotated model with QONNX
-        from qonnx.core.onnx_exec import execute_onnx
-
         return execute_onnx(quant_model, inputs, return_full_exec_context=False)
-
-    # ========================================================================
-    # Pipeline execution (REMOVED - use fixtures instead)
-    # ========================================================================
-    # run_inference_pipeline() was removed in v5.0
-    # Use stage2_model and stage3_model fixtures instead
-
-
-    # ========================================================================
-    # Pytest Fixtures - v3.0 Extraction (Fixture Composition)
-    # ========================================================================
-
-    @pytest.fixture
-    def input_shapes(self, kernel_test_config: "KernelTestConfig"):
-        """Extract input_shapes from unified config (v3.0).
-
-        This extraction fixture enables pytest fixture composition pattern,
-        allowing tests to request input_shapes while framework provides them
-        from kernel_test_config.
-
-        Args:
-            kernel_test_config: Unified test configuration (auto-injected by pytest)
-
-        Returns:
-            Dict mapping input names to shapes
-        """
-        return kernel_test_config.input_shapes
-
-    @pytest.fixture
-    def input_datatypes(self, kernel_test_config: "KernelTestConfig"):
-        """Extract input_datatypes from unified config (v3.0).
-
-        This extraction fixture enables pytest fixture composition pattern,
-        allowing tests to request input_datatypes while framework provides them
-        from kernel_test_config.
-
-        Args:
-            kernel_test_config: Unified test configuration (auto-injected by pytest)
-
-        Returns:
-            Dict mapping input names to DataTypes
-        """
-        return kernel_test_config.input_dtypes
-
-    # ========================================================================
-    # Pytest Fixtures - Stage 1 golden reference (v2.2)
-    # ========================================================================
 
     @pytest.fixture(scope="function")
     def stage1_model(
@@ -312,9 +91,6 @@ class SingleKernelTest(KernelTestBase):
             model, _ = self._prepare_model_with_annotations(kernel_test_config)
 
             # Run shape/datatype inference (required for QONNX execution)
-            from qonnx.transformation.infer_datatypes import InferDataTypes
-            from qonnx.transformation.infer_shapes import InferShapes
-
             model = model.transform(InferShapes())
             model = model.transform(InferDataTypes())
 
@@ -406,21 +182,23 @@ class SingleKernelTest(KernelTestBase):
             target_node = model.graph.node[0].name  # Assume first node
 
             # Stage 1 → Stage 2: ONNX → Base Kernel
-            from tests.support.pipeline import PipelineRunner
-
             runner = PipelineRunner()
 
             def configure_stage_2(op, m):
-                # Apply imperative configuration (backward compatible)
-                self.configure_parameters(op, m, stage=2)
+                # Apply imperative configuration (optional override)
+                if hasattr(self, 'configure_parameters'):
+                    self.configure_parameters(op, m, stage=2)
                 # Apply declarative configuration from fixture (v3.0)
                 self.auto_configure_from_fixture(
                     op, m, stage=2, config=kernel_test_config
                 )
 
+            # Create kernel inference transform from kernel op
+            transform = InferKernels([self.get_kernel_op()])
+
             op, model = runner.run(
                 model_factory=lambda: (model, target_node),
-                transform=self.get_kernel_inference_transform(),
+                transform=transform,
                 configure_fn=configure_stage_2,
             )
 
@@ -456,19 +234,20 @@ class SingleKernelTest(KernelTestBase):
             Use pytest marks (@pytest.mark.cppsim, @pytest.mark.rtlsim) to control
             which backend tests run. Configure fpgapart in kernel_test_config.platform.
         """
-        fpgapart = kernel_test_config.get_fpgapart()
+        fpgapart = kernel_test_config.fpgapart
 
         def builder():
             # Reuse cached Stage 2 model
             base_op, base_model = stage2_model
 
             # Stage 2 → Stage 3: Base Kernel → Backend
-            op, model = self._specialize_to_backend_stage(
+            op, model = self.specialize_to_backend(
                 base_op, base_model, kernel_test_config
             )
 
-            # Configure backend-specific parameters
-            self.configure_parameters(op, model, stage=3)
+            # Configure backend-specific parameters (optional override)
+            if hasattr(self, 'configure_parameters'):
+                self.configure_parameters(op, model, stage=3)
             # Apply declarative configuration from fixture (v3.0)
             self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
 
@@ -476,12 +255,8 @@ class SingleKernelTest(KernelTestBase):
 
         return model_cache.get_stage3_model(kernel_test_config.test_id, fpgapart, builder)
 
-    # ========================================================================
-    # Test Suite (6 tests) - Parameterized via fixtures
-    # ========================================================================
-
     @pytest.mark.pipeline
-    @pytest.mark.single_kernel
+    @pytest.mark.kernel
     def test_pipeline_creates_hw_node(
         self, kernel_test_config: "KernelTestConfig", stage2_model: Tuple
     ):
@@ -514,7 +289,7 @@ class SingleKernelTest(KernelTestBase):
         assert node_found, f"Hardware node '{op.onnx_node.name}' not found in graph"
 
     @pytest.mark.pipeline
-    @pytest.mark.single_kernel
+    @pytest.mark.kernel
     def test_shapes_preserved_through_pipeline(
         self, kernel_test_config: "KernelTestConfig", stage2_model: Tuple
     ):
@@ -562,7 +337,7 @@ class SingleKernelTest(KernelTestBase):
             )
 
     @pytest.mark.pipeline
-    @pytest.mark.single_kernel
+    @pytest.mark.kernel
     def test_datatypes_preserved_through_pipeline(
         self, kernel_test_config: "KernelTestConfig", stage2_model: Tuple
     ):
@@ -610,7 +385,7 @@ class SingleKernelTest(KernelTestBase):
 
     @pytest.mark.pipeline
     @pytest.mark.golden
-    @pytest.mark.single_kernel
+    @pytest.mark.kernel
     def test_python_execution_vs_golden(
         self,
         kernel_test_config: "KernelTestConfig",
@@ -644,7 +419,7 @@ class SingleKernelTest(KernelTestBase):
     @pytest.mark.golden
     @pytest.mark.cppsim
     @pytest.mark.slow
-    @pytest.mark.single_kernel
+    @pytest.mark.kernel
     def test_cppsim_execution_vs_golden(
         self,
         kernel_test_config: "KernelTestConfig",
@@ -690,7 +465,7 @@ class SingleKernelTest(KernelTestBase):
     @pytest.mark.golden
     @pytest.mark.rtlsim
     @pytest.mark.slow
-    @pytest.mark.single_kernel
+    @pytest.mark.kernel
     def test_rtlsim_execution_vs_golden(
         self,
         kernel_test_config: "KernelTestConfig",

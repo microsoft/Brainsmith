@@ -318,5 +318,6 @@ class SpecializeKernels(Transformation):
         new_node.attribute.append(
             helper.make_attribute("backend", language)
         )
+        print(f"Specialized node {node.name} ({node.op_type}) to backend {backend_name} of type {language}.")
 
         return new_node

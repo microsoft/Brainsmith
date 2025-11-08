@@ -22,9 +22,6 @@ from .builder import BuildContext, DesignSpaceBuilder
 from .transformation import TransformationResult
 from .ordered_parameter import OrderedParameter
 
-# Backward compatibility alias
-OrderedDimension = OrderedParameter
-
 logger = logging.getLogger(__name__)
 
 
@@ -300,7 +297,7 @@ class KernelOp(HWCustomOp, ABC):
                 # Check if attribute is actually set in ONNX node (not just has a default)
                 if get_by_name(self.onnx_node.attribute, param_name) is None:
                     # Parameter not set - use default/minimum value
-                    if isinstance(param, OrderedDimension):  # Using alias
+                    if isinstance(param, OrderedParameter):
                         # OrderedParameter: use get_default() (explicit default or minimum)
                         initial_value = param.get_default()
                     else:  # frozenset

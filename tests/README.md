@@ -22,25 +22,22 @@
 
 ## Quick Start
 
-**TL;DR**: Use `SingleKernelTest` for single implementation testing, or `KernelParityTest` for comparing two implementations (FINN vs Brainsmith). Everything else is utilities.
+**TL;DR**: Use `KernelTest` for single implementation testing, or `KernelParityTest` for comparing two implementations (FINN vs Brainsmith). Everything else is utilities.
 
 ### Testing ONE Kernel Implementation
 
 ```python
-from tests.frameworks.single_kernel_test import SingleKernelTest
+from tests.frameworks.kernel_test import KernelTest
 
-class TestMyKernel(SingleKernelTest):
+class TestMyKernel(KernelTest):
     def make_test_model(self):
         # Create ONNX model with your operation
         return model, node_name
 
-    def get_kernel_inference_transform(self):
-        # Return transform that converts ONNX → Kernel
-        return InferMyKernel
-
-    def compute_golden_reference(self, inputs):
-        # NumPy implementation of expected behavior
-        return {"output": np.my_operation(inputs["input"])}
+    def get_kernel_op(self):
+        # Return kernel class to test
+        from brainsmith.kernels.my_kernel import MyKernelOp
+        return MyKernelOp
 
     def get_num_inputs(self):
         return 1
@@ -97,8 +94,8 @@ class TestAddParity(KernelParityTest):
         return [ElementwiseAdd_hls]
 
     # Primary Implementation (Brainsmith) - uses inherited defaults
-    def get_kernel_inference_transform(self):
-        return lambda: InferKernels([ElementwiseBinaryOp])
+    def get_kernel_op(self):
+        return ElementwiseBinaryOp
 
     def get_num_inputs(self):
         return 2
@@ -106,8 +103,8 @@ class TestAddParity(KernelParityTest):
     def get_num_outputs(self):
         return 1
 
-    def compute_golden_reference(self, inputs):
-        return {"output": inputs["input0"] + inputs["input1"]}
+    # No compute_golden_reference() override needed!
+    # QONNX executes the Stage 1 Add node automatically to produce golden reference.
 ```
 
 **Result:** 18 inherited tests automatically!
@@ -177,7 +174,7 @@ Stage 1: ONNX Node          Stage 2: Base Kernel        Stage 3: Backend
 ```
 KernelTestConfig                    # Minimal abstract base (3 required + 7 optional hooks)
     ↓
-SingleKernelTest                    # Tests ONE implementation (6 inherited tests)
+KernelTest                    # Tests ONE implementation (6 inherited tests)
     ↓ composition
 PipelineRunner                      # ONNX → Base Kernel (Stage 1 → 2)
     + specialize_to_backend()       # Base → Backend (Stage 2 → 3)
@@ -219,9 +216,9 @@ Executors
 
 ## Test Framework Guide
 
-### SingleKernelTest API
+### KernelTest API
 
-**Required Methods (5):**
+**Required Methods (3):**
 
 ```python
 def make_test_model(self) -> Tuple[ModelWrapper, str]:
@@ -231,21 +228,11 @@ def make_test_model(self) -> Tuple[ModelWrapper, str]:
         (model, node_name): ModelWrapper and name of target node
     """
 
-def get_kernel_inference_transform(self) -> Type[Transformation]:
-    """Return transform that converts ONNX → Kernel.
+def get_kernel_op(self) -> Type:
+    """Return kernel operator class.
 
     Returns:
-        Transformation class (e.g., InferAddStreamsLayer)
-    """
-
-def compute_golden_reference(self, inputs: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-    """Compute expected outputs using NumPy.
-
-    Args:
-        inputs: Dict mapping input names to numpy arrays
-
-    Returns:
-        Dict mapping output names to expected numpy arrays
+        Kernel operator class (e.g., AddStreamsOp, ElementwiseBinaryOp)
     """
 
 def get_num_inputs(self) -> int:
@@ -300,11 +287,11 @@ def get_inference_timeout(self) -> int:
 
 **Required Methods (7):**
 
-All from SingleKernelTest, plus:
+All from KernelTest, plus:
 - `infer_kernel_reference(model, target_node)` - Reference implementation (usually FINN)
 - `get_backend_variants_reference()` - Reference backend variants
 
-Primary implementation uses inherited defaults from SingleKernelTest.
+Primary implementation uses inherited defaults from KernelTest.
 
 **Inherited Tests (18):**
 
@@ -345,7 +332,7 @@ Golden references define "correct" behavior for kernel validation. The framework
 The framework automatically executes your Stage 1 ONNX model using QONNX to generate golden outputs:
 
 ```python
-class TestMyKernel(SingleKernelTest):
+class TestMyKernel(KernelTest):
     # No golden reference override needed!
     # Framework uses QONNX execution on Stage 1 model automatically
     pass
@@ -366,130 +353,20 @@ class TestMyKernel(SingleKernelTest):
 - Operation supported by QONNX
 - Model must be executable at Stage 1
 
-### Custom Pattern: NumPy Implementation
-
-**When to use:**
-- Operation not supported by QONNX execution
-- Need specific quantization behavior
-- Debugging dtype transformations
-- Testing against mathematical specification
-
-**Implementation:**
-
-```python
-class TestMyKernel(SingleKernelTest):
-    def get_use_custom_golden_reference(self):
-        """Enable custom golden reference."""
-        return True
-
-    def compute_custom_golden_reference(self, model, inputs):
-        """Compute golden using NumPy.
-
-        Args:
-            model: Stage 1 ONNX model
-            inputs: Dict of pre-quantized numpy arrays
-
-        Returns:
-            Dict mapping output names to expected arrays
-        """
-        # Implement operation using NumPy
-        result = np.my_operation(inputs["input"])
-        return {"output": result}
-```
-
-**For KernelParityTest** (simpler interface):
-
-```python
-class TestMyKernelParity(KernelParityTest):
-    def compute_golden_reference(self, inputs):
-        """Compute golden using NumPy.
-
-        Args:
-            inputs: Dict of pre-quantized numpy arrays
-
-        Returns:
-            Dict mapping output names to expected arrays
-        """
-        return {"output": inputs["input0"] + inputs["input1"]}
-```
-
-### Decision Tree
-
-```
-Do you need golden reference validation?
-  ├─ YES → Can QONNX execute your Stage 1 model?
-  │   ├─ YES → Use default (no code needed) ✅
-  │   └─ NO → Use custom pattern
-  └─ NO → Override get_use_custom_golden_reference() to return False
-```
-
-### Common Mistakes
-
-❌ **Computing golden from Stage 2/3 models:**
-```python
-# WRONG - Don't use transformed model!
-def compute_custom_golden_reference(self, model, inputs):
-    stage2_model = model.transform(InferMyKernel())  # NO!
-    return execute(stage2_model, inputs)
-```
-
-✅ **Compute golden from original operation:**
-```python
-# CORRECT - Use NumPy for operation semantics
-def compute_custom_golden_reference(self, model, inputs):
-    return {"output": np.add(inputs["input0"], inputs["input1"])}
-```
-
----
-
-❌ **Implementing custom when QONNX works:**
-```python
-# WRONG - Unnecessary custom implementation
-def get_use_custom_golden_reference(self):
-    return True
-
-def compute_custom_golden_reference(self, model, inputs):
-    return {"output": inputs["input0"] + inputs["input1"]}  # QONNX can do this!
-```
-
-✅ **Use default for standard operations:**
-```python
-# CORRECT - Let framework use QONNX
-class TestAdd(SingleKernelTest):
-    pass  # Framework handles golden reference automatically
-```
-
----
-
-❌ **Using post-quantized data:**
-```python
-# WRONG - Don't quantize inputs yourself
-def compute_custom_golden_reference(self, model, inputs):
-    quantized = quantize(inputs["input"])  # NO!
-    return {"output": my_op(quantized)}
-```
-
-✅ **Framework provides pre-quantized data:**
-```python
-# CORRECT - Inputs are already quantized
-def compute_custom_golden_reference(self, model, inputs):
-    # inputs are already pre-quantized based on model dtypes
-    return {"output": my_op(inputs["input"])}
-```
+**Note:** Since QONNX supports all standard ONNX operations, custom golden reference is rarely needed. The framework automatically handles golden reference generation.
 
 ### Architecture Philosophy
 
-**Principle:** Tests own the definition of "correct" behavior.
+**Principle:** Framework automatically validates against ONNX specification.
 
-- **Golden computation** - Each test implements (or uses default QONNX)
+- **Golden reference** - QONNX executes Stage 1 model automatically
 - **Golden validation** - Framework provides (GoldenValidator)
-- **Golden execution** - Framework provides (_execute_and_validate_golden)
+- **Test data generation** - Framework generates pre-quantized inputs based on dtypes
 
-This separation ensures:
-- Tests explicitly define expected behavior
-- Framework provides reusable validation logic
-- No coupling between test operations
-- Clear ownership of correctness
+This design ensures:
+- Tests validate against ONNX specification (source of truth)
+- No custom golden reference code required
+- Correctness guaranteed by QONNX (uses ONNXRuntime internally)
 
 ---
 
@@ -512,7 +389,7 @@ Backend integration (Stages 0-7) extends the test framework to support the full 
 
 **✅ Stage 0:** Spike test - Backend pattern validated
 **✅ Stage 1:** Extract backend helper (`specialize_to_backend()`)
-**✅ Stage 2:** SingleKernelTest backend support
+**✅ Stage 2:** KernelTest backend support
 **✅ Stage 3:** Validation test (AddStreams)
 **✅ Stage 4:** Example test demonstrating pattern
 **✅ Stage 5:** KernelParityTest backend support
@@ -525,14 +402,14 @@ Backend integration (Stages 0-7) extends the test framework to support the full 
 
 **Without backend:**
 ```python
-class TestMyKernel(SingleKernelTest):
+class TestMyKernel(KernelTest):
     # Only required methods
     # Tests skip cppsim/rtlsim automatically
 ```
 
 **With backend:**
 ```python
-class TestMyKernel(SingleKernelTest):
+class TestMyKernel(KernelTest):
     # ... required methods ...
 
     def get_backend_fpgapart(self):
@@ -677,7 +554,7 @@ pytest -v
 
 ### By Framework
 ```bash
-pytest -m "single_kernel" -v      # SingleKernelTest tests
+pytest -m "kernel" -v      # KernelTest tests
 pytest -m "parity" -v              # KernelParityTest tests
 pytest -m "kernel_parity" -v      # KernelParityTest tests
 ```
@@ -724,7 +601,7 @@ tests/
 │
 ├── frameworks/                         # Test Framework (START HERE)
 │   ├── kernel_test_base.py           # Base class with shared utilities
-│   ├── single_kernel_test.py         # Single kernel testing (6 inherited tests)
+│   ├── kernel_test.py         # Single kernel testing (6 inherited tests)
 │   ├── kernel_parity_test.py         # Dual kernel parity (18 inherited tests)
 │   ├── KERNEL_PARITY_TEST_GUIDE.md   # Comprehensive KernelParityTest documentation
 │   ├── test_config.py                # Test configuration (KernelTestConfig, ModelStructure)
@@ -785,14 +662,14 @@ tests/
 ```python
 # tests/kernels/test_my_simple_kernel.py
 
-from tests.frameworks.single_kernel_test import SingleKernelTest
+from tests.frameworks.kernel_test import KernelTest
 from onnx import helper, TensorProto
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
 import numpy as np
 
-class TestMySimpleKernel(SingleKernelTest):
-    """Test MySimpleKernel using SingleKernelTest framework."""
+class TestMySimpleKernel(KernelTest):
+    """Test MySimpleKernel using KernelTest framework."""
 
     def make_test_model(self):
         """Create ONNX model with Identity node → MySimpleKernel."""
@@ -810,14 +687,10 @@ class TestMySimpleKernel(SingleKernelTest):
 
         return model, "Identity_0"
 
-    def get_kernel_inference_transform(self):
-        """Return MySimpleKernel inference transform."""
-        from my_transforms import InferMySimpleKernel
-        return InferMySimpleKernel
-
-    def compute_golden_reference(self, inputs):
-        """Golden reference: output = input (identity operation)."""
-        return {"out": inputs["inp"]}
+    def get_kernel_op(self):
+        """Return MySimpleKernel operator class."""
+        from brainsmith.kernels.my_simple_kernel import MySimpleKernelOp
+        return MySimpleKernelOp
 
     def get_num_inputs(self):
         return 1
@@ -849,12 +722,9 @@ class TestMyKernelParity(KernelParityTest):
         return [MyKernel_finn_hls]
 
     # Primary implementation (uses inherited defaults)
-    def get_kernel_inference_transform(self):
-        # Brainsmith transform
-        return lambda: InferKernels([MyKernelOp])
-
-    def compute_golden_reference(self, inputs):
-        return {"output": np.my_operation(inputs["input"])}
+    def get_kernel_op(self):
+        # Brainsmith kernel operator class
+        return MyKernelOp
 ```
 
 **Result:** 18 tests automatically (7 parity + 5 HW estimation + 6 golden)
@@ -870,7 +740,7 @@ from tests.frameworks.test_config import (
     ValidationConfig,
 )
 
-class TestMyKernelWithBackend(SingleKernelTest):
+class TestMyKernelWithBackend(KernelTest):
     """Test MyKernel with full backend pipeline (cppsim + rtlsim)."""
 
     @pytest.fixture(params=[
@@ -913,7 +783,7 @@ pytest test_my_kernel_backend.py -m "not cppsim and not rtlsim" -v
 ## See Also
 
 - **Framework Implementation:**
-  - `frameworks/single_kernel_test.py` - Single kernel testing
+  - `frameworks/kernel_test.py` - Single kernel testing
   - `frameworks/kernel_parity_test.py` - Dual kernel parity testing
   - `frameworks/kernel_test_base.py` - Base class with shared utilities
 - **Comprehensive Guides:**

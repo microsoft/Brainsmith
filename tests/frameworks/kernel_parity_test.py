@@ -1,110 +1,19 @@
-"""KernelParityTest framework for comparing two kernel implementations.
+"""Test framework for comparing two kernel implementations (parity testing).
 
-This module provides KernelParityTest, a fixture-driven test framework for comparing
-two kernel implementations (e.g., FINN vs Brainsmith, version A vs B, platform A vs B).
+Compares reference vs primary implementations (e.g., FINN vs Brainsmith).
 
-Design Philosophy:
-- Generalizes test framework to compare "reference" vs "primary" implementations
-- Leverages shared utilities (74% code reduction in golden tests)
-- Per-kernel methods enable 90/10 configuration rule (90% shared, 10% custom)
-- Consistent override pattern across all 4 pipeline stages
-- Maximum code reuse from SingleKernelTest and KernelTestBase
+Provides 18 inherited tests:
+- 7 core parity tests (shapes, datatypes, stream widths)
+- 5 HW estimation parity tests (cycles, resources, efficiency)
+- 6 golden execution tests (reference/primary × Python/cppsim/rtlsim)
 
-Inheritance Chain:
-    KernelTestConfig (abstract interface)
-        ↓
-    KernelTestBase (shared utilities)
-        ↓
-    KernelParityTest (dual-kernel parity testing) ← THIS CLASS
+Subclasses must implement:
+- make_test_model(): Create shared ONNX model
+- infer_kernel_reference(): Reference kernel inference
+- get_backend_variants_reference(): Reference backends
+- get_num_inputs(), get_num_outputs(): Validation counts
 
-Inherited from KernelTestBase:
-- infer_kernel() - Default implementation for primary
-- specialize_to_backend() - Default backend specialization
-- _execute_and_validate_golden() - Shared golden validation (74% reduction)
-- _find_hw_node() - Helper to locate transformed nodes
-- auto_configure_from_fixture() - Declarative configuration
-- validate_against_golden() - GoldenValidator-based validation
-
-Test Coverage (18 tests):
-1. Core Parity (7 tests): Shapes, datatypes, stream widths
-2. HW Estimation Parity (5 tests): Cycles, resources, efficiency
-3. Golden Execution (6 tests): kernel_a/b × python/cppsim/rtlsim
-
-Usage Example:
-
-    @pytest.fixture(params=[
-        KernelTestConfig(
-            operation="Add",
-            input_shapes={"input": (1, 64), "param": (1, 64)},
-            input_dtypes={"input": DataType["INT8"], "param": DataType["INT8"]},
-            fpgapart="xc7z020clg400-1",
-        )
-    ])
-    def kernel_test_config(request):
-        return request.param
-
-    class TestAddParity(KernelParityTest):
-        # ========================================================================
-        # Shared Model
-        # ========================================================================
-
-        def make_test_model(self, kernel_test_config):
-            '''Create ONNX Add model (shared by both kernels).'''
-            # Build ONNX Add node
-            return model, ["input", "param"]
-
-        # ========================================================================
-        # Kernel A (FINN AddStreams)
-        # ========================================================================
-
-        def infer_kernel_a(self, model, target_node):
-            '''FINN AddStreams inference.'''
-            from finn.transformation.fpgadataflow.infer_addstreams import InferAddStreamsLayer
-            model = model.transform(InferAddStreamsLayer())
-            op = self._find_hw_node(model, target_node, expected_type="AddStreams")
-            return op, model
-
-        def get_backend_variants_a(self):
-            '''FINN AddStreams HLS backend.'''
-            from finn.custom_op.fpgadataflow.hls.addstreams_hls import AddStreams_hls
-            return [AddStreams_hls]
-
-        def configure_kernel_a(self, op, model, stage, config):
-            '''Configure FINN-specific parameters.'''
-            super().configure_kernel_a(op, model, stage, config)
-            if stage == 2:
-                op.set_nodeattr("Func", config.operation.upper())  # FINN uses uppercase
-
-        # ========================================================================
-        # Kernel B (Brainsmith ElementwiseBinary) - uses defaults
-        # ========================================================================
-
-        def get_kernel_op(self):
-            '''Brainsmith kernel for default inference.'''
-            from brainsmith.kernels.elementwise_binary import ElementwiseBinary
-            return ElementwiseBinary
-
-        # infer_kernel_b() - uses default (calls self.infer_kernel())
-        # get_backend_variants_b() - uses default (auto-detect)
-        # configure_kernel_b() - uses default (auto_configure_from_fixture)
-
-        # ========================================================================
-        # Test Structure Information
-        # ========================================================================
-
-        def get_num_inputs(self):
-            return 2
-
-        def get_num_outputs(self):
-            return 1
-
-Result: 18 tests automatically run comparing FINN vs Brainsmith implementations!
-
-v5.0 Changes:
-- Uses Phase 1 _execute_and_validate_golden() for all golden tests
-- Public specialize_to_backend_a/b() methods (v3.0 design)
-- Consistent override pattern across all pipeline stages
-- Per-kernel configuration hooks (90/10 rule)
+Primary implementation uses inherited defaults from KernelTestBase.
 """
 
 from abc import abstractmethod
@@ -115,48 +24,31 @@ import pytest
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.core.onnx_exec import execute_onnx
+from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.infer_shapes import InferShapes
 
-# Import base utilities
 from tests.frameworks.kernel_test_base import KernelTestBase
-
-# Import Phase 1 utilities
+from tests.support.assertions import (
+    assert_shapes_match,
+    assert_widths_match,
+    assert_datatypes_match,
+    assert_values_match,
+)
+from tests.support.backend_utils import specialize_to_backend
 from tests.support.pipeline import PipelineRunner
 
 
 class KernelParityTest(KernelTestBase):
-    """Test two kernel implementations for parity (v5.0).
+    """Compare two kernel implementations for parity.
 
-    This class provides a comprehensive test framework for comparing two kernel
-    implementations (e.g., FINN vs Brainsmith, manual vs auto, v1 vs v2).
+    Abstract methods (must implement):
+    - make_test_model(): Create shared ONNX model
+    - infer_kernel_reference(): Reference kernel inference
+    - get_backend_variants_reference(): Reference backends
+    - get_num_inputs(), get_num_outputs(): Validation counts
 
-    Abstract Methods (MUST implement - 5 total):
-    1. make_test_model() - Create shared ONNX model
-    2. infer_kernel_a() - Kernel A inference (e.g., FINN)
-    3. get_backend_variants_a() - Kernel A backends (explicit)
-    4. get_num_inputs() - Number of inputs for validation
-    5. get_num_outputs() - Number of outputs for validation
-
-    Optional Overrides (with defaults - 4 total):
-    1. infer_kernel_b() - Default: self.infer_kernel() (Brainsmith)
-    2. get_backend_variants_b() - Default: None (auto-detect)
-    3. configure_kernel_a() - Default: auto_configure_from_fixture()
-    4. configure_kernel_b() - Default: auto_configure_from_fixture()
-
-    Backend Specialization (v5.0 - 2 methods):
-    1. specialize_to_backend_a() - Kernel A backend specialization
-    2. specialize_to_backend_b() - Kernel B backend specialization
-
-    Test Suite (18 tests):
-    - 7 Core parity tests (shapes, datatypes, streams)
-    - 5 HW estimation parity tests (cycles, resources)
-    - 6 Golden execution tests (kernel_a/b × python/cppsim/rtlsim)
-
-    Inherited Utilities (from Phase 1):
-    - _execute_and_validate_golden() - Eliminates 74% duplication
-    - infer_kernel() - Default Brainsmith inference
-    - specialize_to_backend() - Public backend specialization
-    - _find_hw_node() - Node location helper
-    - auto_configure_from_fixture() - Declarative config
+    Test suite: 18 tests (7 parity + 5 HW estimation + 6 golden execution)
     """
 
     # ========================================================================
@@ -290,43 +182,30 @@ class KernelParityTest(KernelTestBase):
         Returns:
             (backend_op, model): Specialized reference and model
         """
-        import pytest
-
-        fpgapart = config.get_fpgapart()
+        fpgapart = config.fpgapart
         if fpgapart is None:
             pytest.skip("Backend testing skipped (no FPGA part configured)")
 
         backend_variants = self.get_backend_variants_reference()
 
-        from tests.support.backend_utils import specialize_to_backend
-
         return specialize_to_backend(op, model, fpgapart, backend_variants)
-
-    # ========================================================================
-    # Helper Methods (copied from SingleKernelTest)
-    # ========================================================================
-
-    # Note: _prepare_model_with_annotations and _generate_test_inputs moved to
-    # KernelTestBase to eliminate duplication with SingleKernelTest (v6.0)
 
     def _compute_golden_reference(
         self, quant_model: ModelWrapper, inputs: Dict[str, np.ndarray]
     ) -> Dict[str, np.ndarray]:
-        """Compute golden reference using test's compute_golden_reference().
+        """Compute golden reference using QONNX execution on Stage 1 model.
+
+        Same implementation as KernelTest - uses QONNX to execute Stage 1 model
+        with DataType annotations (no Quant nodes).
 
         Args:
             quant_model: ModelWrapper WITH DataType annotations
-            inputs: Test data
+            inputs: Test data (pre-quantized)
 
         Returns:
-            Expected outputs
+            Expected outputs from QONNX execution
         """
-        # Call the abstract method that test must implement
-        return self.compute_golden_reference(inputs)
-
-    # ========================================================================
-    # Pytest Fixtures - Shared (reuse from SingleKernelTest pattern)
-    # ========================================================================
+        return execute_onnx(quant_model, inputs, return_full_exec_context=False)
 
     @pytest.fixture(scope="function")
     def stage1_model(
@@ -334,7 +213,7 @@ class KernelParityTest(KernelTestBase):
     ) -> ModelWrapper:
         """Stage 1 model with QONNX annotations (shared by both kernels).
 
-        Same as SingleKernelTest.stage1_model - creates ONNX model before kernel inference.
+        Same as KernelTest.stage1_model - creates ONNX model before kernel inference.
 
         Args:
             kernel_test_config: Unified test configuration
@@ -348,9 +227,6 @@ class KernelParityTest(KernelTestBase):
             model, _ = self._prepare_model_with_annotations(kernel_test_config)
 
             # Run shape/datatype inference (required for QONNX execution)
-            from qonnx.transformation.infer_datatypes import InferDataTypes
-            from qonnx.transformation.infer_shapes import InferShapes
-
             model = model.transform(InferShapes())
             model = model.transform(InferDataTypes())
 
@@ -364,7 +240,7 @@ class KernelParityTest(KernelTestBase):
     ) -> Dict[str, np.ndarray]:
         """Generate test inputs (shared by both kernels).
 
-        Same as SingleKernelTest.test_inputs - generates test data.
+        Same as KernelTest.test_inputs - generates test data.
 
         Args:
             kernel_test_config: Unified test configuration
@@ -389,7 +265,7 @@ class KernelParityTest(KernelTestBase):
     ) -> Dict[str, np.ndarray]:
         """Golden reference from Stage 1 ONNX (shared by both kernels).
 
-        Same as SingleKernelTest.golden_outputs - computes golden reference once.
+        Same as KernelTest.golden_outputs - computes golden reference once.
 
         Args:
             kernel_test_config: Unified test configuration
@@ -417,18 +293,11 @@ class KernelParityTest(KernelTestBase):
         stage1_model: ModelWrapper,
         model_cache,
     ) -> Tuple:
-        """Stage 2 primary model (v6.0 - unqualified).
+        """Stage 2 primary model.
 
         Uses inherited infer_kernel() from base class.
-        Primary implementation (typically Brainsmith) uses standard inference.
 
-        Args:
-            kernel_test_config: Test configuration
-            stage1_model: Annotated model
-            model_cache: Cache
-
-        Returns:
-            (op, model): Primary kernel and model
+        Returns (op, model): Primary kernel and model.
         """
 
         def builder():
@@ -452,17 +321,11 @@ class KernelParityTest(KernelTestBase):
         stage1_model: ModelWrapper,
         model_cache,
     ) -> Tuple:
-        """Stage 2 reference model (v6.0).
+        """Stage 2 reference model.
 
         Uses infer_kernel_reference() method.
 
-        Args:
-            kernel_test_config: Test configuration
-            stage1_model: Annotated model
-            model_cache: Cache
-
-        Returns:
-            (op, model): Reference kernel and model
+        Returns (op, model): Reference kernel and model.
         """
 
         def builder():
@@ -486,19 +349,13 @@ class KernelParityTest(KernelTestBase):
         stage2_model: Tuple,
         model_cache,
     ) -> Tuple:
-        """Stage 3 primary model (v6.0 - unqualified).
+        """Stage 3 primary model.
 
         Uses inherited specialize_to_backend() from base class.
 
-        Args:
-            kernel_test_config: Test configuration
-            stage2_model: Stage 2 primary model
-            model_cache: Cache
-
-        Returns:
-            (op, model): Primary backend and model
+        Returns (op, model): Primary backend and model.
         """
-        fpgapart = kernel_test_config.get_fpgapart()
+        fpgapart = kernel_test_config.fpgapart
 
         def builder():
             base_op, base_model = stage2_model
@@ -520,19 +377,13 @@ class KernelParityTest(KernelTestBase):
         stage2_model_reference: Tuple,
         model_cache,
     ) -> Tuple:
-        """Stage 3 reference model (v6.0).
+        """Stage 3 reference model.
 
         Uses specialize_to_backend_reference() method.
 
-        Args:
-            kernel_test_config: Test configuration
-            stage2_model_reference: Stage 2 reference model
-            model_cache: Cache
-
-        Returns:
-            (op, model): Reference backend and model
+        Returns (op, model): Reference backend and model.
         """
-        fpgapart = kernel_test_config.get_fpgapart()
+        fpgapart = kernel_test_config.fpgapart
 
         def builder():
             base_op, base_model = stage2_model_reference
@@ -546,10 +397,6 @@ class KernelParityTest(KernelTestBase):
 
         cache_key = f"{kernel_test_config.test_id}_reference"
         return model_cache.get_stage3_model(cache_key, fpgapart, builder)
-
-    # ========================================================================
-    # Golden Execution Tests (6 tests) - v6.0 reference-based API
-    # ========================================================================
 
     @pytest.mark.golden
     @pytest.mark.kernel_parity
@@ -625,10 +472,6 @@ class KernelParityTest(KernelTestBase):
             "rtlsim", "Reference RTL rtlsim", kernel_test_config
         )
 
-    # ========================================================================
-    # Core Parity Tests (7 tests) - Structural comparison at Stage 2
-    # ========================================================================
-
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.kernel_parity
@@ -641,14 +484,12 @@ class KernelParityTest(KernelTestBase):
         for i in range(self.get_num_inputs()):
             shape = op.get_normal_input_shape(i)
             shape_ref = op_ref.get_normal_input_shape(i)
-            from tests.support.assertions import assert_shapes_match
             assert_shapes_match(shape, shape_ref, i, "normal input")
 
         # Output shapes
         for i in range(self.get_num_outputs()):
             shape = op.get_normal_output_shape(i)
             shape_ref = op_ref.get_normal_output_shape(i)
-            from tests.support.assertions import assert_shapes_match
             assert_shapes_match(shape, shape_ref, i, "normal output")
 
     @pytest.mark.parity
@@ -663,14 +504,12 @@ class KernelParityTest(KernelTestBase):
         for i in range(self.get_num_inputs()):
             shape = op.get_folded_input_shape(i)
             shape_ref = op_ref.get_folded_input_shape(i)
-            from tests.support.assertions import assert_shapes_match
             assert_shapes_match(shape, shape_ref, i, "folded input")
 
         # Output shapes
         for i in range(self.get_num_outputs()):
             shape = op.get_folded_output_shape(i)
             shape_ref = op_ref.get_folded_output_shape(i)
-            from tests.support.assertions import assert_shapes_match
             assert_shapes_match(shape, shape_ref, i, "folded output")
 
     @pytest.mark.parity
@@ -685,14 +524,12 @@ class KernelParityTest(KernelTestBase):
         for i in range(self.get_num_inputs()):
             width = op.get_instream_width(i)
             width_ref = op_ref.get_instream_width(i)
-            from tests.support.assertions import assert_widths_match
             assert_widths_match(width, width_ref, i, "Input")
 
         # Output stream widths
         for i in range(self.get_num_outputs()):
             width = op.get_outstream_width(i)
             width_ref = op_ref.get_outstream_width(i)
-            from tests.support.assertions import assert_widths_match
             assert_widths_match(width, width_ref, i, "Output")
 
     @pytest.mark.parity
@@ -707,24 +544,18 @@ class KernelParityTest(KernelTestBase):
         for i in range(self.get_num_inputs()):
             width = op.get_instream_width_padded(i)
             width_ref = op_ref.get_instream_width_padded(i)
-
-            def format_width(w):
-                return f"{w} bits (padded)"
-            from tests.support.assertions import assert_values_match
             assert_values_match(
-                width, width_ref, f"Input {i} stream width", format_width
+                width, width_ref, f"Input {i} stream width",
+                lambda w: f"{w} bits (padded)"
             )
 
         # Output stream widths padded
         for i in range(self.get_num_outputs()):
             width = op.get_outstream_width_padded(i)
             width_ref = op_ref.get_outstream_width_padded(i)
-
-            def format_width(w):
-                return f"{w} bits (padded)"
-            from tests.support.assertions import assert_values_match
             assert_values_match(
-                width, width_ref, f"Output {i} stream width", format_width
+                width, width_ref, f"Output {i} stream width",
+                lambda w: f"{w} bits (padded)"
             )
 
     @pytest.mark.parity
@@ -739,14 +570,12 @@ class KernelParityTest(KernelTestBase):
         for i in range(self.get_num_inputs()):
             dt = op.get_input_datatype(i)
             dt_ref = op_ref.get_input_datatype(i)
-            from tests.support.assertions import assert_datatypes_match
             assert_datatypes_match(dt, dt_ref, i, "Input")
 
         # Output datatypes
         for i in range(self.get_num_outputs()):
             dt = op.get_output_datatype(i)
             dt_ref = op_ref.get_output_datatype(i)
-            from tests.support.assertions import assert_datatypes_match
             assert_datatypes_match(dt, dt_ref, i, "Output")
 
     @pytest.mark.parity
@@ -785,7 +614,6 @@ class KernelParityTest(KernelTestBase):
             dt_ref = model_ref.get_tensor_datatype(input_name_ref)
 
             # Compare datatypes (names may differ)
-            from tests.support.assertions import assert_datatypes_match
             assert_datatypes_match(
                 dt, dt_ref, i,
                 f"After infer_node_datatype, input"
@@ -801,7 +629,6 @@ class KernelParityTest(KernelTestBase):
             dt_ref = model_ref.get_tensor_datatype(output_name_ref)
 
             # Compare datatypes (names may differ)
-            from tests.support.assertions import assert_datatypes_match
             assert_datatypes_match(
                 dt, dt_ref, i,
                 f"After infer_node_datatype, output"
@@ -842,10 +669,6 @@ class KernelParityTest(KernelTestBase):
                 f"Reference shape-compatible op output {i} name mismatch"
             )
 
-    # ========================================================================
-    # Hardware Estimation Parity Tests (5 tests)
-    # ========================================================================
-
     @pytest.mark.parity
     @pytest.mark.hw_estimation
     @pytest.mark.kernel_parity
@@ -857,7 +680,6 @@ class KernelParityTest(KernelTestBase):
         cycles = op.get_exp_cycles()
         cycles_ref = op_ref.get_exp_cycles()
 
-        from tests.support.assertions import assert_values_match
         assert_values_match(cycles, cycles_ref, "Expected cycles")
 
     @pytest.mark.parity
@@ -871,7 +693,6 @@ class KernelParityTest(KernelTestBase):
         count = op.get_number_output_values()
         count_ref = op_ref.get_number_output_values()
 
-        from tests.support.assertions import assert_values_match
         assert_values_match(count, count_ref, "Number of output values")
 
     @pytest.mark.parity
@@ -886,11 +707,8 @@ class KernelParityTest(KernelTestBase):
         if hasattr(op, "lut_estimation") and hasattr(op_ref, "lut_estimation"):
             luts = op.lut_estimation()
             luts_ref = op_ref.lut_estimation()
-
-            def format_lut(count):
-                return f"{count:,} LUTs"
-            from tests.support.assertions import assert_values_match
-            assert_values_match(luts, luts_ref, "LUT estimation", format_lut)
+            assert_values_match(luts, luts_ref, "LUT estimation",
+                              lambda count: f"{count:,} LUTs")
 
         # DSP estimation (requires fpgapart parameter per FINN API)
         if hasattr(op, "dsp_estimation") and hasattr(op_ref, "dsp_estimation"):
@@ -899,31 +717,22 @@ class KernelParityTest(KernelTestBase):
             fpgapart = PARITY_DEFAULT_FPGA_PART_HLS
             dsps = op.dsp_estimation(fpgapart)
             dsps_ref = op_ref.dsp_estimation(fpgapart)
-
-            def format_dsp(count):
-                return f"{count:,} DSPs"
-            from tests.support.assertions import assert_values_match
-            assert_values_match(dsps, dsps_ref, "DSP estimation", format_dsp)
+            assert_values_match(dsps, dsps_ref, "DSP estimation",
+                              lambda count: f"{count:,} DSPs")
 
         # BRAM estimation
         if hasattr(op, "bram_estimation") and hasattr(op_ref, "bram_estimation"):
             brams = op.bram_estimation()
             brams_ref = op_ref.bram_estimation()
-
-            def format_bram(count):
-                return f"{count:,} BRAMs"
-            from tests.support.assertions import assert_values_match
-            assert_values_match(brams, brams_ref, "BRAM estimation", format_bram)
+            assert_values_match(brams, brams_ref, "BRAM estimation",
+                              lambda count: f"{count:,} BRAMs")
 
         # URAM estimation
         if hasattr(op, "uram_estimation") and hasattr(op_ref, "uram_estimation"):
             urams = op.uram_estimation()
             urams_ref = op_ref.uram_estimation()
-
-            def format_uram(count):
-                return f"{count:,} URAMs"
-            from tests.support.assertions import assert_values_match
-            assert_values_match(urams, urams_ref, "URAM estimation", format_uram)
+            assert_values_match(urams, urams_ref, "URAM estimation",
+                              lambda count: f"{count:,} URAMs")
 
     @pytest.mark.parity
     @pytest.mark.hw_estimation
@@ -937,21 +746,15 @@ class KernelParityTest(KernelTestBase):
         if hasattr(op, "bram_efficiency_estimation") and hasattr(op_ref, "bram_efficiency_estimation"):
             eff = op.bram_efficiency_estimation()
             eff_ref = op_ref.bram_efficiency_estimation()
-
-            def format_efficiency(eff):
-                return f"{eff:.4f} ({eff*100:.2f}%)"
-            from tests.support.assertions import assert_values_match
-            assert_values_match(eff, eff_ref, "BRAM efficiency", format_efficiency)
+            assert_values_match(eff, eff_ref, "BRAM efficiency",
+                              lambda e: f"{e:.4f} ({e*100:.2f}%)")
 
         # URAM efficiency
         if hasattr(op, "uram_efficiency_estimation") and hasattr(op_ref, "uram_efficiency_estimation"):
             eff = op.uram_efficiency_estimation()
             eff_ref = op_ref.uram_efficiency_estimation()
-
-            def format_efficiency(eff):
-                return f"{eff:.4f} ({eff*100:.2f}%)"
-            from tests.support.assertions import assert_values_match
-            assert_values_match(eff, eff_ref, "URAM efficiency", format_efficiency)
+            assert_values_match(eff, eff_ref, "URAM efficiency",
+                              lambda e: f"{e:.4f} ({e*100:.2f}%)")
 
     @pytest.mark.parity
     @pytest.mark.hw_estimation
@@ -964,6 +767,4 @@ class KernelParityTest(KernelTestBase):
         if hasattr(op, "get_op_and_param_counts") and hasattr(op_ref, "get_op_and_param_counts"):
             counts = op.get_op_and_param_counts()
             counts_ref = op_ref.get_op_and_param_counts()
-
-            from tests.support.assertions import assert_values_match
             assert_values_match(counts, counts_ref, "Operation and parameter counts")

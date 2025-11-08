@@ -110,7 +110,7 @@ def test_kernel_design_space_creation():
         outputs={"output": output_ds},
         internal_datatypes={},
         optimization_constraints=[],
-        dimensions={"SIMD": {1, 2, 3, 4, 6, 8, 12, 16}},
+        parameters={"SIMD": {1, 2, 3, 4, 6, 8, 12, 16}},
     )
 
     assert model.name == "TestKernel"
@@ -120,8 +120,8 @@ def test_kernel_design_space_creation():
     assert "output" in model.outputs
     assert model.inputs["input"] == input_ds
     assert model.outputs["output"] == output_ds
-    assert "SIMD" in model.dimensions
-    assert 8 in model.dimensions["SIMD"]
+    assert "SIMD" in model.parameters
+    assert 8 in model.parameters["SIMD"]
 
 
 def test_kernel_design_space_dict_access():
@@ -148,7 +148,7 @@ def test_kernel_design_space_dict_access():
         outputs={"output": output_ds},
         internal_datatypes={},
         optimization_constraints=[],
-        dimensions={"SIMD": {1, 2}, "PE": {1, 2}},
+        parameters={"SIMD": {1, 2}, "PE": {1, 2}},
     )
 
     # Dict access works
@@ -169,7 +169,7 @@ def test_kernel_design_space_immutable():
         outputs={},
         internal_datatypes={},
         optimization_constraints=[],
-        dimensions={},
+        parameters={},
     )
 
     with pytest.raises(Exception):  # dataclasses.FrozenInstanceError
@@ -195,14 +195,14 @@ def test_kernel_design_space_valid_ranges():
         outputs={},
         internal_datatypes={},
         optimization_constraints=[],
-        dimensions={"SIMD": valid_simd},
+        parameters={"SIMD": valid_simd},
     )
 
-    assert len(model.dimensions["SIMD"]) == 18
-    assert 64 in model.dimensions["SIMD"]
-    assert 128 in model.dimensions["SIMD"]
-    assert 768 in model.dimensions["SIMD"]
-    assert 1 in model.dimensions["SIMD"]
+    assert len(model.parameters["SIMD"]) == 18
+    assert 64 in model.parameters["SIMD"]
+    assert 128 in model.parameters["SIMD"]
+    assert 768 in model.parameters["SIMD"]
+    assert 1 in model.parameters["SIMD"]
 
 
 if __name__ == "__main__":

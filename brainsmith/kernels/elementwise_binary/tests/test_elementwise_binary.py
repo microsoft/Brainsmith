@@ -22,11 +22,11 @@ from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import qonnx_make_model
 
-from tests.frameworks.single_kernel_test import SingleKernelTest
+from tests.frameworks.kernel_test import KernelTest
 from tests.frameworks.test_config import KernelTestConfig
 
 
-class ElementwiseBinaryTestBase(SingleKernelTest):
+class ElementwiseBinaryTestBase(KernelTest):
     """Shared test base for ElementwiseBinary operations.
 
     Provides common implementation for:

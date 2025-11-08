@@ -5,7 +5,7 @@ Tests can override by defining local fixtures with same name.
 
 Usage:
     # Use defaults (single INT8 input, shape (1, 64))
-    class TestMyKernel(SingleKernelTest):
+    class TestMyKernel(KernelTest):
         # Uses default fixtures automatically
         pass
 
@@ -24,7 +24,7 @@ Usage:
     def input_shapes(request):
         return request.param
 
-    class TestMyKernel(SingleKernelTest):
+    class TestMyKernel(KernelTest):
         # Now runs with custom parameterization!
         pass
 """
@@ -106,77 +106,6 @@ def input_shapes(request):
         Dict mapping input names to shape tuples
     """
     return request.param
-
-
-# ============================================================================
-# Fixture utilities (optional helpers)
-# ============================================================================
-
-
-def make_dtype_fixture(configs):
-    """Helper to create dtype fixture from config list.
-
-    Convenience function for creating parameterized dtype fixtures inline.
-
-    Args:
-        configs: List of dicts mapping input names to DataTypes
-
-    Returns:
-        Pytest fixture function
-
-    Usage:
-        # In test file
-        input_datatypes = make_dtype_fixture([
-            {"input": DataType["INT8"], "param": DataType["INT8"]},
-            {"input": DataType["INT16"], "param": DataType["INT16"]},
-        ])
-
-        class TestMyKernel(SingleKernelTest):
-            # Runs with 2 dtype configurations automatically!
-            pass
-
-    Note:
-        This is optional - you can define fixtures manually using @pytest.fixture.
-    """
-
-    @pytest.fixture(params=configs)
-    def _fixture(request):
-        return request.param
-
-    return _fixture
-
-
-def make_shape_fixture(configs):
-    """Helper to create shape fixture from config list.
-
-    Convenience function for creating parameterized shape fixtures inline.
-
-    Args:
-        configs: List of dicts mapping input names to shape tuples
-
-    Returns:
-        Pytest fixture function
-
-    Usage:
-        # In test file
-        input_shapes = make_shape_fixture([
-            {"input": (1, 64), "param": (64,)},
-            {"input": (4, 128), "param": (128,)},
-        ])
-
-        class TestMyKernel(SingleKernelTest):
-            # Runs with 2 shape configurations automatically!
-            pass
-
-    Note:
-        This is optional - you can define fixtures manually using @pytest.fixture.
-    """
-
-    @pytest.fixture(params=configs)
-    def _fixture(request):
-        return request.param
-
-    return _fixture
 
 
 # ============================================================================

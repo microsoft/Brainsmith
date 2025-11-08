@@ -11,7 +11,7 @@ Architecture:
 - Support utilities via composition (not inheritance)
 
 Frameworks:
-- SingleKernelTest: Test one kernel implementation vs golden reference
+- KernelTest: Test one kernel implementation vs golden reference
 - KernelParityTest: Test FINN vs Brainsmith parity + both vs golden (v6.0)
 
 Configuration:
@@ -26,8 +26,8 @@ Support Utilities (tests.support):
 - GoldenValidator: Output validation against golden reference
 - Executors: Backend execution (Python, cppsim, rtlsim)
 
-Example (SingleKernelTest):
-    from tests.frameworks.single_kernel_test import SingleKernelTest
+Example (KernelTest):
+    from tests.frameworks.kernel_test import KernelTest
     from tests.frameworks.test_config import (
         KernelTestConfig,
         ModelStructure,
@@ -44,7 +44,7 @@ Example (SingleKernelTest):
         tolerance_cppsim={"rtol": 1e-5, "atol": 1e-6},
     )
 
-    class TestMyKernel(SingleKernelTest):
+    class TestMyKernel(KernelTest):
         @pytest.fixture(params=[
             KernelTestConfig(
                 test_id="add_int8_baseline",
@@ -105,7 +105,7 @@ from tests.frameworks.test_config import (
     ValidationConfig,
 )
 from tests.frameworks.kernel_test_base import KernelTestBase
-from tests.frameworks.single_kernel_test import SingleKernelTest
+from tests.frameworks.kernel_test import KernelTest
 from tests.frameworks.kernel_parity_test import KernelParityTest
 
 __all__ = [
@@ -115,6 +115,6 @@ __all__ = [
     "PlatformConfig",
     "ValidationConfig",
     "KernelTestBase",
-    "SingleKernelTest",
+    "KernelTest",
     "KernelParityTest",
 ]

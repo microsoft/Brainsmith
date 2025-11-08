@@ -308,26 +308,3 @@ class KernelTestConfig:
         """Access validation.tolerance_rtlsim directly."""
         return self.validation.tolerance_rtlsim
 
-    # ========================================================================
-    # Framework delegation methods (match v3.0 API)
-    # ========================================================================
-
-    def get_tolerance_python(self) -> Dict[str, float]:
-        """Get Python execution tolerance (always returns dict, never None)."""
-        return self.validation.tolerance_python
-
-    def get_tolerance_cppsim(self) -> Dict[str, float]:
-        """Get C++ simulation tolerance (always returns dict, never None)."""
-        return self.validation.tolerance_cppsim
-
-    def get_tolerance_rtlsim(self) -> Dict[str, float]:
-        """Get RTL simulation tolerance (defaults to cppsim)."""
-        return self.validation.get_tolerance_rtlsim()
-
-    def get_fpgapart(self) -> Optional[str]:
-        """Get FPGA part string (None if software-only testing)."""
-        return self.platform.fpgapart
-
-    def has_backend_testing(self) -> bool:
-        """Check if backend testing is enabled (fpgapart configured)."""
-        return self.platform.fpgapart is not None

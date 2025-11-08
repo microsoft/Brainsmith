@@ -1,30 +1,5 @@
 # Getting Started
 
-- [Installation](#installation)
-  - [Local Development with Poetry](#option-a-local-development-with-poetry)
-  - [Docker-based Development](#option-b-docker-based-development)
-- [Project Management](#project-management)
-  - [Creating Projects](#creating-projects)
-  - [Configuration](#configuration)
-    - [Core Paths](#core-paths)
-    - [Xilinx Configuration](#xilinx-configuration)
-    - [Runtime Configuration](#runtime-configuration)
-    - [Logging Configuration](#logging-configuration)
-- [Validate Installation](#validate-installation)
-- [Quick Start](#quick-start)
-  - [Run Your First DSE](#run-your-first-dse)
-  - [Explore Results](#explore-results)
-  - [Customize the Design](#customize-the-design)
-  - [Understanding Blueprints](#understanding-blueprints)
-  - [Troubleshooting](#troubleshooting)
-  - [Getting Help](#getting-help)
-- [Next Steps](#next-steps)
-  - [Explore Design Space](#explore-design-space)
-  - [Try Custom Models](#try-custom-models)
-  - [Learn the Tools](#learn-the-tools)
-
----
-
 ## Installation
 
 !!! note "Prerequisites"
@@ -37,6 +12,8 @@ git clone https://github.com/microsoft/brainsmith.git ./brainsmith
 cd brainsmith
 
 ```
+
+---
 
 ### (Option A): Local Development with Poetry
 
@@ -70,8 +47,9 @@ Query project settings to confirm your configuration is loaded correctly
 brainsmith project info
 ```
 
-### (Option B): Docker-based Development
+---
 
+### (Option B): Docker-based Development
 
 !!! note "Prerequisites"
     - Docker configured to run [without root](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
@@ -106,10 +84,11 @@ Or send one-off commands to the container
 
 ## Project Management
 
-Brainsmith operates from a single poetry `venv` from the repostiory root, but
-you can create isolated workspaces via the *project* system with independent configurations,
-build artifacts, and component registries.
+Brainsmith operates from a single poetry `venv` from the repository root, but
+you can create isolated workspaces via the *project* system with independent
+configurations, build directories, and component registries.
 
+---
 
 ### Creating Projects
 
@@ -143,25 +122,16 @@ source .brainsmith/env.sh
 
 ---
 
-
 ### Configuration
 
-Configuration management for Brainsmith projects with hierarchical loading and type-safe validation using Pydantic.
-
-Settings are loaded from multiple sources with the following priority (highest to lowest) for deep user control, but it
-is strongly recommended to primarily configure your projects via the `brainsmith.yaml`.
+Project settings are loaded from multiple sources with the following priority
+(highest to lowest) for deep user control, but the recommended interface is the
+**yaml config file** using CLI arguments to override as necessary.
 
 1. **CLI arguments** - Passed to `load_config()` or command-line tools
 2. **Environment variables** - `BSMITH_*` prefix (e.g., `BSMITH_BUILD_DIR`)
 3. **Project config file** - `brainsmith.yaml` in project root
 4. **Built-in defaults** - Field defaults in `SystemConfig`
-
-It is highly recommended to primarily configure
-
-
-### Configuration Fields
-
-
 
 #### Core Paths
 
@@ -170,6 +140,11 @@ It is highly recommended to primarily configure
 | `build_dir` | `Path` | `"build"` | Build directory for compilation artifacts. Relative paths resolve to `project_dir`. |
 | `project_dir` | `Path` | *auto-detected* | Project root directory (parent of `.brainsmith/`). Auto-detected via upward directory walk or `BSMITH_PROJECT_DIR`. |
 | `bsmith_dir` | `Path` | *auto-detected* | Brainsmith installation root (cached property). |
+| `component_sources` | `Dict[str, Path | None]` | `{'project': None}` | Filesystem-based component source paths. `'project'` defaults to `project_dir` (supports `kernels/` and `steps/` subdirectories). Core namespace (`'brainsmith'`) and entry points (`'finn'`) are loaded automatically. |
+| `source_priority` | `List[str]` | `['project', 'brainsmith', 'finn', 'custom']` | Component source resolution priority (first match wins). Custom sources are auto-appended if not listed. |
+| `source_module_prefixes` | `Dict[str, str]` | `{'brainsmith.': 'brainsmith', 'finn.': 'finn'}` | Module prefix → source name mapping for component classification. |
+| `components_strict` | `bool` | `True` | Enable strict component loading (fail on errors vs. warn). Set to `false` for development. |
+| `cache_components` | `bool` | `True` | Enable manifest caching for component discovery (auto-invalidates on file changes). |
 
 All relative paths are resolved from the *point of configuration*...
 
@@ -224,36 +199,11 @@ Additional configuration fields (FINN settings, direct Xilinx tool paths, etc.) 
 let auto-configure from the core brainsmith fields.
 
 
-
-
-
-
 ---
 
-
-## Validate Installation
-
-Run the quicktest to verify everything is working:
-
-```bash
-./examples/bert/quicktest.sh
-```
-
-This runs a minimal BERT example (single layer) to verify:
-- Environment is configured correctly
-- Vivado is accessible
-- Dependencies are installed
-- Basic DSE pipeline works
-
-!!! info "Build Time"
-    The quicktest can take upwards of an hour, depending on your system due to
-    RTL simulation based fifo sizing.
+## Running Design Space Exploration
 
 ---
-
-## Quick Start
-
-Get started with Brainsmith in 5 minutes by running the BERT example.
 
 ### Prerequisites
 
@@ -266,6 +216,9 @@ cd /path/to/brainsmith
 # Option 2: Manual activation
 source .venv/bin/activate && source .brainsmith/env.sh
 ```
+
+
+---
 
 ### Run Your First DSE
 
@@ -438,8 +391,6 @@ design_space:
     - step_deployment_package
 ```
 
-Learn more in the [Blueprint Reference](developer-guide/3-reference/blueprints.md).
-
 ---
 
 ### Troubleshooting
@@ -481,7 +432,7 @@ Learn more in the [Blueprint Reference](developer-guide/3-reference/blueprints.m
 
 ### Getting Help
 
-- Check the [build log](../examples/bert/quicktest/build_dataflow.log) for detailed error messages
+- Check the build log (`build_dataflow.log` in your output directory) for detailed error messages
 - Search existing [GitHub Issues](https://github.com/microsoft/brainsmith/issues)
 - Ask on [GitHub Discussions](https://github.com/microsoft/brainsmith/discussions)
 
@@ -511,8 +462,8 @@ smith dfc model.onnx blueprint_fast.yaml --output-dir ./results_fast
    smith dfc my_model.onnx my_blueprint.yaml
    ```
 
-### Learn the Tools
+### Learn More
 
-- [Blueprint Reference](developer-guide/3-reference/blueprints.md) - Master the YAML format
-- [CLI Reference](developer-guide/3-reference/cli.md) - Explore all commands
-- [Design Space Exploration](developer-guide/2-core-systems/design-space-exploration.md) - Understand DSE concepts
+- Explore the [example configurations](https://github.com/microsoft/brainsmith/tree/main/examples) in the repository
+- Check the [CLI help](getting-started.md#configuration) for available commands and options
+- Join the discussion on [GitHub](https://github.com/microsoft/brainsmith/discussions)

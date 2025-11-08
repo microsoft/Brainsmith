@@ -81,9 +81,13 @@ def branching_design_space(simple_onnx_model) -> GlobalDesignSpace:
     Returns:
         GlobalDesignSpace with one branch point
     """
+    from brainsmith.registry import get_backend
+
     return GlobalDesignSpace(
         model_path=str(simple_onnx_model),
-        kernel_backends=[("TestKernel", ["TestKernel_hls", "TestKernel_rtl"])],
+        kernel_backends=[
+            ("TestKernel", [get_backend("custom:TestKernel_hls"), get_backend("custom:TestKernel_rtl")])
+        ],
         steps=[
             "test_step",
             ["test_step1", "test_step2"],  # Branch point
@@ -103,11 +107,13 @@ def multi_branch_design_space(simple_onnx_model) -> GlobalDesignSpace:
     Returns:
         GlobalDesignSpace with multiple branches and kernel backends
     """
+    from brainsmith.registry import get_backend
+
     return GlobalDesignSpace(
         model_path=str(simple_onnx_model),
         kernel_backends=[
-            ("TestKernel", ["TestKernel_hls", "TestKernel_rtl"]),
-            ("TestKernel2", ["TestKernel2_hls"])
+            ("TestKernel", [get_backend("custom:TestKernel_hls"), get_backend("custom:TestKernel_rtl")]),
+            ("TestKernel2", [get_backend("custom:TestKernel2_hls")])
         ],
         steps=[
             "test_step",

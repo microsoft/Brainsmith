@@ -44,18 +44,18 @@ def parse_kernels(kernels_data: List[Union[str, dict]]) -> List[Tuple[str, List[
         of kernels that don't yet have backend implementations.
 
     Examples:
-        >>> # All backends for each kernel
+        >>> # All backends for each kernel (auto-sorted: RTL first, then HLS)
         >>> parse_kernels(['LayerNorm', 'Crop'])
-        [('LayerNorm', [<class 'LayerNorm_hls'>, <class 'LayerNorm_rtl'>]),
+        [('LayerNorm', [<class 'LayerNorm_rtl'>, <class 'LayerNorm_hls'>]),
          ('Crop', [<class 'Crop_hls'>])]
 
-        >>> # Specific backends in priority order
+        >>> # Specific backends in priority order (user-specified order preserved)
         >>> parse_kernels([
         ...     'LayerNorm',
         ...     {'MVAU': ['MVAU_rtl', 'MVAU_hls']},
         ...     {'Softmax': ['brainsmith:Softmax_hls']}
         ... ])
-        [('LayerNorm', [<class 'LayerNorm_hls'>, <class 'LayerNorm_rtl'>]),
+        [('LayerNorm', [<class 'LayerNorm_rtl'>, <class 'LayerNorm_hls'>]),
          ('MVAU', [<class 'MVAU_rtl'>, <class 'MVAU_hls'>]),
          ('Softmax', [<class 'Softmax_hls'>])]
     """
@@ -102,7 +102,7 @@ def _resolve_all_backends(kernel_name: str) -> List[Type]:
         kernel_name: Name of the kernel (e.g., 'MVAU', 'LayerNorm')
 
     Returns:
-        List of backend classes in registration order
+        List of backend classes sorted by priority (RTL first, then HLS)
 
     Raises:
         ValueError: If backend resolution fails
@@ -119,6 +119,20 @@ def _resolve_all_backends(kernel_name: str) -> List[Type]:
         raise ValueError(
             f"Backend not found for kernel '{kernel_name}': {e}"
         ) from e
+
+    # Sort backends: RTL first, then HLS, then others
+    def backend_sort_key(backend_class: Type) -> tuple:
+        """Sort key: (priority, class_name) where lower priority comes first."""
+        class_name = backend_class.__name__.lower()
+        if class_name.endswith('_rtl'):
+            priority = 0  # RTL first
+        elif class_name.endswith('_hls'):
+            priority = 1  # HLS second
+        else:
+            priority = 2  # Others last
+        return (priority, class_name)
+
+    backend_classes.sort(key=backend_sort_key)
 
     return backend_classes
 
@@ -231,13 +245,16 @@ def _validate_backend_kernel_match(kernel_name: str, backend_name: str, backend_
     """Validate that a backend implements the expected kernel.
 
     Args:
-        kernel_name: Expected kernel name (e.g., 'MVAU')
+        kernel_name: Expected kernel name (e.g., 'MVAU' or 'finn:MVAU')
         backend_name: Backend name from YAML (for error messages)
         backend_class: Backend class to validate
 
     Raises:
         ValueError: If backend doesn't implement the kernel
     """
+    # Strip namespace from kernel_name if present (e.g., 'finn:MVAU' → 'MVAU')
+    expected_kernel = kernel_name.split(':')[-1]
+
     # Get the backend's target kernel from its class name
     # Backend class names follow pattern: KernelName_backend (e.g., MVAU_rtl, LayerNorm_hls)
     backend_class_name = backend_class.__name__
@@ -249,7 +266,7 @@ def _validate_backend_kernel_match(kernel_name: str, backend_name: str, backend_
         backend_kernel = backend_class_name
 
     # Allow exact match or backend being more specific (e.g., MVAU_rtl implements MVAU)
-    if backend_kernel != kernel_name:
+    if backend_kernel != expected_kernel:
         raise ValueError(
             f"Backend '{backend_name}' (class: {backend_class_name}) does not implement "
             f"kernel '{kernel_name}'. Expected backend for kernel '{kernel_name}', "

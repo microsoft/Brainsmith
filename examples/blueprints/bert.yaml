@@ -11,7 +11,7 @@ board: "V80"                        # Target FPGA board
 design_space:
   kernels:
     - LayerNorm
-    - finn:DuplicateStreams
+    - DuplicateStreams
     - ElementwiseBinaryOp
     - Shuffle
     - Softmax
@@ -26,6 +26,8 @@ design_space:
     # Core Brainsmith steps
     - "build_dataflow_graph"  # ONNX --> Kernels
     - "build_hw_graph"        # Kernels --> HW Backends
+    # - "loop_rolling"
+    - "transpose_decomposition"
     - "brainsmith:target_fps_parallelization"
     - "apply_parallelization_config"
     - "minimize_bit_width"

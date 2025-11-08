@@ -172,7 +172,7 @@ def test_seed(request):
             inputs = make_execution_context(..., seed=test_seed)
 
     Usage in test frameworks:
-        class TestMyKernel(SingleKernelTest):
+        class TestMyKernel(KernelTest):
             def get_test_seed(self):
                 # Override to customize seed
                 return 99
@@ -295,7 +295,7 @@ def setup_parity_imports():
     - test_fixtures.py (make_execution_context)
 
     New framework usage:
-        from tests.frameworks.single_kernel_test import SingleKernelTest
+        from tests.frameworks.kernel_test import KernelTest
         from tests.frameworks.kernel_parity_test import KernelParityTest
 
     This eliminates brittle sys.path manipulation in individual test files.

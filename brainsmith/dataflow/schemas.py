@@ -61,7 +61,7 @@ class ParameterSpec:
 
     The container type determines how the dimension is treated during DSE:
 
-    - **list/tuple → OrderedDimension** (ordered sequences with navigation)
+    - **list/tuple → OrderedParameter** (ordered sequences with navigation)
         - Supports min/max access, step_up/step_down, percentage-based indexing
         - Values are sorted automatically
         - Examples: depth=[128, 256, 512], num_layers=[1, 2, 4, 8]
@@ -93,7 +93,7 @@ class ParameterSpec:
         >>> ParameterSpec("res_type", {"lut", "dsp"})  # Uses sorted first
 
     Note:
-        Tiling dimensions (PE, SIMD) are ALWAYS ordered (auto-wrapped in OrderedDimension)
+        Tiling dimensions (PE, SIMD) are ALWAYS ordered (auto-wrapped in OrderedParameter)
         since they're computed as divisors (naturally ordered sequences).
     """
     name: str
@@ -221,7 +221,7 @@ class KernelSchema:
         outputs: Output interface schemas
         internal_datatypes: Internal datatype derivation specs (e.g., accumulator)
         kernel_params: Kernel-specific parameters (e.g., epsilon, algorithm)
-        dse_dimensions: Explorable resource/implementation dimensions (e.g., ram_style)
+        dse_parameters: Explorable resource/implementation parameters (e.g., ram_style)
         constraints: Validation constraints (datatype, shape, ONNX requirements)
         attribute_mapping: Map ONNX attributes to kernel parameters
     """
@@ -318,7 +318,7 @@ class KernelSchema:
         from structural schema, returning only attributes that need persistence:
         - Datatypes (for interfaces and internals)
         - Tiling parameters (SIMD, PE, etc.) - auto-extracted from stream_tiling
-        - DSE dimensions (ram_style, res_type, etc.) - from dse_dimensions
+        - DSE parameters (ram_style, res_type, etc.) - from dse_parameters
         - Kernel-specific parameters (epsilon, algorithm, etc.) - from kernel_params
 
         Shapes are NEVER stored in nodeattrs. They are either:

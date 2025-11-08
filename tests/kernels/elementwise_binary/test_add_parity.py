@@ -177,23 +177,17 @@ class TestAddParity(KernelParityTest):
     # Primary Implementation: Brainsmith ElementwiseBinary (uses defaults)
     # ========================================================================
 
-    def get_kernel_inference_transform(self):
-        """Return Brainsmith InferKernels transform for primary implementation.
-
-        Required by base class. The inherited infer_kernel() implementation
-        calls this method to get the kernel inference transform.
+    def get_kernel_op(self):
+        """Return Brainsmith ElementwiseBinaryOp for primary implementation.
 
         Returns:
-            InferKernels transform configured for ElementwiseBinaryOp
+            ElementwiseBinaryOp class
         """
-        from brainsmith.primitives.transforms.infer_kernels import InferKernels
         from brainsmith.kernels.elementwise_binary import ElementwiseBinaryOp
-
-        # Return lambda that creates configured InferKernels instance
-        return lambda: InferKernels([ElementwiseBinaryOp])
+        return ElementwiseBinaryOp
 
     # Primary implementation uses inherited defaults from KernelTestBase:
-    # - infer_kernel() (via get_kernel_inference_transform() above)
+    # - infer_kernel() (creates InferKernels([get_kernel_op()]) automatically)
     # - get_backend_variants() (auto-detect from registry)
     # - configure_kernel() (auto_configure_from_fixture)
 
@@ -212,16 +206,5 @@ class TestAddParity(KernelParityTest):
     # ========================================================================
     # Golden Reference
     # ========================================================================
-
-    def compute_golden_reference(self, inputs):
-        """Compute expected output using NumPy element-wise addition.
-
-        Args:
-            inputs: Dict mapping input names to numpy arrays
-                   {"input0": ndarray, "input1": ndarray}
-
-        Returns:
-            Dict mapping output names to expected numpy arrays
-            {"output": ndarray}
-        """
-        return {"output": inputs["input0"] + inputs["input1"]}
+    # No compute_golden_reference() override needed!
+    # QONNX executes the Stage 1 Add node automatically to produce golden reference.
