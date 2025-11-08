@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from brainsmith.registry import step
-from brainsmith.build.parallelization import (
+from brainsmith.primitives.transforms.parallelization import (
     ApplyParallelizationConfig,
     SetParallelization,
 )

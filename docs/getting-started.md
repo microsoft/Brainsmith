@@ -252,21 +252,22 @@ This automated script will:
 
 #### 3. Monitor Progress
 
-The script outputs progress to the console. Key stages include:
+The script outputs detailed progress to the console and log files. The build process transforms your model through several stages:
 
+**Transformation Pipeline:**
 ```
-[INFO] Generating BERT ONNX model...
-[INFO] Creating folding configuration...
-[INFO] Running dataflow build...
-  ├─ Streamlining
-  ├─ QONNX to FINN conversion
-  ├─ Dataflow partition creation
-  ├─ Kernel inference
-  ├─ RTL code generation
-  ├─ IP packaging
-  └─ RTL simulation
-[SUCCESS] Build complete!
+PyTorch → ONNX → Hardware Kernels → HLS/RTL → IP Cores → Bitfile
 ```
+
+**Key stages you'll see:**
+
+- **Model transformation**: Converting ONNX operations to hardware kernels
+- **Design space exploration**: Determining parallelization factors (PE/SIMD)
+- **Code generation**: Generating HLS C++ and RTL (Verilog/VHDL)
+- **IP packaging**: Creating Vivado IP cores
+- **Simulation**: Verifying correctness with RTL simulation
+
+Check `build/quicktest/build_dataflow.log` for detailed progress and diagnostics.
 
 ---
 
@@ -310,7 +311,11 @@ Check `final_output/report/estimate_reports.json`:
 
 The generated RTL is in `final_output/stitched_ip/`:
 
-- `finn_design_wrapper.v` - Top-level wrapper with AXI stream interfaces
+##### RTL Output
+
+The generated RTL is in `final_output/stitched_ip/`:
+
+- `finn_design_wrapper.v` — Top-level wrapper with AXI stream interfaces
 - Individual kernel implementations (e.g., `MVAU_hls_*.v`, `Thresholding_rtl_*.v`)
 - Stream infrastructure (FIFOs, width converters, etc.)
 
@@ -322,148 +327,152 @@ Now that you've run the basic example, try customizing it:
 
 #### Adjust Target Performance
 
-Edit `bert_quicktest.yaml`:
+Edit `bert_quicktest.yaml` to increase throughput:
 
 ```yaml
-design_space:
-  steps:
-    - step_target_fps_parallelization:
-        target_fps: 100  # Increase target throughput
+finn_config:
+  target_fps: 10  # Increase from 1 to 10 FPS
 ```
 
 Higher target FPS will:
-- Increase parallelization factors
-- Use more FPGA resources
-- Reduce latency
+- Increase parallelization factors (PE/SIMD parameters)
+- Use more FPGA resources (LUTs, DSPs, BRAM)
+- Reduce latency per inference
 
-#### Change Backend
+#### Create Custom Configurations
 
-Try different hardware implementations:
+Create your own blueprint that inherits from the BERT base:
 
 ```yaml
-design_space:
-  kernels:
-    - MVAU: [mvau_hls, mvau_rtl]  # Try both HLS and RTL backends
+# my_custom_bert.yaml
+name: "My Custom BERT"
+extends: "${BSMITH_DIR}/examples/blueprints/bert.yaml"
+
+clock_ns: 4.0           # 250MHz (faster clock)
+output: "estimates"     # Just get resource estimates
+
+finn_config:
+  target_fps: 5000      # Very high throughput
 ```
 
-#### Run Full Example
-
-The full BERT demo (not just quicktest) processes actual text:
+Then run it:
 
 ```bash
-python bert_demo.py --config bert_demo.yaml
+python bert_demo.py -o my_output -l 2 --blueprint my_custom_bert.yaml
 ```
 
-This uses a larger model and generates a complete accelerator.
+#### Run Full BERT Demo
+
+The full demo processes larger models. From `examples/bert/`:
+
+```bash
+# Generate standard folding configuration
+python gen_folding_config.py --simd 16 --pe 16 -o configs/demo_folding.json
+
+# Run with 4 layers instead of 1
+python bert_demo.py -o bert_demo_output -l 4 --blueprint bert_demo.yaml
+```
+
+This creates a more realistic accelerator but takes significantly longer to build.
 
 ---
 
 ### Understanding Blueprints
 
-The `bert_quicktest.yaml` file is a **Blueprint** - a YAML configuration that defines your design space:
+A **Blueprint** is a YAML configuration that defines your hardware design space - the kernels, transformation steps, and build parameters.
+
+#### Blueprint Inheritance
+
+Blueprints support inheritance via the `extends` key, allowing you to build on existing configurations:
 
 ```yaml
+# bert_quicktest.yaml - Quick test configuration
 name: "BERT Quicktest"
+extends: "${BSMITH_DIR}/examples/bert/bert_demo.yaml"
+
+output: "bitfile"
+
+finn_config:
+  target_fps: 1                     # Low FPS for quick testing
+  folding_config_file: "configs/quicktest_folding.json"
+  fifosim_n_inferences: 2           # Faster FIFO sizing
+```
+
+The parent blueprint (`bert_demo.yaml`) defines the core design space:
+
+```yaml
+# bert_demo.yaml - Inherits from blueprints/bert.yaml
+name: "BERT Demo"
+extends: "${BSMITH_DIR}/examples/blueprints/bert.yaml"
+
 clock_ns: 5.0           # 200MHz target clock
-output: "rtlsim"        # Generate RTL and run simulation
+output: "bitfile"
+board: "V80"
 
-design_space:
-  kernels:              # Hardware kernels to use
-    - MVAU
-    - Thresholding
-    - StreamingFCLayer
-
-  steps:                # Build pipeline steps
-    - streamline
-    - qonnx_to_finn
-    - step_create_dataflow_partition
-    - step_specialize_layers
-    - step_target_fps_parallelization:
-        target_fps: 50
-    - step_minimize_bit_width
-    - step_generate_estimate_reports
-    - step_hw_codegen
-    - step_hw_ipgen
-    - step_set_fifo_depths
-    - step_create_stitched_ip
-    - step_synthesize_bitfile
-    - step_make_pynq_driver
-    - step_deployment_package
+finn_config:
+  target_fps: 3000                  # High performance target
+  standalone_thresholds: true
 ```
 
 ---
 
-### Troubleshooting
-
-#### Build Fails During Kernel Inference
-
-**Error:** `Could not find suitable kernel for operation X`
-
-**Solution:** Add the missing kernel to your blueprint's `kernels` list.
-
-#### RTL Simulation Fails
-
-**Error:** `Simulation mismatch detected`
-
-**Solution:** This usually indicates a configuration issue. Check:
-- Folding factors are valid for your model dimensions
-- FIFO depths are sufficient
-- Input/output data types match model requirements
-
-#### Out of Memory
-
-**Error:** `MemoryError` during build
-
-**Solution:**
-- Close other applications
-- Reduce model size for testing
-- Use `--stop-step` to build incrementally
-
-#### Vivado Not Found
-
-**Error:** `vivado: command not found`
-
-**Solution:**
-1. Check config: `brainsmith project info`
-2. Re-activate environment: `source .brainsmith/env.sh`
-3. Verify Vivado path: `ls $XILINX_PATH`
-
----
 
 ### Getting Help
 
-- Check the build log (`build_dataflow.log` in your output directory) for detailed error messages
-- Search existing [GitHub Issues](https://github.com/microsoft/brainsmith/issues)
-- Ask on [GitHub Discussions](https://github.com/microsoft/brainsmith/discussions)
+**Build logs:** Check `<output_dir>/build_dataflow.log` for detailed error messages and transformation steps.
+
+**Resources:**
+- [GitHub Issues](https://github.com/microsoft/brainsmith/issues) - Report bugs or search existing issues
+- [GitHub Discussions](https://github.com/microsoft/brainsmith/discussions) - Ask questions and share experiences
 
 ---
 
 ## Next Steps
 
-### Explore Design Space
+### Explore Design Space Trade-offs
 
-Run multiple configurations to compare trade-offs:
+Compare different configurations by varying performance targets. From `examples/bert/`:
 
 ```bash
-# Low resource usage
-smith dfc model.onnx blueprint_small.yaml --output-dir ./results_small
+# Create low-resource configuration
+cat > bert_lowres.yaml << 'EOF'
+name: "BERT Low Resource"
+extends: "${BSMITH_DIR}/examples/bert/bert_quicktest.yaml"
+finn_config:
+  target_fps: 1
+EOF
 
-# High performance
-smith dfc model.onnx blueprint_fast.yaml --output-dir ./results_fast
+# Create high-performance configuration
+cat > bert_highperf.yaml << 'EOF'
+name: "BERT High Performance"
+extends: "${BSMITH_DIR}/examples/bert/bert_quicktest.yaml"
+finn_config:
+  target_fps: 50
+EOF
+
+# Compare resource usage
+python bert_demo.py -o output_lowres -l 1 --blueprint bert_lowres.yaml
+python bert_demo.py -o output_highperf -l 1 --blueprint bert_highperf.yaml
+
+# Check results
+cat output_lowres/final_output/report/estimate_reports.json
+cat output_highperf/final_output/report/estimate_reports.json
 ```
 
 ### Try Custom Models
 
-1. Quantize your PyTorch model with Brevitas
-2. Export to ONNX
-3. Create a blueprint
-4. Run DSE:
+**From PyTorch to FPGA:**
+
+1. **Quantize** - Use Brevitas to quantize your PyTorch model to low precision (INT8, INT4, etc.)
+2. **Export** - Export to ONNX format with `brevitas.export`
+3. **Create blueprint** - Start with an existing blueprint and modify the kernel list
+4. **Build** - Run design space exploration:
    ```bash
-   smith dfc my_model.onnx my_blueprint.yaml
+   smith my_model.onnx my_blueprint.yaml -o my_output
    ```
 
 ### Learn More
 
-- Explore the [example configurations](https://github.com/microsoft/brainsmith/tree/main/examples) in the repository
-- Check the [CLI help](getting-started.md#configuration) for available commands and options
-- Join the discussion on [GitHub](https://github.com/microsoft/brainsmith/discussions)
+- **[API Reference](api/index.md)** - Programmatic access to Brainsmith functions
+- **[Example Blueprints](https://github.com/microsoft/brainsmith/tree/main/examples/blueprints)** - Pre-built configurations for common architectures
+- **[GitHub Discussions](https://github.com/microsoft/brainsmith/discussions)** - Community support and examples
