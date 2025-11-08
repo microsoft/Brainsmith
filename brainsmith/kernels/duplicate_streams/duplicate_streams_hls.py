@@ -15,7 +15,7 @@ from brainsmith.registry import backend
 
 
 @backend(
-    name="DuplicateStreamsHLS",
+    name="DuplicateStreams_hls",
     target_kernel="brainsmith:DuplicateStreams",
     language="hls",
     author="AMD FINN team"

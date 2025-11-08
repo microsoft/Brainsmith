@@ -25,7 +25,7 @@ from brainsmith.dataflow.constraints import (
     IsStatic,
     HasLayout,
     NodeAttributeEquals,
-    Custom,
+    CustomConstraint,
 )
 from brainsmith.dataflow.types import ShapeHierarchy
 
@@ -159,7 +159,7 @@ def test_custom_constraint_is_invariant():
     def check_fn(ctx):
         return None
 
-    constraint = Custom(check_fn, "Test custom constraint")
+    constraint = CustomConstraint(check_fn, "Test custom constraint")
     assert constraint.evaluation_phase == 'structural'
 
 
@@ -183,7 +183,7 @@ def test_all_constraints_have_evaluation_phase():
         IsStatic(("weight",)),
         HasLayout("input", "NHWC"),
         NodeAttributeEquals("axis", -1),
-        Custom(lambda ctx: None, "Test"),
+        CustomConstraint(lambda ctx: None, "Test"),
     ]
 
     for constraint in constraints_to_test:

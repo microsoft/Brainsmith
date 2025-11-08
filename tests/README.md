@@ -1,7 +1,8 @@
 # Brainsmith Test Framework Documentation
 
-**Last Updated:** 2025-10-31
-**Framework Version:** v2.0 (Backend Integration Complete)
+**Last Updated:** 2025-11-07
+
+> **New to testing?** Start with [QUICKSTART.md](QUICKSTART.md) for a 5-minute guide.
 
 ---
 
@@ -21,25 +22,22 @@
 
 ## Quick Start
 
-**TL;DR**: Use `SingleKernelTest` or `DualKernelTest`. Everything else is utilities.
+**TL;DR**: Use `KernelTest` for single implementation testing, or `KernelParityTest` for comparing two implementations (FINN vs Brainsmith). Everything else is utilities.
 
 ### Testing ONE Kernel Implementation
 
 ```python
-from tests.frameworks.single_kernel_test import SingleKernelTest
+from tests.frameworks.kernel_test import KernelTest
 
-class TestMyKernel(SingleKernelTest):
+class TestMyKernel(KernelTest):
     def make_test_model(self):
         # Create ONNX model with your operation
         return model, node_name
 
-    def get_kernel_inference_transform(self):
-        # Return transform that converts ONNX → Kernel
-        return InferMyKernel
-
-    def compute_golden_reference(self, inputs):
-        # NumPy implementation of expected behavior
-        return {"output": np.my_operation(inputs["input"])}
+    def get_kernel_op(self):
+        # Return kernel class to test
+        from brainsmith.kernels.my_kernel import MyKernelOp
+        return MyKernelOp
 
     def get_num_inputs(self):
         return 1
@@ -55,46 +53,101 @@ class TestMyKernel(SingleKernelTest):
 - HLS C++ simulation vs golden (if backend enabled)
 - RTL simulation vs golden (if backend enabled)
 
-### Testing TWO Implementations (Manual vs Auto Parity)
+### Testing TWO Implementations (Parity Testing)
 
 ```python
-from tests.frameworks.dual_kernel_test import DualKernelTest
+from tests.frameworks.kernel_parity_test import KernelParityTest
+from tests.frameworks.test_config import KernelTestConfig, ModelStructure
 
-class TestMyKernelParity(DualKernelTest):
-    def make_test_model(self):
-        return model, node_name
+class TestAddParity(KernelParityTest):
+    """Compare FINN ElementwiseAdd vs Brainsmith ElementwiseBinaryOp."""
 
-    def get_manual_transform(self):
-        return InferManualKernel  # FINN implementation
+    @pytest.fixture(
+        params=[
+            KernelTestConfig(
+                test_id="add_int8",
+                model=ModelStructure(
+                    operation="Add",
+                    input_shapes={"input0": (1, 64), "input1": (1, 64)},
+                    input_dtypes={
+                        "input0": DataType["INT8"],
+                        "input1": DataType["INT8"]
+                    },
+                ),
+            )
+        ]
+    )
+    def kernel_test_config(self, request):
+        return request.param
 
-    def get_auto_transform(self):
-        return InferKernelList  # Brainsmith implementation
+    def make_test_model(self, kernel_test_config):
+        # Create ONNX model
+        return model, ["input0", "input1"]
 
-    def compute_golden_reference(self, inputs):
-        return {"output": np.my_operation(inputs["input"])}
+    # Reference Implementation (FINN)
+    def infer_kernel_reference(self, model, target_node):
+        model = model.transform(InferElementwiseBinaryOperation())
+        nodes = model.get_nodes_by_op_type("ElementwiseAdd")  # Search by op_type!
+        return getCustomOp(nodes[0]), model
+
+    def get_backend_variants_reference(self):
+        return [ElementwiseAdd_hls]
+
+    # Primary Implementation (Brainsmith) - uses inherited defaults
+    def get_kernel_op(self):
+        return ElementwiseBinaryOp
 
     def get_num_inputs(self):
-        return 1
+        return 2
 
     def get_num_outputs(self):
         return 1
+
+    # No compute_golden_reference() override needed!
+    # QONNX executes the Stage 1 Add node automatically to produce golden reference.
 ```
 
-**Result:** 20 inherited tests automatically!
+**Result:** 18 inherited tests automatically!
+- 6 golden execution tests (reference/primary × python/cppsim/rtlsim)
 - 7 core parity tests (shapes, widths, datatypes)
-- 5 HW estimation tests (cycles, resources)
-- 8 golden execution tests (manual/auto vs golden, both vs each other)
+- 5 HW estimation tests (cycles, resources, efficiency)
+
+**Key Features:**
+- Fixture-based parameterization (easier to test multiple configs)
+- Session-scoped caching (better performance)
+- Per-kernel backend selection (more flexible)
+- Expected failures are features (reveals real differences)
+
+**See:** `tests/frameworks/KERNEL_PARITY_TEST_GUIDE.md` for comprehensive documentation
 
 ### Enabling Backend Testing
 
-Add one method to enable cppsim/rtlsim tests:
+Configure fpgapart in your test configuration:
 
 ```python
-class TestMyKernel(SingleKernelTest):
-    # ... required methods ...
+from tests.frameworks.test_config import KernelTestConfig, PlatformConfig
 
-    def get_backend_fpgapart(self):
-        return "xc7z020clg400-1"  # Enable backend specialization!
+@pytest.fixture(params=[
+    KernelTestConfig(
+        test_id="my_test_with_backend",
+        model=ModelStructure(...),
+        platform=PlatformConfig(fpgapart="xc7z020clg400-1")  # Enable backend!
+    )
+])
+def kernel_test_config(self, request):
+    return request.param
+```
+
+**Control test execution with pytest marks:**
+```bash
+# Run all tests (including backend if configured)
+pytest test_my_kernel.py -v
+
+# Skip backend tests
+pytest test_my_kernel.py -m "not cppsim and not rtlsim" -v
+
+# Run ONLY rtlsim tests
+pytest test_my_kernel.py -m "rtlsim" -v
 ```
 
 ---
@@ -121,7 +174,7 @@ Stage 1: ONNX Node          Stage 2: Base Kernel        Stage 3: Backend
 ```
 KernelTestConfig                    # Minimal abstract base (3 required + 7 optional hooks)
     ↓
-SingleKernelTest                    # Tests ONE implementation (6 inherited tests)
+KernelTest                    # Tests ONE implementation (6 inherited tests)
     ↓ composition
 PipelineRunner                      # ONNX → Base Kernel (Stage 1 → 2)
     + specialize_to_backend()       # Base → Backend (Stage 2 → 3)
@@ -134,10 +187,19 @@ make_execution_context()            # Test data generation
 ```
 
 ```
-DualKernelTest                      # Tests TWO implementations (20 inherited tests)
+KernelParityTest                      # Tests TWO implementations (20 inherited tests)
     ↓ composition (uses all the same utilities)
 PipelineRunner (manual pipeline)
 PipelineRunner (auto pipeline)
+GoldenValidator
+Executors
+
+KernelParityTest                     # Tests TWO implementations (18 inherited tests)
+    ↓ fixture-based architecture
+Session-scoped fixtures (caching)
+Asymmetric design (reference explicit, primary inherited)
+PipelineRunner (reference pipeline)
+PipelineRunner (primary pipeline)
 GoldenValidator
 Executors
 ```
@@ -154,9 +216,9 @@ Executors
 
 ## Test Framework Guide
 
-### SingleKernelTest API
+### KernelTest API
 
-**Required Methods (5):**
+**Required Methods (3):**
 
 ```python
 def make_test_model(self) -> Tuple[ModelWrapper, str]:
@@ -166,21 +228,11 @@ def make_test_model(self) -> Tuple[ModelWrapper, str]:
         (model, node_name): ModelWrapper and name of target node
     """
 
-def get_kernel_inference_transform(self) -> Type[Transformation]:
-    """Return transform that converts ONNX → Kernel.
+def get_kernel_op(self) -> Type:
+    """Return kernel operator class.
 
     Returns:
-        Transformation class (e.g., InferAddStreamsLayer)
-    """
-
-def compute_golden_reference(self, inputs: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-    """Compute expected outputs using NumPy.
-
-    Args:
-        inputs: Dict mapping input names to numpy arrays
-
-    Returns:
-        Dict mapping output names to expected numpy arrays
+        Kernel operator class (e.g., AddStreamsOp, ElementwiseBinaryOp)
     """
 
 def get_num_inputs(self) -> int:
@@ -231,16 +283,17 @@ def get_inference_timeout(self) -> int:
 5. `test_cppsim_execution_vs_golden` - HLS C++ execution (Stage 3)
 6. `test_rtlsim_execution_vs_golden` - RTL execution (Stage 3)
 
-### DualKernelTest API
+### KernelParityTest API
 
-**Required Methods (6):**
+**Required Methods (7):**
 
-Same as SingleKernelTest, but replace:
-- `get_kernel_inference_transform()` with:
-  - `get_manual_transform()` - FINN transform
-  - `get_auto_transform()` - Brainsmith transform
+All from KernelTest, plus:
+- `infer_kernel_reference(model, target_node)` - Reference implementation (usually FINN)
+- `get_backend_variants_reference()` - Reference backend variants
 
-**Inherited Tests (20):**
+Primary implementation uses inherited defaults from KernelTest.
+
+**Inherited Tests (18):**
 
 **Core Parity Tests (7):**
 1. `test_normal_shapes_parity` - Unfolded shapes match
@@ -258,15 +311,62 @@ Same as SingleKernelTest, but replace:
 11. `test_efficiency_metrics_parity` - BRAM/URAM efficiency matches
 12. `test_operation_counts_parity` - MAC/op counts match
 
-**Golden Execution Tests (8):**
-13. `test_manual_python_vs_golden` - Manual Python execution correct
-14. `test_auto_python_vs_golden` - Auto Python execution correct
-15. `test_manual_cppsim_vs_golden` - Manual cppsim correct (Stage 3)
-16. `test_auto_cppsim_vs_golden` - Auto cppsim correct (Stage 3)
-17. `test_manual_rtlsim_vs_golden` - Manual rtlsim correct (Stage 3)
-18. `test_auto_rtlsim_vs_golden` - Auto rtlsim correct (Stage 3)
-19. `test_manual_auto_parity_python` - Manual vs auto Python parity
-20. `test_manual_auto_parity_cppsim` - Manual vs auto cppsim parity
+**Golden Execution Tests (6):**
+13. `test_reference_python_vs_golden` - Reference Python execution correct
+14. `test_primary_python_vs_golden` - Primary Python execution correct
+15. `test_reference_cppsim_vs_golden` - Reference cppsim correct (Stage 3)
+16. `test_primary_cppsim_vs_golden` - Primary cppsim correct (Stage 3)
+17. `test_reference_rtlsim_vs_golden` - Reference rtlsim correct (Stage 3)
+18. `test_primary_rtlsim_vs_golden` - Primary rtlsim correct (Stage 3)
+
+---
+
+## Golden Reference Pattern
+
+Golden references define "correct" behavior for kernel validation. The framework supports two patterns.
+
+### Default Pattern: QONNX Execution (Recommended)
+
+**When to use:** Most cases (95%+)
+
+The framework automatically executes your Stage 1 ONNX model using QONNX to generate golden outputs:
+
+```python
+class TestMyKernel(KernelTest):
+    # No golden reference override needed!
+    # Framework uses QONNX execution on Stage 1 model automatically
+    pass
+```
+
+**How it works:**
+1. Framework takes your Stage 1 model (from `make_test_model()`)
+2. Generates pre-quantized test inputs based on dtypes
+3. Executes model using QONNX
+4. Uses outputs as golden reference
+
+**Benefits:**
+- Zero code required
+- Guaranteed correct (uses same ONNX semantics as your model)
+- Works for all standard ONNX operations
+
+**Requirements:**
+- Operation supported by QONNX
+- Model must be executable at Stage 1
+
+**Note:** Since QONNX supports all standard ONNX operations, custom golden reference is rarely needed. The framework automatically handles golden reference generation.
+
+### Architecture Philosophy
+
+**Principle:** Framework automatically validates against ONNX specification.
+
+- **Golden reference** - QONNX executes Stage 1 model automatically
+- **Golden validation** - Framework provides (GoldenValidator)
+- **Test data generation** - Framework generates pre-quantized inputs based on dtypes
+
+This design ensures:
+- Tests validate against ONNX specification (source of truth)
+- No custom golden reference code required
+- Correctness guaranteed by QONNX (uses ONNXRuntime internally)
 
 ---
 
@@ -289,10 +389,10 @@ Backend integration (Stages 0-7) extends the test framework to support the full 
 
 **✅ Stage 0:** Spike test - Backend pattern validated
 **✅ Stage 1:** Extract backend helper (`specialize_to_backend()`)
-**✅ Stage 2:** SingleKernelTest backend support
+**✅ Stage 2:** KernelTest backend support
 **✅ Stage 3:** Validation test (AddStreams)
 **✅ Stage 4:** Example test demonstrating pattern
-**✅ Stage 5:** DualKernelTest backend support
+**✅ Stage 5:** KernelParityTest backend support
 **✅ Stage 6:** Production examples (DuplicateStreams, ElementwiseBinaryOp)
 **✅ Stage 7:** Documentation and cleanup
 
@@ -302,14 +402,14 @@ Backend integration (Stages 0-7) extends the test framework to support the full 
 
 **Without backend:**
 ```python
-class TestMyKernel(SingleKernelTest):
+class TestMyKernel(KernelTest):
     # Only required methods
     # Tests skip cppsim/rtlsim automatically
 ```
 
 **With backend:**
 ```python
-class TestMyKernel(SingleKernelTest):
+class TestMyKernel(KernelTest):
     # ... required methods ...
 
     def get_backend_fpgapart(self):
@@ -398,7 +498,7 @@ class MyKernelOp(KernelOp):
 
 ### Test Framework Coverage
 
-**DualKernelTest framework covers 83% of HWCustomOp methods:**
+**KernelParityTest framework covers 83% of HWCustomOp methods:**
 
 - **22/35 methods (63%)** - Directly covered by 20 inherited tests
 - **7/35 methods (20%)** - Indirectly covered via cppsim/rtlsim execution
@@ -454,8 +554,9 @@ pytest -v
 
 ### By Framework
 ```bash
-pytest -m "single_kernel" -v      # SingleKernelTest tests
-pytest -m "dual_kernel" -v        # DualKernelTest tests
+pytest -m "kernel" -v      # KernelTest tests
+pytest -m "parity" -v              # KernelParityTest tests
+pytest -m "kernel_parity" -v      # KernelParityTest tests
 ```
 
 ### By Execution Mode
@@ -499,13 +600,17 @@ tests/
 ├── README.md                           # This file (authoritative documentation)
 │
 ├── frameworks/                         # Test Framework (START HERE)
-│   ├── kernel_test_base.py           # Minimal abstract base (3 required + 7 optional hooks)
-│   ├── single_kernel_test.py         # Single kernel testing (6 inherited tests)
-│   ├── dual_kernel_test.py           # Dual kernel parity (20 inherited tests)
+│   ├── kernel_test_base.py           # Base class with shared utilities
+│   ├── kernel_test.py         # Single kernel testing (6 inherited tests)
+│   ├── kernel_parity_test.py         # Dual kernel parity (18 inherited tests)
+│   ├── KERNEL_PARITY_TEST_GUIDE.md   # Comprehensive KernelParityTest documentation
+│   ├── test_config.py                # Test configuration (KernelTestConfig, ModelStructure)
 │   ├── test_addstreams_validation.py # Framework validation tests
 │   └── test_addstreams_dual_backend.py # Backend integration validation
 │
 ├── kernels/                            # Kernel-Specific Tests
+│   ├── elementwise_binary/
+│   │   └── test_add_parity.py            # KernelParityTest example (FINN vs Brainsmith)
 │   ├── test_duplicate_streams_backend.py # DuplicateStreams example
 │   ├── test_elementwise_add_backend.py   # ElementwiseBinaryOp example
 │   └── test_mvau.py                      # MVAU tests
@@ -557,14 +662,14 @@ tests/
 ```python
 # tests/kernels/test_my_simple_kernel.py
 
-from tests.frameworks.single_kernel_test import SingleKernelTest
+from tests.frameworks.kernel_test import KernelTest
 from onnx import helper, TensorProto
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.datatype import DataType
 import numpy as np
 
-class TestMySimpleKernel(SingleKernelTest):
-    """Test MySimpleKernel using SingleKernelTest framework."""
+class TestMySimpleKernel(KernelTest):
+    """Test MySimpleKernel using KernelTest framework."""
 
     def make_test_model(self):
         """Create ONNX model with Identity node → MySimpleKernel."""
@@ -582,14 +687,10 @@ class TestMySimpleKernel(SingleKernelTest):
 
         return model, "Identity_0"
 
-    def get_kernel_inference_transform(self):
-        """Return MySimpleKernel inference transform."""
-        from my_transforms import InferMySimpleKernel
-        return InferMySimpleKernel
-
-    def compute_golden_reference(self, inputs):
-        """Golden reference: output = input (identity operation)."""
-        return {"out": inputs["inp"]}
+    def get_kernel_op(self):
+        """Return MySimpleKernel operator class."""
+        from brainsmith.kernels.my_simple_kernel import MySimpleKernelOp
+        return MySimpleKernelOp
 
     def get_num_inputs(self):
         return 1
@@ -602,104 +703,103 @@ class TestMySimpleKernel(SingleKernelTest):
 
 ### Example 2: Dual Kernel Parity Test
 
+See [QUICKSTART.md](QUICKSTART.md) for a complete, copy-paste ready example.
+
+Brief overview:
 ```python
-# tests/kernels/test_my_kernel_parity.py
+from tests.frameworks.kernel_parity_test import KernelParityTest
 
-from tests.frameworks.dual_kernel_test import DualKernelTest
-from onnx import helper, TensorProto
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
-import numpy as np
+class TestMyKernelParity(KernelParityTest):
+    """Test reference vs primary implementation parity."""
 
-class TestMyKernelParity(DualKernelTest):
-    """Test FINN vs Brainsmith MyKernel parity."""
+    # Reference implementation (explicit methods)
+    def infer_kernel_reference(self, model, target_node):
+        # Usually FINN - apply transform and return op
+        return op, model
 
-    def make_test_model(self):
-        """Create ONNX model with Add node → MyKernel."""
-        node = helper.make_node("Add", ["inp0", "inp1"], ["out"], name="Add_0")
+    def get_backend_variants_reference(self):
+        # Return reference backend classes
+        return [MyKernel_finn_hls]
 
-        shape = [1, 64]
-        inp0_vi = helper.make_tensor_value_info("inp0", TensorProto.FLOAT, shape)
-        inp1_vi = helper.make_tensor_value_info("inp1", TensorProto.FLOAT, shape)
-        out_vi = helper.make_tensor_value_info("out", TensorProto.FLOAT, shape)
-
-        graph = helper.make_graph(
-            [node],
-            "test_graph",
-            [inp0_vi, inp1_vi],
-            [out_vi]
-        )
-        model = ModelWrapper(helper.make_model(graph))
-
-        dtype = DataType["INT8"]
-        model.set_tensor_datatype("inp0", dtype)
-        model.set_tensor_datatype("inp1", dtype)
-
-        return model, "Add_0"
-
-    def get_manual_transform(self):
-        """FINN manual transform."""
-        from finn.transformation.fpgadataflow.convert_to_hw_layers import InferMyKernelLayer
-        return InferMyKernelLayer
-
-    def get_auto_transform(self):
-        """Brainsmith auto transform."""
-        from brainsmith.primitives.transforms.infer_kernel_list import InferKernelList
-        return InferKernelList
-
-    def compute_golden_reference(self, inputs):
-        """Golden reference: output = inp0 + inp1."""
-        return {"out": inputs["inp0"] + inputs["inp1"]}
-
-    def get_num_inputs(self):
-        return 2
-
-    def get_num_outputs(self):
-        return 1
-
-    def configure_kernel_node(self, op, model):
-        """Configure kernel with PE=4."""
-        op.set_nodeattr("PE", 4)
+    # Primary implementation (uses inherited defaults)
+    def get_kernel_op(self):
+        # Brainsmith kernel operator class
+        return MyKernelOp
 ```
 
-**Result:** 20 tests automatically (7 parity + 5 HW estimation + 8 golden)
+**Result:** 18 tests automatically (7 parity + 5 HW estimation + 6 golden)
 
 ### Example 3: Backend Testing Enabled
 
 ```python
-class TestMyKernelWithBackend(SingleKernelTest):
+from tests.frameworks.test_config import (
+    KernelTestConfig,
+    ModelStructure,
+    PlatformConfig,
+    DesignParameters,
+    ValidationConfig,
+)
+
+class TestMyKernelWithBackend(KernelTest):
     """Test MyKernel with full backend pipeline (cppsim + rtlsim)."""
 
+    @pytest.fixture(params=[
+        KernelTestConfig(
+            test_id="my_kernel_backend",
+            model=ModelStructure(
+                operation="MyOp",
+                input_shapes={"input": (1, 64)},
+                input_dtypes={"input": DataType["INT8"]}
+            ),
+            design=DesignParameters(
+                input_streams={0: 8},  # PE=8
+                dimensions={"SIMD": 16}
+            ),
+            platform=PlatformConfig(fpgapart="xc7z020clg400-1"),  # Enable backend!
+            validation=ValidationConfig(
+                tolerance_cppsim={"rtol": 1e-4, "atol": 1e-5}  # Relaxed for HLS
+            )
+        )
+    ])
+    def kernel_test_config(self, request):
+        return request.param
+
     # ... required methods ...
-
-    def configure_kernel_node(self, op, model):
-        """Configure PE and SIMD for backend."""
-        op.set_nodeattr("PE", 8)
-        op.set_nodeattr("SIMD", 16)
-
-    def get_backend_fpgapart(self):
-        """Enable backend testing."""
-        return "xc7z020clg400-1"
-
-    def get_tolerance_cppsim(self):
-        """Relax tolerance for HLS fixed-point."""
-        return {"rtol": 1e-4, "atol": 1e-5}
 ```
 
 **Result:** All 6 tests run, including cppsim + rtlsim (Stage 3)
+
+**Control execution:**
+```bash
+# Run all tests
+pytest test_my_kernel_backend.py -v
+
+# Skip slow backend tests
+pytest test_my_kernel_backend.py -m "not cppsim and not rtlsim" -v
+```
 
 ---
 
 ## See Also
 
-- **Framework Implementation:** `frameworks/single_kernel_test.py`, `frameworks/dual_kernel_test.py`
+- **Framework Implementation:**
+  - `frameworks/kernel_test.py` - Single kernel testing
+  - `frameworks/kernel_parity_test.py` - Dual kernel parity testing
+  - `frameworks/kernel_test_base.py` - Base class with shared utilities
+- **Comprehensive Guides:**
+  - `frameworks/KERNEL_PARITY_TEST_GUIDE.md` - Complete KernelParityTest documentation
+  - `_artifacts/phase3_kernelparitytest_flow.md` - Visual flow diagrams
+  - `_artifacts/PHASE_STATUS.md` - Implementation status
 - **Support Utilities:** `support/pipeline.py`, `support/validator.py`, `support/executors.py`
-- **Working Examples:** `frameworks/test_addstreams_dual_backend.py`, `kernels/test_duplicate_streams_backend.py`
+- **Working Examples:**
+  - `kernels/elementwise_binary/test_add_parity.py` - KernelParityTest example
+  - `frameworks/test_addstreams_dual_backend.py` - Backend integration
+  - `kernels/test_duplicate_streams_backend.py` - DuplicateStreams example
 - **Pipeline Tests:** `pipeline/test_addstreams_integration.py`
 - **Coverage Analysis:** Archived in `_artifacts/archive/planning_docs/COVERAGE_GAP_ANALYSIS.md`
 - **Backend Status:** Archived in `_artifacts/archive/planning_docs/BACKEND_INTEGRATION_STATUS.md`
 
 ---
 
-**Brainsmith Test Framework v2.0**
-Backend Integration Complete • 83% Method Coverage • 100% Functional Coverage
+**Brainsmith Test Framework**
+Complete testing infrastructure for kernel validation and parity testing

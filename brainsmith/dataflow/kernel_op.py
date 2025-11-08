@@ -20,7 +20,7 @@ from .schemas import KernelSchema
 from .dse_models import KernelDesignSpace, KernelDesignPoint
 from .builder import BuildContext, DesignSpaceBuilder
 from .transformation import TransformationResult
-from .ordered_dimension import OrderedDimension
+from .ordered_parameter import OrderedParameter
 
 logger = logging.getLogger(__name__)
 
@@ -220,8 +220,8 @@ class KernelOp(HWCustomOp, ABC):
 
         # Always regenerate design point from current nodeattrs
         current_config = {
-            dim_name: self.get_nodeattr(dim_name)
-            for dim_name in self._design_space.dimensions.keys()
+            param_name: self.get_nodeattr(param_name)
+            for param_name in self._design_space.parameters.keys()
         }
 
         try:
@@ -291,22 +291,22 @@ class KernelOp(HWCustomOp, ABC):
             except ValueError as e:
                 raise self._error(str(e))
 
-            # Auto-populate missing dimension parameters from auto-computed defaults
+            # Auto-populate missing parameter values from auto-computed defaults
             from qonnx.util.basic import get_by_name
-            for dim_name, dim in self._design_space.dimensions.items():
+            for param_name, param in self._design_space.parameters.items():
                 # Check if attribute is actually set in ONNX node (not just has a default)
-                if get_by_name(self.onnx_node.attribute, dim_name) is None:
-                    # Dimension not set - use default/minimum value
-                    if isinstance(dim, OrderedDimension):
-                        # OrderedDimension: use get_default() (explicit default or minimum)
-                        initial_value = dim.get_default()
+                if get_by_name(self.onnx_node.attribute, param_name) is None:
+                    # Parameter not set - use default/minimum value
+                    if isinstance(param, OrderedParameter):
+                        # OrderedParameter: use get_default() (explicit default or minimum)
+                        initial_value = param.get_default()
                     else:  # frozenset
                         # Discrete: use sorted first value
-                        initial_value = sorted(dim)[0]
+                        initial_value = sorted(param)[0]
 
-                    self.set_nodeattr(dim_name, initial_value)
+                    self.set_nodeattr(param_name, initial_value)
                     logger.debug(
-                        f"{self.onnx_node.name}: Auto-populated {dim_name}={initial_value}"
+                        f"{self.onnx_node.name}: Auto-populated {param_name}={initial_value}"
                     )
 
     def _ensure_initialized_for_execution(self, graph):
@@ -365,15 +365,15 @@ class KernelOp(HWCustomOp, ABC):
         # Delegate to existing lazy initialization
         self._ensure_ready(model_w)
 
-    def get_valid_ranges(self, model_w: ModelWrapper) -> Dict[str, Union[OrderedDimension, FrozenSet]]:
-        """Valid dimension values for DSE (tiling + resource).
+    def get_valid_ranges(self, model_w: ModelWrapper) -> Dict[str, Union['OrderedParameter', FrozenSet]]:
+        """Valid parameter values for DSE (tiling + resource).
 
         Returns:
-            Dict mapping dimension names to OrderedDimension (ordered sequences)
+            Dict mapping parameter names to OrderedParameter (ordered sequences)
             or frozenset (discrete categories).
         """
         self._ensure_ready(model_w)
-        return self.design_space.dimensions
+        return self.design_space.parameters
 
     def infer_node_datatype(self, model_w):
         """Sync datatypes: model → nodeattrs (inputs), nodeattrs → model (outputs).

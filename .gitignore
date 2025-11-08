@@ -5,6 +5,7 @@
 .brainsmith
 .envrc
 .python-version
+/brainsmith.yaml
 *.onnx
 
 # Brainsmith examples

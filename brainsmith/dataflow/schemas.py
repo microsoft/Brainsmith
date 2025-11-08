@@ -48,8 +48,8 @@ TilingSpec = Union[
 # ============================================================================
 
 @dataclass(frozen=True)
-class DSEDimension:
-    """Explorable dimension in design space.
+class ParameterSpec:
+    """Explorable parameter in design space.
 
     Represents resource allocation or implementation choices that can be
     explored during DSE (ram_style, res_type, mem_mode, etc.).
@@ -61,7 +61,7 @@ class DSEDimension:
 
     The container type determines how the dimension is treated during DSE:
 
-    - **list/tuple → OrderedDimension** (ordered sequences with navigation)
+    - **list/tuple → OrderedParameter** (ordered sequences with navigation)
         - Supports min/max access, step_up/step_down, percentage-based indexing
         - Values are sorted automatically
         - Examples: depth=[128, 256, 512], num_layers=[1, 2, 4, 8]
@@ -80,20 +80,20 @@ class DSEDimension:
         default: Default value (None = auto-select: min for ordered, first for discrete)
 
     Examples:
-        >>> # Ordered dimension (list/tuple → OrderedDimension with navigation)
-        >>> DSEDimension("depth", [128, 256, 512, 1024], default=256)
+        >>> # Ordered parameter (list/tuple → OrderedParameter with navigation)
+        >>> ParameterSpec("depth", [128, 256, 512, 1024], default=256)
         >>> # Enables: .with_min("depth"), .with_step_up("depth"), .sweep_percentage("depth", [...])
 
-        >>> # Discrete dimension (set/frozenset → frozenset, membership only)
-        >>> DSEDimension("ram_style", {"distributed", "block"}, default="distributed")
+        >>> # Discrete parameter (set/frozenset → frozenset, membership only)
+        >>> ParameterSpec("ram_style", {"distributed", "block"}, default="distributed")
         >>> # Enables: .sweep_dimension("ram_style") - iterates all values
 
         >>> # Auto-default (will use min for ordered, first for discrete)
-        >>> DSEDimension("num_layers", [1, 2, 4, 8])  # Uses min (1)
-        >>> DSEDimension("res_type", {"lut", "dsp"})  # Uses sorted first
+        >>> ParameterSpec("num_layers", [1, 2, 4, 8])  # Uses min (1)
+        >>> ParameterSpec("res_type", {"lut", "dsp"})  # Uses sorted first
 
     Note:
-        Tiling dimensions (PE, SIMD) are ALWAYS ordered (auto-wrapped in OrderedDimension)
+        Tiling dimensions (PE, SIMD) are ALWAYS ordered (auto-wrapped in OrderedParameter)
         since they're computed as divisors (naturally ordered sequences).
     """
     name: str
@@ -221,7 +221,7 @@ class KernelSchema:
         outputs: Output interface schemas
         internal_datatypes: Internal datatype derivation specs (e.g., accumulator)
         kernel_params: Kernel-specific parameters (e.g., epsilon, algorithm)
-        dse_dimensions: Explorable resource/implementation dimensions (e.g., ram_style)
+        dse_parameters: Explorable resource/implementation parameters (e.g., ram_style)
         constraints: Validation constraints (datatype, shape, ONNX requirements)
         attribute_mapping: Map ONNX attributes to kernel parameters
     """
@@ -235,14 +235,14 @@ class KernelSchema:
     internal_datatypes: Dict[str, Any] = field(default_factory=dict)  # DatatypeSpec union type
     kernel_params: Dict[str, tuple] = field(default_factory=dict)
 
-    # ============= DSE DIMENSIONS =============
-    dse_dimensions: Dict[str, DSEDimension] = field(default_factory=dict)
-    """Explorable resource/implementation dimensions (ram_style, res_type, etc.).
+    # ============= DSE PARAMETERS =============
+    dse_parameters: Dict[str, ParameterSpec] = field(default_factory=dict)
+    """Explorable resource/implementation parameters (ram_style, res_type, etc.).
 
-    Tiling dimensions (PE, SIMD) NOT declared here - auto-extracted from
+    Tiling parameters (PE, SIMD) NOT declared here - auto-extracted from
     stream_tiling templates with defaults computed from factoring.
 
-    Example: {"ram_style": DSEDimension("ram_style", {"distributed", "block"}, "distributed")}
+    Example: {"ram_style": ParameterSpec("ram_style", {"distributed", "block"}, "distributed")}
     """
 
     # ============= VALIDATION =============
@@ -303,12 +303,12 @@ class KernelSchema:
                     f"Available params: {list(self.kernel_params.keys())}"
                 )
 
-        # Validate dse_dimensions have unique names
-        for dim_name in self.dse_dimensions.keys():
-            if dim_name in self.kernel_params:
+        # Validate dse_parameters have unique names
+        for param_name in self.dse_parameters.keys():
+            if param_name in self.kernel_params:
                 raise ValueError(
-                    f"DSE dimension '{dim_name}' conflicts with kernel_param. "
-                    f"DSE dimensions must have unique names."
+                    f"DSE parameter '{param_name}' conflicts with kernel_param. "
+                    f"DSE parameters must have unique names."
                 )
 
     def build_nodeattr_registry(self) -> Dict[str, tuple]:
@@ -318,7 +318,7 @@ class KernelSchema:
         from structural schema, returning only attributes that need persistence:
         - Datatypes (for interfaces and internals)
         - Tiling parameters (SIMD, PE, etc.) - auto-extracted from stream_tiling
-        - DSE dimensions (ram_style, res_type, etc.) - from dse_dimensions
+        - DSE parameters (ram_style, res_type, etc.) - from dse_parameters
         - Kernel-specific parameters (epsilon, algorithm, etc.) - from kernel_params
 
         Shapes are NEVER stored in nodeattrs. They are either:
@@ -346,21 +346,21 @@ class KernelSchema:
         for param in template_params:
             attrs[param] = ("i", False, 1)  # Default 1, will be computed from factoring
 
-        # DSE dimensions (resource parameters)
-        for dim_name, dim_spec in self.dse_dimensions.items():
+        # DSE parameters (resource parameters)
+        for param_name, param_spec in self.dse_parameters.items():
             # Determine type from values
-            if callable(dim_spec.values):
+            if callable(param_spec.values):
                 # Callable - assume int for now (can't inspect without context)
-                attrs[dim_name] = ("i", False, dim_spec.default if dim_spec.default is not None else 1)
+                attrs[param_name] = ("i", False, param_spec.default if param_spec.default is not None else 1)
             else:
                 # Set - check first value type
-                first_val = next(iter(dim_spec.values))
+                first_val = next(iter(param_spec.values))
                 if isinstance(first_val, int):
-                    default = dim_spec.default if dim_spec.default is not None else min(dim_spec.values)
-                    attrs[dim_name] = ("i", False, default)
+                    default = param_spec.default if param_spec.default is not None else min(param_spec.values)
+                    attrs[param_name] = ("i", False, default)
                 else:
-                    default = dim_spec.default if dim_spec.default is not None else sorted(dim_spec.values)[0]
-                    attrs[dim_name] = ("s", False, default)
+                    default = param_spec.default if param_spec.default is not None else sorted(param_spec.values)[0]
+                    attrs[param_name] = ("s", False, default)
 
         # Kernel-specific parameters (structural)
         attrs.update(self.kernel_params)

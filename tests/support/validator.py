@@ -18,6 +18,10 @@ Design Philosophy:
 Usage:
     validator = GoldenValidator()
 
+Verbose Mode (show passing assertions):
+    Set environment variable BRAINSMITH_VERBOSE_TESTS=1 or use pytest option:
+    pytest -v -s --log-cli-level=INFO
+
     # In your test
     golden_outputs = compute_golden_reference(inputs)  # Test-defined
     actual_outputs = op.execute_node(...)
@@ -33,8 +37,13 @@ Usage:
 
 from typing import Dict, Optional
 import numpy as np
+import logging
+import os
 
 from tests.support.assertions import assert_arrays_close
+
+# Logger for verbose test output
+logger = logging.getLogger(__name__)
 
 
 class GoldenValidator:
@@ -150,6 +159,9 @@ class GoldenValidator:
                 f"Actual: {len(actual_list)} outputs {list(actual_outputs.keys())}"
             )
 
+        # Check if verbose mode is enabled
+        verbose = os.environ.get("BRAINSMITH_VERBOSE_TESTS", "0") == "1"
+
         # Compare by index (handles name mismatches)
         for i, ((actual_name, actual_array), (golden_name, golden_array)) in enumerate(
             zip(actual_list, golden_list)
@@ -162,6 +174,17 @@ class GoldenValidator:
                 rtol=rtol,
                 atol=atol,
             )
+
+            # Log successful comparison in verbose mode
+            if verbose:
+                logger.info(
+                    f"✓ {backend_name} output {i} ({actual_name}) PASSED validation\n"
+                    f"  Shape: {actual_array.shape}\n"
+                    f"  Golden range: [{golden_array.min():.6f}, {golden_array.max():.6f}]\n"
+                    f"  Actual range: [{actual_array.min():.6f}, {actual_array.max():.6f}]\n"
+                    f"  Max abs diff: {np.abs(actual_array - golden_array).max():.2e}\n"
+                    f"  Tolerance: rtol={rtol:.2e}, atol={atol:.2e}"
+                )
 
 
 # Convenience tolerance presets for common backends

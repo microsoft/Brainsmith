@@ -17,7 +17,6 @@ from finn.util.basic import CppBuilder
 from brainsmith.registry import backend
 
 @backend(
-    name="CropHLS",
     target_kernel="brainsmith:Crop",
     language="hls",
     author="Josh Monson"
@@ -139,6 +138,9 @@ class Crop_hls(Crop, HLSBackend):
         ]
 
     def execute_node(self, context, graph):
+        # Ensure design space initialized (QONNX creates fresh instances)
+        self._ensure_initialized_for_execution(graph)
+
         mode = self.get_nodeattr("exec_mode")
         node = self.onnx_node
         folded_ishape = self.get_folded_input_shape()

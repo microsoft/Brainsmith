@@ -97,9 +97,9 @@ def test_build_basic():
     assert output0.stream_tiling == ["SIMD"]  # Preserved, not resolved
 
     # Verify valid ranges computed
-    assert "SIMD" in design_space.dimensions
-    assert 64 in design_space.dimensions["SIMD"]
-    assert len(design_space.dimensions["SIMD"]) == 18  # divisors of 768
+    assert "SIMD" in design_space.parameters
+    assert 64 in design_space.parameters["SIMD"]
+    assert len(design_space.parameters["SIMD"]) == 18  # divisors of 768
 
 
 def test_build_multi_parameter():
@@ -138,10 +138,10 @@ def test_build_multi_parameter():
     design_space = builder.build(ctx)
 
     # Verify both parameters have valid ranges
-    assert "MW" in design_space.dimensions
-    assert "MH" in design_space.dimensions
-    assert len(design_space.dimensions["MW"]) == 18  # divisors of 768
-    assert len(design_space.dimensions["MH"]) == 7   # divisors of 64
+    assert "MW" in design_space.parameters
+    assert "MH" in design_space.parameters
+    assert len(design_space.parameters["MW"]) == 18  # divisors of 768
+    assert len(design_space.parameters["MH"]) == 7   # divisors of 64
 
 
 def test_build_no_stream_tiling():
@@ -172,7 +172,7 @@ def test_build_no_stream_tiling():
     design_space = builder.build(ctx)
 
     # No parallelization params
-    assert design_space.dimensions == {}
+    assert design_space.parameters == {}
     assert design_space.inputs["input0"].stream_tiling is None
 
 

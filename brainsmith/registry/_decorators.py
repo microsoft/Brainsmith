@@ -117,6 +117,11 @@ def _register_step(
     **kwargs  # Accept and ignore extra parameters (category, description, etc.) for backwards compat
 ) -> Union[Callable, Type]:
     """Register step in global component index."""
+    if 'source' in kwargs:
+        raise ValueError(
+            "'source' parameter not supported. Use source_context() or configure component_sources in brainsmith.yaml"
+        )
+
     source = _detect_source(func_or_class)
     name = name or getattr(func_or_class, 'name', None) or func_or_class.__name__
 
@@ -159,6 +164,11 @@ def _register_kernel(
     **kwargs  # Accept and ignore extra parameters (e.g., op_type, domain) for backwards compat
 ) -> Type:
     """Register kernel in global component index."""
+    if 'source' in kwargs:
+        raise ValueError(
+            "'source' parameter not supported. Use source_context() or configure component_sources in brainsmith.yaml"
+        )
+
     source = _detect_source(cls)
     name = name or getattr(cls, 'op_type', None) or cls.__name__
 
@@ -217,6 +227,11 @@ def _register_backend(
     **kwargs  # Accept and ignore extra parameters (e.g., author, description) for backwards compat
 ) -> Type:
     """Register backend in global component index."""
+    if 'source' in kwargs:
+        raise ValueError(
+            "'source' parameter not supported. Use source_context() or configure component_sources in brainsmith.yaml"
+        )
+
     source = _detect_source(cls)
     name = name or cls.__name__
 

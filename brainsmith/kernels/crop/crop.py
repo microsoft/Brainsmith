@@ -37,6 +37,8 @@ from qonnx.core.datatype import DataType
 from qonnx.util.basic import get_by_name
 
 from brainsmith.dataflow import KernelOp, FULL_DIM
+from brainsmith.dataflow.spec_helpers import derive_dim
+from brainsmith.dataflow.types import ShapeHierarchy
 import brainsmith.dataflow as df
 from brainsmith.registry import kernel
 
@@ -176,7 +178,7 @@ CROP_SCHEMA = df.KernelSchema(
                 _compute_output_width,       # Cropped width
                 FULL_DIM,                    # C dimension (unchanged)
             ],
-            stream_tiling=[1, 1, 1, ("input", -1)],  # Match input SIMD
+            stream_tiling=[1, 1, 1, derive_dim("input", ShapeHierarchy.STREAM, -1)],  # Match input SIMD
             datatype="input",  # Pass-through datatype
             required_layout="NHWC",
         )
@@ -209,7 +211,7 @@ CROP_SCHEMA = df.KernelSchema(
         df.DimensionDivisible("input", -1, "SIMD", hierarchy=df.ShapeHierarchy.STREAM),
 
         # Custom crop bounds validation
-        df.Custom(_validate_crop_bounds, "Crop bounds must be within input dimensions"),
+        df.CustomConstraint(_validate_crop_bounds, "Crop bounds must be within input dimensions"),
     ],
 
     # ========== TRANSFORMATION ==========

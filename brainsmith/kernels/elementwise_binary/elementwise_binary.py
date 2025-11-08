@@ -33,8 +33,9 @@ from brainsmith.dataflow import KernelOp, FULL_DIM
 from brainsmith.dataflow.types import VALUE_OPTIMIZED
 from brainsmith.dataflow.transformation import TransformationResult
 from brainsmith.dataflow.spec_helpers import (
-    add_datatype, sub_datatype, smallest_datatype_for_range
+    add_datatype, sub_datatype, smallest_datatype_for_range, derive_dim
 )
+from brainsmith.dataflow.types import ShapeHierarchy
 import brainsmith.dataflow as df
 from brainsmith.registry import kernel
 from .operations import BinaryOperations
@@ -246,7 +247,7 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
         df.OutputSchema(
             name="output",
             block_tiling=[FULL_DIM],                      # Full tensor
-            stream_tiling=[("lhs", -1)],                  # Match LHS PE
+            stream_tiling=[derive_dim("lhs", ShapeHierarchy.STREAM, -1)],  # Match LHS PE
             datatype=_elementwise_binary_output_datatype(),  # Polymorphic dispatch
             required_layout=None,
         )
@@ -271,16 +272,16 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
         ),
     },
 
-    # DSE DIMENSIONS (explorable resource parameters)
-    dse_dimensions={
+    # DSE PARAMETERS (explorable resource parameters)
+    dse_parameters={
         # RAM style for parameter storage (HLS-specific, only for static inputs)
-        "ram_style": df.DSEDimension(
+        "ram_style": df.ParameterSpec(
             name="ram_style",
             values={"auto", "distributed", "block", "ultra"},
             default="auto"
         ),
         # Memory mode for constant parameters
-        "mem_mode": df.DSEDimension(
+        "mem_mode": df.ParameterSpec(
             name="mem_mode",
             values={"internal_embedded", "internal_decoupled"},
             default="internal_embedded"

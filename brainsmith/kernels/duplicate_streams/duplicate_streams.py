@@ -17,6 +17,8 @@ from qonnx.core.modelwrapper import ModelWrapper
 
 import brainsmith.dataflow as df
 from brainsmith.dataflow import KernelOp, FULL_DIM
+from brainsmith.dataflow.spec_helpers import derive_dim
+from brainsmith.dataflow.types import ShapeHierarchy
 from brainsmith.registry import kernel
 
 
@@ -90,7 +92,7 @@ class DuplicateStreams(KernelOp):
             df.OutputSchema(
                 name=f"output{i}",
                 block_tiling=[FULL_DIM],          # Same as input
-                stream_tiling=[("input", -1)],    # Match input PE
+                stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],    # Match input PE
                 datatype="input",                  # Passthrough datatype
             )
             for i in range(num_outputs)

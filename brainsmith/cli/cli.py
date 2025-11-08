@@ -60,6 +60,10 @@ class LazyGroup(click.Group):
         return sorted(lazy_names | manual_names)
 
     def get_command(self, ctx, name):
+        # Typo alias for *someone* ;)
+        if name == "regsitry":
+            name = "registry"
+
         if name in self.lazy_commands:
             from importlib import import_module
             module_path, attr_name = self.lazy_commands[name]

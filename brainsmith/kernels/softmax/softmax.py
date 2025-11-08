@@ -9,6 +9,8 @@ from typing import Optional
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import get_by_name
 from brainsmith.dataflow import KernelOp, constant_datatype
+from brainsmith.dataflow.spec_helpers import derive_dim
+from brainsmith.dataflow.types import ShapeHierarchy
 import brainsmith.dataflow as df
 from brainsmith.dataflow import FULL_DIM
 from brainsmith.registry import kernel
@@ -28,7 +30,7 @@ SOFTMAX_SCHEMA = df.KernelSchema(
         df.OutputSchema(
             name="output",
             block_tiling=[FULL_DIM],           # Same as input: (1, 1, channels)
-            stream_tiling=[("input", -1)],     # Output streams at same rate as input
+            stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],     # Output streams at same rate as input
             datatype=constant_datatype("FLOAT32"),  # Always FLOAT32 (integer inputs upcast in HLS)
         )
     ],

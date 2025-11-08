@@ -103,19 +103,16 @@ from .constraints import (
     CustomConstraint,
 )
 
-# Backwards compatibility alias
-Custom = CustomConstraint
-
 # Core architecture - unified schemas
 from .schemas import (
-    DSEDimension,
+    ParameterSpec,
     InputSchema,
     OutputSchema,
     KernelSchema,
 )
 
 # DSE navigation
-from .ordered_dimension import OrderedDimension
+from .ordered_parameter import OrderedParameter
 
 # Immutable models (design space exploration)
 from .dse_models import (
@@ -156,6 +153,7 @@ __all__ = [
     'KernelSchema',
     'InputSchema',
     'OutputSchema',
+    'ParameterSpec',
 
     # Builder (for DSE and kernel construction)
     'DesignSpaceBuilder',
@@ -166,7 +164,7 @@ __all__ = [
     'KernelDesignPoint',
     'InterfaceDesignSpace',
     'InterfaceDesignPoint',
-    'OrderedDimension',  # For ordered dimension navigation
+    'OrderedParameter',  # For ordered parameter navigation
 
     # Validation
     'Constraint',

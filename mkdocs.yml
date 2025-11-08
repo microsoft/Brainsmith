@@ -1,7 +1,9 @@
 site_name: Brainsmith
 site_description: From PyTorch to RTL - FPGA Accelerator Compiler for AI
 site_author: Microsoft
-site_url: https://microsoft.github.io/brainsmith/
+# TEMPORARY: Set to root for VS Code port forwarding during dev
+# site_url: https://microsoft.github.io/brainsmith/
+site_url: http://127.0.0.1:8000/
 
 repo_name: microsoft/brainsmith
 repo_url: https://github.com/microsoft/brainsmith
@@ -45,6 +47,7 @@ use_directory_urls: true
 # Exclude files from build
 exclude_docs: |
   kernels/_template.md
+  api/_template.md
 
 plugins:
   - search
@@ -57,6 +60,7 @@ plugins:
             show_root_heading: true
             show_root_full_path: false
             show_signature_annotations: true
+            separate_signature: true
             merge_init_into_class: true
             heading_level: 2
   - git-revision-date-localized:
@@ -100,58 +104,13 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Overview: getting-started/index.md
-    - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quickstart.md
-    - Configuration: getting-started/configuration.md
-  - Developer Guide:
-    - Overview: developer-guide/index.md
-    - 1. Foundations:
-      - Understanding Kernels: developer-guide/1-foundations/understanding-kernels.md
-      - Dataflow Accelerators: developer-guide/1-foundations/dataflow-accelerators.md
-    - 2. Core Systems:
-      - Design Space Exploration: developer-guide/2-core-systems/design-space-exploration.md
-      - Kernel Modeling: developer-guide/2-core-systems/kernel-modeling.md
-      - Component Registry: developer-guide/2-core-systems/component-registry.md
-    - Kernel Op Developer Guide:
-      - Overview: developer-guide/kernel_ops/README.md
-      - 1. Introduction: developer-guide/kernel_ops/01_introduction.md
-      - 2. Fundamental Concepts: developer-guide/kernel_ops/02_fundamental_concepts.md
-      - 3. Building Your First Kernel: developer-guide/kernel_ops/03_building_your_first_kernel.md
-      - 4. Schema Design: developer-guide/kernel_ops/04_schema_design.md
-      - 5. Design Space Exploration: developer-guide/kernel_ops/05_design_space_exploration.md
-      - 6. Advanced Topics: developer-guide/kernel_ops/06_advanced_topics.md
-      - 7. Best Practices: developer-guide/kernel_ops/07_best_practices.md
-    - 3. Reference:
-      - Kernel Architecture: developer-guide/3-reference/kernels.md
-      - Blueprints: developer-guide/3-reference/blueprints.md
-      - CLI Reference: developer-guide/3-reference/cli.md
-  - Tutorials:
-    - Overview: tutorials/index.md
-  - Kernel Reference:
-    - Overview: kernels/index.md
-    - Core Kernels:
-      - AddStreams:
-        - Specification: kernels/addstreams.md
-        - HLS Backend: kernels/addstreams-hls.md
-      - Crop: kernels/crop.md
-      - DuplicateStreams: kernels/duplicate_streams.md
-      - ElementwiseBinary: kernels/elementwise_binary.md
-      - LayerNorm: kernels/layernorm.md
-      - Softmax: kernels/softmax.md
-    - FINN Legacy:
-      - ChannelwiseOp: kernels/channelwise.md
-      - Thresholding: kernels/thresholding.md
-    - Experimental:
-      - RotaryEmbedding: kernels/rotaryembedding.md
-      - Shuffle: kernels/shuffle.md
+  - Getting Started: getting-started.md
+  - Tutorials (Coming Soon): tutorials/index.md
   - API Reference:
     - Overview: api/index.md
     - Design Space Exploration: api/dse.md
     - Component Registry: api/registry.md
     - Dataflow Modeling: api/dataflow.md
-    - Kernel Base Class: api/kernel_op.md
     - Settings: api/settings.md
 
 extra_css:

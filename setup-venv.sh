@@ -223,19 +223,19 @@ else
 fi
 
 # Step 4.5: Initialize default project config if needed
-if [ ! -f ".brainsmith/config.yaml" ]; then
+if [ ! -f "brainsmith.yaml" ]; then
     echo ""
-    echo "No config found at .brainsmith/config.yaml, generating default"
+    echo "No config found at brainsmith.yaml, generating default"
     poetry run brainsmith project init
     if [ $? -eq 0 ]; then
         echo -e "\033[32m✓\033[0m Default config created in .brainsmith/"
-        echo "   Edit .brainsmith/config.yaml to set your Xilinx paths"
+        echo "   Edit brainsmith.yaml to set your Xilinx paths"
     else
         echo "⚠️  Could not create default config (non-fatal)"
     fi
 else
     echo ""
-    echo -e "\033[32m✓\033[0m Using existing .brainsmith/config.yaml"
+    echo -e "\033[32m✓\033[0m Using existing brainsmith.yaml"
 fi
 
 # Step 5.5: Activate environment and optionally configure direnv

@@ -8,6 +8,8 @@ from typing import Optional
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import get_by_name
 from brainsmith.dataflow import KernelOp, FULL_DIM
+from brainsmith.dataflow.spec_helpers import derive_dim
+from brainsmith.dataflow.types import ShapeHierarchy
 import brainsmith.dataflow as df
 from brainsmith.registry import kernel
 
@@ -31,7 +33,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
         df.OutputSchema(
             name="output",
             block_tiling=[FULL_DIM],         # (1, 1, channels)
-            stream_tiling=[("input", -1)],   # Output streams at same rate as input
+            stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],   # Output streams at same rate as input
             datatype=df.constant_datatype("FLOAT32"),                # Output datatype same as input
             required_layout="NHWC",          # Hardware produces NHWC layout
         )

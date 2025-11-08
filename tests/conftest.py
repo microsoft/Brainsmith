@@ -172,7 +172,7 @@ def test_seed(request):
             inputs = make_execution_context(..., seed=test_seed)
 
     Usage in test frameworks:
-        class TestMyKernel(SingleKernelTest):
+        class TestMyKernel(KernelTest):
             def get_test_seed(self):
                 # Override to customize seed
                 return 99
@@ -204,7 +204,7 @@ def isolated_env(tmp_path, monkeypatch):
     Creates:
     - tmp_path/test_project/.brainsmith/
     - tmp_path/test_project/plugins/
-    - Real config.yaml
+    - Real brainsmith.yaml
     - BSMITH_PROJECT_DIR env var
 
     No mocking. Real settings system. Real component discovery.
@@ -223,7 +223,7 @@ def isolated_env(tmp_path, monkeypatch):
     plugins_dir.mkdir()
 
     # Write real config file
-    config_file = brainsmith_dir / "config.yaml"
+    config_file = project_dir / "brainsmith.yaml"
     config_file.write_text("""
 cache_components: true
 component_sources: {}
@@ -249,7 +249,7 @@ def empty_env(tmp_path, monkeypatch):
 
     Creates:
     - tmp_path/test_project/.brainsmith/
-    - Real config.yaml (no component sources)
+    - Real brainsmith.yaml (no component sources)
     - BSMITH_PROJECT_DIR env var
 
     No mocking. For tests that only need core brainsmith components.
@@ -263,7 +263,7 @@ def empty_env(tmp_path, monkeypatch):
     brainsmith_dir.mkdir()
 
     # Empty config - no component sources
-    config_file = brainsmith_dir / "config.yaml"
+    config_file = project_dir / "brainsmith.yaml"
     config_file.write_text("""
 cache_components: false
 component_sources: {}
@@ -295,8 +295,8 @@ def setup_parity_imports():
     - test_fixtures.py (make_execution_context)
 
     New framework usage:
-        from tests.frameworks.single_kernel_test import SingleKernelTest
-        from tests.frameworks.dual_kernel_test import DualKernelTest
+        from tests.frameworks.kernel_test import KernelTest
+        from tests.frameworks.kernel_parity_test import KernelParityTest
 
     This eliminates brittle sys.path manipulation in individual test files.
     """

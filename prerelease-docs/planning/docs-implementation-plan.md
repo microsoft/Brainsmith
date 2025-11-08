@@ -311,11 +311,11 @@ poetry shell
 brainsmith config init
 ```
 
-This creates `~/.brainsmith/config.yaml`.
+This creates `~/brainsmith.yaml`.
 
 ### Edit Configuration
 
-Edit `~/.brainsmith/config.yaml` to set your Xilinx paths:
+Edit `~/brainsmith.yaml` to set your Xilinx paths:
 
 ```yaml
 xilinx_path: /opt/Xilinx/Vivado/2024.2
@@ -605,8 +605,8 @@ graph LR
 
 1. CLI arguments / environment vars (highest)
 2. Explicit `--config` file
-3. Project config (`./brainsmith_config.yaml` or `./.brainsmith/config.yaml`)
-4. User config (`~/.brainsmith/config.yaml`)
+3. Project config (`./brainsmith_config.yaml` or `./brainsmith.yaml`)
+4. User config (`~/brainsmith.yaml`)
 5. Built-in defaults (lowest)
 
 **Location:** `brainsmith/config/`
@@ -831,7 +831,7 @@ We welcome contributions! This guide will help you get started.
 4. Configure Vivado paths:
    ```bash
    brainsmith config init
-   # Edit ~/.brainsmith/config.yaml
+   # Edit ~/brainsmith.yaml
    ```
 
 ## Running Tests

@@ -88,7 +88,6 @@ DTYPES_MIXED_WIDTH = {"lhs": DataType["INT8"], "rhs": DataType["INT16"]}
 
 # Use v5.0 PlatformConfig structure
 PLATFORM_ZYNQ7020 = PlatformConfig(fpgapart="xc7z020clg400-1")
-PLATFORM_SOFTWARE_ONLY = PlatformConfig()  # No fpgapart = software-only (no cppsim)
 
 # ============================================================================
 # Constants: Design Parameters
@@ -232,7 +231,7 @@ VALIDATION_CASES_BASE = [
     ("int8_4x128_pe8_ram_distributed", SHAPE_2D_4x128, DTYPES_INT8, DESIGN_PE8_RAM_DISTRIBUTED, PLATFORM_ZYNQ7020),
     ("int8_4x128_pe8_ram_block", SHAPE_2D_4x128, DTYPES_INT8, DESIGN_PE8_RAM_BLOCK, PLATFORM_ZYNQ7020),
     # ========================================================================
-    # Broadcasting Cases (Software-Only - Not Backend-Ready Yet)
+    # Broadcasting Cases (Python-Only - Backend Not Supported Yet)
     # ========================================================================
     # All 5 broadcasting patterns tested with INT8
     (
@@ -240,51 +239,51 @@ VALIDATION_CASES_BASE = [
         SHAPE_BROADCAST_CHANNEL,
         DTYPES_INT8,
         DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
+        PLATFORM_ZYNQ7020,
     ),
     (
         "int8_scalar_broadcast",
         SHAPE_BROADCAST_SCALAR,
         DTYPES_INT8,
         DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
+        PLATFORM_ZYNQ7020,
     ),
     (
         "int8_spatial_broadcast",
         SHAPE_BROADCAST_SPATIAL,
         DTYPES_INT8,
         DESIGN_PE8,
-        PLATFORM_SOFTWARE_ONLY,
+        PLATFORM_ZYNQ7020,
     ),
     (
         "int8_bidirectional_broadcast",
         SHAPE_BROADCAST_BIDIR,
         DTYPES_INT8,
         DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
+        PLATFORM_ZYNQ7020,
     ),
     (
         "int8_rank_mismatch",
         SHAPE_BROADCAST_RANK,
         DTYPES_INT8,
         DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
+        PLATFORM_ZYNQ7020,
     ),
     # ========================================================================
-    # Mixed DataType Cases (Software-Only - HLS Doesn't Support)
+    # Mixed DataType Cases (Python-Only - HLS Doesn't Support)
     # ========================================================================
     (
         "mixed_sign",
         SHAPE_2D_1x64,
         DTYPES_MIXED_SIGN,
         DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
+        PLATFORM_ZYNQ7020,
     ),
     (
         "mixed_width",
         SHAPE_2D_1x64,
         DTYPES_MIXED_WIDTH,
         DESIGN_BASELINE,
-        PLATFORM_SOFTWARE_ONLY,
+        PLATFORM_ZYNQ7020,
     ),
 ]

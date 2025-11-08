@@ -107,28 +107,37 @@ class DSETreeBuilder:
         # Fully qualify all names to source:name format for registry lookups
         kernel_selections = []
         for kernel_name, backend_classes in space.kernel_backends:
-            if not backend_classes:
-                continue
-
-            # Get fully qualified kernel name from first backend's target_kernel
-            # All backends for a kernel should target the same kernel
-            first_backend = backend_classes[0]
-            if hasattr(first_backend, '__registry_name__'):
-                from brainsmith.registry import get_component_metadata
-                backend_meta = get_component_metadata(first_backend.__registry_name__, 'backend')
-                qualified_kernel_name = backend_meta.backend_target
-            else:
-                # Fallback: assume kernel_name is already qualified or use as-is
-                qualified_kernel_name = kernel_name if ':' in kernel_name else f"brainsmith:{kernel_name}"
-
-            # Convert backend classes to fully qualified names
-            backend_names = []
-            for backend_class in backend_classes:
-                if hasattr(backend_class, '__registry_name__'):
-                    backend_names.append(backend_class.__registry_name__)
+            # Allow kernels without backends - they may be handled by custom transforms
+            # or will error during codegen if not properly handled
+            if backend_classes:
+                # Get fully qualified kernel name from first backend's target_kernel
+                # All backends for a kernel should target the same kernel
+                first_backend = backend_classes[0]
+                if hasattr(first_backend, '__registry_name__'):
+                    from brainsmith.registry import get_component_metadata
+                    backend_meta = get_component_metadata(first_backend.__registry_name__, 'backend')
+                    qualified_kernel_name = backend_meta.backend_target
                 else:
-                    # Fallback: use class name (not ideal but better than failing)
-                    backend_names.append(backend_class.__name__)
+                    # Fallback: assume kernel_name is already qualified or use as-is
+                    qualified_kernel_name = kernel_name if ':' in kernel_name else f"brainsmith:{kernel_name}"
+
+                # Convert backend classes to fully qualified names
+                backend_names = []
+                for backend_class in backend_classes:
+                    if hasattr(backend_class, '__registry_name__'):
+                        backend_names.append(backend_class.__registry_name__)
+                    else:
+                        # Fallback: use class name (not ideal but better than failing)
+                        backend_names.append(backend_class.__name__)
+            else:
+                # No backends - resolve kernel name through registry
+                from brainsmith.registry import get_kernel
+                kernel_class = get_kernel(kernel_name)
+                if hasattr(kernel_class, '__registry_name__'):
+                    qualified_kernel_name = kernel_class.__registry_name__
+                else:
+                    qualified_kernel_name = kernel_name if ':' in kernel_name else f"brainsmith:{kernel_name}"
+                backend_names = []
 
             kernel_selections.append((qualified_kernel_name, backend_names))
 

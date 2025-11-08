@@ -25,6 +25,13 @@ from .normalize_dataflow_layouts import NormalizeDataflowLayouts
 from .insert_duplicate_streams import InsertDuplicateStreams
 from .insert_infrastructure_kernels import InsertInfrastructureKernels
 from .refresh_design_points import RefreshKernelDesignPoints
+from .parallelization import (
+    ApplyParallelizationConfig,
+    SetParallelization,
+    get_node_interface,
+    set_parallelization,
+    get_parallelization,
+)
 
 __all__ = [
     "ExpandNorms",
@@ -39,4 +46,9 @@ __all__ = [
     "InsertDuplicateStreams",
     "InsertInfrastructureKernels",
     "RefreshKernelDesignPoints",
+    "ApplyParallelizationConfig",
+    "SetParallelization",
+    "get_node_interface",
+    "set_parallelization",
+    "get_parallelization",
 ]

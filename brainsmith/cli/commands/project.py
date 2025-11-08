@@ -53,7 +53,7 @@ def project():
     """\b
     Manage Brainsmith projects and configuration.
 
-    Each project has a .brainsmith/config.yaml file that configures:
+    Each project has a brainsmith.yaml file at the root that configures:
     - Build directories and Xilinx tool paths
     - Component sources and priorities
     - Environment variables for tools
@@ -91,8 +91,8 @@ def info(ctx: ApplicationContext, finn: bool) -> None:
 def init(path: str, force: bool) -> None:
     """Initialize a Brainsmith project with configuration and environment scripts.
 
-    Creates .brainsmith/config.yaml and generates environment activation scripts
-    (env.sh, .envrc).
+    Creates brainsmith.yaml at project root and generates environment activation
+    scripts (env.sh, .envrc) in .brainsmith/.
 
     PATH defaults to current directory. If PATH doesn't exist, it will be created.
 
@@ -116,15 +116,15 @@ def init(path: str, force: bool) -> None:
             project_path.mkdir(parents=True, exist_ok=True)
             console.print(f"[dim]Created directory: {project_path}[/dim]")
 
-        # 2. Ensure .brainsmith/ exists
+        # 2. Ensure .brainsmith/ exists (for generated files)
         brainsmith_dir = project_path / ".brainsmith"
         brainsmith_dir.mkdir(parents=True, exist_ok=True)
 
-        # 3. Create config.yaml (unless exists and not force)
-        config_path = brainsmith_dir / "config.yaml"
+        # 3. Create brainsmith.yaml at project root (unless exists and not force)
+        config_path = project_path / "brainsmith.yaml"
         if config_path.exists() and not force:
             console.print(f"[yellow]Config already exists: {config_path}[/yellow]")
-            console.print("[yellow]Skipping config.yaml (use --force to overwrite)[/yellow]")
+            console.print("[yellow]Skipping brainsmith.yaml (use --force to overwrite)[/yellow]")
             console.print()
         else:
             # Generate and write config
@@ -221,7 +221,7 @@ def allow_direnv(ctx: ApplicationContext) -> None:
             pass
 
     # Ensure project is initialized
-    config_path = Path.cwd() / ".brainsmith" / "config.yaml"
+    config_path = Path.cwd() / "brainsmith.yaml"
     if not config_path.exists():
         raise ConfigurationError(
             f"No project found in {Path.cwd()}\n\n"

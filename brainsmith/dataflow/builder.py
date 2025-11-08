@@ -33,7 +33,7 @@ from qonnx.core.datatype import BaseDataType
 from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith._internal.math import divisors
-from .ordered_dimension import OrderedDimension
+from .ordered_parameter import OrderedParameter
 from .schemas import KernelSchema
 from .template_resolution import resolve_template, normalize_template
 from .types import VALUE_OPTIMIZED, ShapeHierarchy
@@ -321,84 +321,62 @@ class DesignSpaceBuilder:
             outputs=outputs,
             internal_datatypes=internal_datatypes,
             optimization_constraints=optimization_constraints,
-            dimensions=all_dimensions,
+            parameters=all_dimensions,
         )
 
         logger.debug(f"KernelDesignSpace built successfully for {ctx.node_name}")
         return design_space
 
-    def _resolve_output_datatype(self, schema: Any, out_name: str) -> BaseDataType:
-        """Resolve output datatype from schema or graph.
+    def _resolve_datatype(
+        self,
+        spec: Any,
+        tensor_name: str,
+        direction: str,
+        schema_name: Optional[str] = None
+    ) -> BaseDataType:
+        """Unified datatype resolution for inputs, outputs, and internal datatypes.
 
-        Supports DatatypeSpec union type:
+        Consolidates logic from _resolve_input_datatype() and _resolve_output_datatype().
+        Supports all DatatypeSpec union variants:
         - None: Use ONNX graph datatype (pass-through)
-        - BaseDataType: Fixed datatype
-        - str: Shorthand for derive_datatype(interface)
+        - BaseDataType: Fixed datatype from schema
+        - str: Shorthand for derive_datatype(interface_name)
         - VALUE_OPTIMIZED: Optimize from tensor values
         - Callable: Custom datatype function
 
         Args:
-            schema: OutputSchema
-            out_name: ONNX output tensor name
+            spec: DatatypeSpec from schema (schema.datatype)
+            tensor_name: ONNX tensor name
+            direction: "input", "output", or "internal" (for logging)
+            schema_name: Schema interface name (for logging)
 
         Returns:
-            Resolved DataType
+            Resolved BaseDataType
 
         Raises:
             ValueError: If datatype resolution fails
         """
-        graph_dt = self._ctx.model_w.get_tensor_datatype(out_name)
+        graph_dt = self._ctx.model_w.get_tensor_datatype(tensor_name)
 
         # Use unified DatatypeSpec resolver
         derived_dt = self._resolve_datatype_spec(
-            spec=schema.datatype,
-            tensor_name=out_name,
+            spec=spec,
+            tensor_name=tensor_name,
             fallback_datatype=graph_dt  # Use graph datatype if spec is None
         )
 
-        # Log if schema overrides graph
-        if schema.datatype is not None and derived_dt != graph_dt:
-            logger.info(
-                f"Output '{schema.name}' datatype: schema derived {derived_dt.name}, "
-                f"graph has {graph_dt.name} - using schema"
-            )
-
-        return derived_dt
-
-    def _resolve_input_datatype(self, schema: Any, inp_name: str) -> BaseDataType:
-        """Resolve input datatype from schema or graph.
-
-        Supports DatatypeSpec union type:
-        - None: Use ONNX graph datatype (default)
-        - BaseDataType: Fixed datatype
-        - str: Shorthand for derive_datatype(interface)
-        - VALUE_OPTIMIZED: Optimize from tensor values
-        - Callable: Custom datatype function
-
-        Args:
-            schema: InputSchema
-            inp_name: ONNX input tensor name
-
-        Returns:
-            Resolved DataType
-
-        Raises:
-            ValueError: If datatype resolution fails
-        """
-        graph_dt = self._ctx.model_w.get_tensor_datatype(inp_name)
-
-        # Use unified DatatypeSpec resolver
-        derived_dt = self._resolve_datatype_spec(
-            spec=schema.datatype,
-            tensor_name=inp_name,
-            fallback_datatype=graph_dt  # Use graph datatype if spec is None
-        )
-
-        # Log if schema optimizes graph datatype
-        if schema.datatype is not None and derived_dt != graph_dt:
-            logger.info(
-                f"Input '{schema.name}': schema optimized {graph_dt.name} → {derived_dt.name}"
-            )
+        # Log if schema overrides graph datatype
+        if spec is not None and derived_dt != graph_dt:
+            name_str = f"'{schema_name}'" if schema_name else f"'{tensor_name}'"
+            if direction == "input":
+                logger.info(
+                    f"Input {name_str}: schema optimized {graph_dt.name} → {derived_dt.name}"
+                )
+            elif direction == "output":
+                logger.info(
+                    f"Output {name_str} datatype: schema derived {derived_dt.name}, "
+                    f"graph has {graph_dt.name} - using schema"
+                )
 
         return derived_dt
 
@@ -428,10 +406,12 @@ class DesignSpaceBuilder:
         ctx = self._ctx
 
         # Resolve datatype (both inputs and outputs can derive)
-        if direction == 'input':
-            datatype = self._resolve_input_datatype(schema, tensor_name)
-        else:  # output
-            datatype = self._resolve_output_datatype(schema, tensor_name)
+        datatype = self._resolve_datatype(
+            spec=schema.datatype,
+            tensor_name=tensor_name,
+            direction=direction,
+            schema_name=schema.name
+        )
 
         # Store datatype to nodeattrs for FINN
         ctx.param_setter(f"{direction}{index}Datatype", datatype.name)
@@ -447,8 +427,7 @@ class DesignSpaceBuilder:
                 ctx.param_getter,
                 self._interfaces,
                 ctx.model_w,
-                tensor_name,
-                hierarchy=ShapeHierarchy.BLOCK  # Explicit: tuple shorthand uses BLOCK hierarchy
+                tensor_name  # Resolves at BLOCK hierarchy level
             )
         except ValueError as e:
             raise ValueError(
@@ -495,20 +474,6 @@ class DesignSpaceBuilder:
     # Helper Methods for Two-Phase Construction
     # =========================================================================
 
-    def _divisors(self, n: int) -> Set[int]:
-        """Compute all divisors of a positive integer (wrapper for testing).
-
-        Args:
-            n: Positive integer
-
-        Returns:
-            Set of all divisors of n
-
-        Raises:
-            ValueError: If n is non-positive
-        """
-        return divisors(n)
-
     def _extract_stream_params(self, stream_tiling: Optional[Any]) -> List[str]:
         """Extract string parameters from stream_tiling template.
 
@@ -543,7 +508,7 @@ class DesignSpaceBuilder:
     def _link_parallelism_metadata(
         self,
         interfaces: Dict[str, Any],  # InterfaceDesignSpace
-        dimensions: Dict[str, Union[OrderedDimension, FrozenSet]]
+        dimensions: Dict[str, Union[OrderedParameter, FrozenSet]]
     ) -> Dict[str, Any]:  # InterfaceDesignSpace
         """Link parallelism dimensions to interfaces.
 
@@ -555,7 +520,7 @@ class DesignSpaceBuilder:
 
         Args:
             interfaces: Dict of InterfaceDesignSpace instances
-            dimensions: Dict of OrderedDimension/frozenset from kernel
+            dimensions: Dict of OrderedParameter/frozenset from kernel
 
         Returns:
             Dict of InterfaceDesignSpace with parallelism metadata linked
@@ -563,7 +528,7 @@ class DesignSpaceBuilder:
         Raises:
             NotImplementedError: If interface has multiple stream params
             ValueError: If param not found in dimensions
-            TypeError: If param is discrete (not OrderedDimension)
+            TypeError: If param is discrete (not OrderedParameter)
         """
         import dataclasses
 
@@ -587,11 +552,11 @@ class DesignSpaceBuilder:
                         f"not found in dimensions dict. Available: {list(dimensions.keys())}"
                     )
 
-                # Validate it's an OrderedDimension (not discrete)
-                if not isinstance(dim, OrderedDimension):
+                # Validate it's an OrderedParameter (not discrete)
+                if not isinstance(dim, OrderedParameter):
                     raise TypeError(
                         f"Interface '{name}' stream param '{param}' is discrete (frozenset), not ordered. "
-                        f"Stream parallelism must be OrderedDimension (tiling params are always ordered)."
+                        f"Stream parallelism must be OrderedParameter (tiling params are always ordered)."
                     )
 
                 # Create new interface with metadata (shared reference to same object!)
@@ -620,12 +585,12 @@ class DesignSpaceBuilder:
         inputs: Dict[str, InterfaceDesignSpace],
         outputs: Dict[str, InterfaceDesignSpace],
         schema: 'KernelSchema',
-    ) -> Dict[str, Union[OrderedDimension, FrozenSet]]:
+    ) -> Dict[str, Union[OrderedParameter, FrozenSet]]:
         """Compute valid values for all explorable dimensions (tiling + DSE).
 
         Combines:
-        1. Tiling dimensions (PE, SIMD) - computed as divisors, wrapped in OrderedDimension
-        2. DSE dimensions - from schema.dse_dimensions, auto-detected as ordered or discrete
+        1. Tiling dimensions (PE, SIMD) - computed as divisors, wrapped in OrderedParameter
+        2. DSE dimensions - from schema.dse_parameters, auto-detected as ordered or discrete
 
         Tiling dimension logic:
         - A tiling parameter is any string appearing in stream_tiling
@@ -633,34 +598,34 @@ class DesignSpaceBuilder:
         - For multi-dimensional cases, if a parameter appears in multiple
           dimensions or interfaces, valid values are divisors of GCD of all
           block dimensions where the parameter appears
-        - Always wrapped in OrderedDimension (ordered sequences)
+        - Always wrapped in OrderedParameter (ordered sequences)
 
         DSE dimension auto-detection:
-        - list/tuple → OrderedDimension (ordered sequences with navigation)
+        - list/tuple → OrderedParameter (ordered sequences with navigation)
         - set/frozenset → frozenset (discrete categories)
 
         Example (tiling):
             stream_tiling=["SIMD"], block_shape=(768,)
             → SIMD must divide 768
-            → OrderedDimension("SIMD", (1, 2, 3, 4, 6, 8, 12, 16, ..., 768))
+            → OrderedParameter("SIMD", (1, 2, 3, 4, 6, 8, 12, 16, ..., 768))
 
         Example (ordered DSE):
-            dse_dimensions={"depth": DSEDimension("depth", [128, 256, 512, 1024])}
-            → OrderedDimension("depth", (128, 256, 512, 1024))
+            dse_parameters={"depth": ParameterSpec("depth", [128, 256, 512, 1024])}
+            → OrderedParameter("depth", (128, 256, 512, 1024))
 
         Example (discrete DSE):
-            dse_dimensions={"ram_style": DSEDimension("ram_style", {"distributed", "block"})}
+            dse_parameters={"ram_style": ParameterSpec("ram_style", {"distributed", "block"})}
             → frozenset({"distributed", "block"})
 
         Args:
             inputs: Input interfaces with resolved block shapes (dict or list)
             outputs: Output interfaces with resolved block shapes (dict or list)
-            schema: KernelSchema containing dse_dimensions
+            schema: KernelSchema containing dse_parameters
 
         Returns:
-            Dict mapping dimension name to OrderedDimension or frozenset
+            Dict mapping dimension name to OrderedParameter or frozenset
             Example: {
-                "SIMD": OrderedDimension("SIMD", (1, 2, 3, 4, 6, 8)),
+                "SIMD": OrderedParameter("SIMD", (1, 2, 3, 4, 6, 8)),
                 "ram_style": frozenset({"distributed", "block"})
             }
 
@@ -693,12 +658,12 @@ class DesignSpaceBuilder:
                 # Literals (1, FULL_DIM) don't create parameters
 
         # Each tiling param must divide GCD of all block dims where it appears
-        # Wrap in OrderedDimension (always ordered sequences)
+        # Wrap in OrderedParameter (always ordered sequences)
         tiling_dimensions = {}
         for param_name, block_dims in param_constraints.items():
             gcd_value = reduce(gcd, block_dims)
             divisor_list = sorted(divisors(gcd_value))
-            tiling_dimensions[param_name] = OrderedDimension(
+            tiling_dimensions[param_name] = OrderedParameter(
                 name=param_name,
                 values=tuple(divisor_list),
                 default=None  # Will use minimum (first value)
@@ -711,7 +676,7 @@ class DesignSpaceBuilder:
 
         # Add DSE dimensions from schema (auto-detect ordered vs discrete)
         dse_dimensions = {}
-        for dim_name, dim_spec in schema.dse_dimensions.items():
+        for dim_name, dim_spec in schema.dse_parameters.items():
             # Evaluate values (callable or direct)
             if callable(dim_spec.values):
                 values = dim_spec.values(self._ctx)
@@ -720,8 +685,8 @@ class DesignSpaceBuilder:
 
             # Auto-detect type based on container type
             if isinstance(values, (list, tuple)):
-                # Ordered sequence → OrderedDimension
-                dse_dimensions[dim_name] = OrderedDimension(
+                # Ordered sequence → OrderedParameter
+                dse_dimensions[dim_name] = OrderedParameter(
                     name=dim_name,
                     values=tuple(sorted(values)),  # Ensure sorted
                     default=dim_spec.default if hasattr(dim_spec, 'default') else None
@@ -738,7 +703,7 @@ class DesignSpaceBuilder:
                 dse_dimensions[dim_name] = frozenset(values)
 
         if dse_dimensions:
-            ordered_count = sum(1 for v in dse_dimensions.values() if isinstance(v, OrderedDimension))
+            ordered_count = sum(1 for v in dse_dimensions.values() if isinstance(v, OrderedParameter))
             discrete_count = sum(1 for v in dse_dimensions.values() if isinstance(v, frozenset))
             logger.debug(
                 f"Added {len(dse_dimensions)} DSE dimensions: "

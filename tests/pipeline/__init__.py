@@ -34,11 +34,11 @@ Usage:
 
 See Also:
     tests/pipeline/README.md - Complete usage guide
-    tests/frameworks/single_kernel_test.py - New composition-based framework
+    tests/frameworks/kernel_test.py - New composition-based framework
     tests/IMPLEMENTATION_STATUS.md - Migration status and history
 """
 
-# NOTE: IntegratedPipelineTest was replaced by SingleKernelTest (tests/frameworks/)
+# NOTE: IntegratedPipelineTest was replaced by KernelTest (tests/frameworks/)
 # All pipeline tests have been migrated to the new composition-based framework.
 # See tests/IMPLEMENTATION_STATUS.md for migration details.
 
