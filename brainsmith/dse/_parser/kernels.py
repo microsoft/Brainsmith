@@ -85,7 +85,7 @@ def parse_kernels(kernels_data: List[Union[str, dict]]) -> List[Tuple[str, List[
             )
 
         if not backend_classes:
-            logger.warning(
+            logger.debug(
                 f"Kernel '{kernel_name}' has no registered backends. "
                 f"This kernel will not be specialized during build_hw_graph."
             )

@@ -73,15 +73,13 @@ def build_hw_graph(model: Any, cfg: Any) -> Any:
         - Returns the dataflow partition model, not the parent model
         - Saves parent model to intermediate_models/dataflow_parent.onnx if enabled
     """
-    logger.debug("=" * 80)
-    logger.info("Building hardware dataflow graph (partitioning + specialization)...")
-    logger.debug("=" * 80)
+    logger.debug("Building hardware dataflow graph (partitioning + specialization)...")
 
     # ========================================================================
     # Phase 1: Create Dataflow Partition
     # ========================================================================
 
-    logger.info("Phase 1: Creating dataflow partition...")
+    logger.debug("Phase 1: Creating dataflow partition...")
 
     partition_dir = os.path.join(
         cfg.output_dir,
@@ -137,7 +135,7 @@ def build_hw_graph(model: Any, cfg: Any) -> Any:
             "dataflow_parent.onnx"
         )
         parent_model.save(parent_model_path)
-        logger.info(f"Saved parent model: {parent_model_path}")
+        logger.debug(f"Saved parent model: {parent_model_path}")
 
     # Load the dataflow partition for specialization
     model = ModelWrapper(dataflow_model_filename)
@@ -152,13 +150,13 @@ def build_hw_graph(model: Any, cfg: Any) -> Any:
         template_config_path,
         ["preferred_impl_style"]
     )
-    logger.info(f"Created template config: {template_config_path}")
+    logger.debug(f"Created template config: {template_config_path}")
 
     # ========================================================================
     # Phase 2: Specialize Layers
     # ========================================================================
 
-    logger.info("Phase 2: Specializing hardware layers...")
+    logger.debug("Phase 2: Specializing hardware layers...")
 
     # Apply user config if provided (manual overrides)
     if cfg.specialize_layers_config_file is not None:
@@ -178,9 +176,5 @@ def build_hw_graph(model: Any, cfg: Any) -> Any:
         InferDataTypes()
     ]:
         model = model.transform(transform)
-
-    logger.debug("=" * 80)
-    logger.info("Hardware dataflow graph construction complete")
-    logger.debug("=" * 80)
 
     return model

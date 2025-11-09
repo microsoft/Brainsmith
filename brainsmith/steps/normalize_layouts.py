@@ -45,11 +45,11 @@ def normalize_dataflow_layouts_step(model: Any, cfg: Any) -> Any:
           - "build_dataflow_graph"
           - ...
     """
-    logger.info("Normalizing dataflow layouts to NHWC (channel-last)")
+    logger.debug("Normalizing dataflow layouts to NHWC (channel-last)")
 
     # Apply the transformation (transforms are primitives, use direct import)
     model = model.transform(NormalizeDataflowLayouts())
 
-    logger.info("Layout normalization complete")
+    logger.debug("Layout normalization complete")
 
     return model

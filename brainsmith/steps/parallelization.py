@@ -54,7 +54,7 @@ def apply_parallelization_config_step(model: Any, cfg: Any) -> Any:
         )
         return model
 
-    logger.info(f"Applying parallelization config from: {config_file}")
+    logger.debug(f"Applying parallelization config from: {config_file}")
     model = model.transform(ApplyParallelizationConfig(config_file))
 
     return model
@@ -98,7 +98,7 @@ def target_fps_parallelization_step(model: Any, cfg: Any) -> Any:
     # Convert to integer cycles
     target_cycles = int(1e9 / (target_fps * clock_period_ns))
 
-    logger.info(
+    logger.debug(
         f"Auto-generating parallelization for target_fps={target_fps}, "
         f"clock={clock_period_ns}ns, target_cycles={target_cycles}"
     )

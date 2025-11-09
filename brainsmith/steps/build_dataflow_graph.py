@@ -43,7 +43,7 @@ def build_dataflow_graph(model: Any, cfg: Any) -> Any:
         logger.debug("No kernel selections configured, skipping inference")
         return model
 
-    logger.info(f"Processing {len(kernel_selections)} kernel(s)...")
+    logger.debug(f"Processing {len(kernel_selections)} kernel(s)...")
 
     # Split kernel classes into infrastructure and computational
     infrastructure_kernels = []
@@ -61,16 +61,16 @@ def build_dataflow_graph(model: Any, cfg: Any) -> Any:
                 computational_kernels.append(kernel_class)
                 logger.debug(f"  {kernel_name} (computational)")
         except KeyError:
-            logger.warning(f"  Kernel not found in registry: {kernel_name}")
+            logger.error(f"  Kernel not found in registry: {kernel_name}")
 
     # Phase 1: Insert infrastructure kernels via topology analysis
     if infrastructure_kernels:
-        logger.info(f"Inserting {len(infrastructure_kernels)} infrastructure kernel(s)...")
+        logger.debug(f"Inserting {len(infrastructure_kernels)} infrastructure kernel(s)...")
         model = model.transform(InsertInfrastructureKernels(infrastructure_kernels))
 
     # Phase 2: Infer computational kernels via pattern matching
     if computational_kernels:
-        logger.info(f"Inferring {len(computational_kernels)} computational kernel(s)...")
+        logger.debug(f"Inferring {len(computational_kernels)} computational kernel(s)...")
         model = model.transform(InferKernels(computational_kernels))
 
     # Ensure all nodes have unique names after graph construction

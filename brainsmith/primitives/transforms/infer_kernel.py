@@ -170,7 +170,7 @@ class InferKernel(Transformation):
 
         # Log summary
         if nodes_processed > 0:
-            logger.info(
+            logger.debug(
                 f"InferKernel({self.kernel_name}): processed {nodes_processed} nodes, "
                 f"converted {nodes_converted}, failed {nodes_failed}"
             )

@@ -357,12 +357,9 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
         # Resolve lazy infer_transform if needed
         infer_transform = resolve_lazy_class(meta.kernel_infer)
 
-        _register_kernel(
-            obj,
-            name=meta.name,
-            infer_transform=infer_transform,
-            is_infrastructure=meta.is_infrastructure
-        )
+        # Note: _register_kernel now preserves existing manifest metadata
+        # when entry already exists, so no need to pass is_infrastructure here
+        _register_kernel(obj, name=meta.name, infer_transform=infer_transform)
         logger.debug(f"Registered kernel: {meta.full_name}")
 
     elif meta.component_type == ComponentType.BACKEND:
@@ -450,7 +447,7 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
                 logger.debug("Falling back to full discovery...")
 
         # Full discovery
-        logger.info("Discovering components from all sources...")
+        logger.debug("Discovering components from all sources...")
 
         # Get config for component sources
         config = get_config()

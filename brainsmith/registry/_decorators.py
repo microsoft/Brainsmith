@@ -135,7 +135,17 @@ def _register_step(
             logger.debug(f"Step {full_name} already registered, skipping")
             return func_or_class
 
-    # Create/update index entry for standalone decorator usage
+        # Entry exists from manifest - update it instead of replacing
+        # This preserves manifest metadata
+        logger.debug(f"Updating existing step registration: {full_name}")
+        existing.loaded_obj = func_or_class
+
+        # Attach registry name to function/class for O(1) reverse lookup
+        func_or_class.__registry_name__ = full_name
+        return func_or_class
+
+    # New registration (no manifest entry exists)
+    # Create index entry for standalone decorator usage
     logger.debug(f"Registering step: {full_name}")
     import_spec = ImportSpec(
         module=func_or_class.__module__,
@@ -182,6 +192,25 @@ def _register_kernel(
             logger.debug(f"Kernel {full_name} already registered, skipping")
             return cls
 
+        # Entry exists from manifest - update it instead of replacing
+        # This preserves manifest metadata (is_infrastructure, backends, etc.)
+        logger.debug(f"Updating existing kernel registration: {full_name}")
+
+        # Extract infer_transform from decorator parameters or class attribute
+        if infer_transform is None:
+            infer_transform = getattr(cls, 'infer_transform', None)
+        infer_transform = _convert_lazy_import_spec(infer_transform)
+
+        # Update the existing metadata
+        existing.loaded_obj = cls
+        if infer_transform is not None:
+            existing.kernel_infer = infer_transform
+
+        # Attach registry name to class for O(1) reverse lookup
+        cls.__registry_name__ = full_name
+        return cls
+
+    # New registration (no manifest entry exists)
     # Extract infer_transform (class attribute or parameter)
     # Supports both class references and string-based lazy import specs
     # Note: infer_transform is optional - not all kernels need it (e.g., test kernels)
@@ -191,7 +220,7 @@ def _register_kernel(
     # Handle string-based lazy import specs (format: 'module.path:ClassName')
     infer_transform = _convert_lazy_import_spec(infer_transform)
 
-    # Create/update index entry for standalone decorator usage
+    # Create index entry for standalone decorator usage
     logger.debug(f"Registering kernel: {full_name}")
     import_spec = ImportSpec(
         module=cls.__module__,
@@ -245,6 +274,42 @@ def _register_backend(
             logger.debug(f"Backend {full_name} already registered, skipping")
             return cls
 
+        # Entry exists from manifest - update it instead of replacing
+        # This preserves manifest metadata
+        logger.debug(f"Updating existing backend registration: {full_name}")
+
+        # Extract metadata - parameters override class attributes
+        target = target_kernel or getattr(cls, 'target_kernel', None)
+        lang = language or getattr(cls, 'language', None)
+
+        # Validate required fields
+        if not target:
+            raise ValueError(f"Backend {full_name} missing 'target_kernel' attribute")
+        if not lang:
+            raise ValueError(f"Backend {full_name} missing 'language' attribute")
+
+        # Normalize unqualified target to backend's source
+        if ':' not in target:
+            target = f"{source}:{target}"
+
+        # Update the existing metadata
+        existing.loaded_obj = cls
+        existing.backend_target = target
+        existing.backend_language = lang
+
+        # Link backend to its target kernel (if kernel exists)
+        kernel_meta = _component_index.get(target)
+        if kernel_meta:
+            if kernel_meta.kernel_backends is None:
+                kernel_meta.kernel_backends = []
+            if full_name not in kernel_meta.kernel_backends:
+                kernel_meta.kernel_backends.append(full_name)
+
+        # Attach registry name to class for O(1) reverse lookup
+        cls.__registry_name__ = full_name
+        return cls
+
+    # New registration (no manifest entry exists)
     # Extract metadata - parameters override class attributes
     target = target_kernel or getattr(cls, 'target_kernel', None)
     lang = language or getattr(cls, 'language', None)
@@ -259,7 +324,7 @@ def _register_backend(
     if ':' not in target:
         target = f"{source}:{target}"
 
-    # Create/update index entry for standalone decorator usage
+    # Create index entry for standalone decorator usage
     logger.debug(f"Registering backend: {full_name} (target={target}, lang={lang})")
     import_spec = ImportSpec(
         module=cls.__module__,

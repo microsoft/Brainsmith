@@ -127,14 +127,14 @@ class InferKernels(Transformation):
             try:
                 if issubclass(kernel_cls, KernelOp):
                     # New style: use InferKernel transform
-                    logger.info(f"Inferring {kernel_name} (KernelOp) via InferKernel")
+                    logger.debug(f"Inferring {kernel_name} (KernelOp) via InferKernel")
                     transform = InferKernel(kernel_cls)
                     model, modified = transform.apply(model)
                     graph_modified = graph_modified or modified
 
                 else:
                     # Legacy style: lookup registered transform via metadata
-                    logger.info(f"Inferring {kernel_name} (legacy) via metadata lookup")
+                    logger.debug(f"Inferring {kernel_name} (legacy) via metadata lookup")
 
                     # Use attached registry name (fallback to __name__ for non-registered classes)
                     registry_name = getattr(kernel_cls, '__registry_name__', kernel_cls.__name__)

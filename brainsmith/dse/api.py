@@ -79,10 +79,10 @@ def explore_design_space(
     config = get_config()
     setup_logging(level=verbosity, output_dir=output_path, config=config.logging)
 
-    logger.info(f"Exploring design space for FPGA accelerator:")
-    logger.info(f"  Model: {model_path}")
-    logger.info(f"  Blueprint: {blueprint_path}")
-    logger.info(f"  Output: {output_dir}")
+    logger.info(f"Exploring design space for dataflow accelerator:")
+    logger.info(f"    Model: {model_path}")
+    logger.info(f"    Blueprint: {blueprint_path}")
+    logger.info(f"    Output: {output_dir}")
 
     # Parse blueprint (with optional step slicing)
     design_space, blueprint_config = parse_blueprint(
@@ -91,7 +91,7 @@ def explore_design_space(
         start_step=start_step_override,
         stop_step=stop_step_override
     )
-    
+
     # Build DSE tree
     tree_builder = DSETreeBuilder()
     tree = tree_builder.build_tree(design_space, blueprint_config)
@@ -106,9 +106,6 @@ def explore_design_space(
     logger.debug(f"  - Total segments: {stats['total_segments']:,}")
     logger.debug(f"  - Segment efficiency: {stats['segment_efficiency']}%")
 
-    # Explore the DSE tree
-    logger.info("Starting design space exploration...")
-    
     # Create runner and execute
     finn_adapter = FINNAdapter()
     runner = SegmentRunner(finn_adapter, tree.root.finn_config)
@@ -117,7 +114,7 @@ def explore_design_space(
         initial_model=Path(model_path),
         output_dir=Path(output_dir)
     )
-    
+
     # Validate results
     results.validate_success(Path(output_dir))
 
