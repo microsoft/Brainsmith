@@ -41,7 +41,7 @@ jobs:
       - name: Run pytest test suite
         uses: ./.github/actions/run-test-with-artifacts
         with:
-          command: "poetry run pytest tests/ -v --cov=brainsmith --cov-report=xml --cov-report=term-missing --junitxml=test-results.xml --tb=short"
+          command: "poetry run pytest -m 'unit or integration' -v --cov=brainsmith --cov-report=xml --cov-report=term-missing --junitxml=test-results.xml --tb=short"
           timeout-minutes: 10
           artifact-name: "pytest-failure-artifacts"
           collect-on: "failure"

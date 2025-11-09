@@ -30,7 +30,7 @@
 #
 # Environment Setup:
 #   Container sources .brainsmith/env.sh for unified local + Docker environment.
-#   Edit .brainsmith/config.yaml to configure Xilinx paths and build directories.
+#   Edit brainsmith.yaml to configure Xilinx paths and build directories.
 #
 # Note: Container HOME is set to /tmp/brainsmith_dev_* for permission isolation.
 #       Each project directory gets its own container for complete isolation.

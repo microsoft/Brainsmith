@@ -1,7 +1,7 @@
 """
 Kernel Integrator
 
-Simple system for generating FINN-compatible AutoHWCustomOp implementations 
+Simple system for generating FINN-compatible KernelOp implementations 
 from SystemVerilog RTL.
 """
 

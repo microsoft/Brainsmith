@@ -13,7 +13,7 @@ class KernelGenerator:
     """Code generator for Brainsmith kernels."""
     
     ARTIFACTS = {
-        'autohwcustomop': {
+        'kernelop': {
             'template': 'auto_hw_custom_op.py.j2',
             'filename': '{name}.py'
         },

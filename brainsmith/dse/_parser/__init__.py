@@ -10,7 +10,7 @@ with all components resolved from the registry.
 
 import os
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from brainsmith.dse.design_space import GlobalDesignSpace
 from brainsmith.dse.config import DSEConfig, extract_config
@@ -22,19 +22,21 @@ from .kernels import parse_kernels
 logger = logging.getLogger(__name__)
 
 
-def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[GlobalDesignSpace, DSEConfig]:
-    """
-    Parse blueprint YAML and return GlobalDesignSpace and DSEConfig.
+def parse_blueprint(
+    blueprint_path: str,
+    model_path: str,
+    start_step: Optional[str] = None,
+    stop_step: Optional[str] = None
+) -> Tuple[GlobalDesignSpace, DSEConfig]:
+    """Parse blueprint YAML to design space and configuration.
 
-    Inheritance is resolved bottom-up:
-    1. Start from the root parent (no extends)
-    2. Fully resolve its steps (including operations)
-    3. Pass resolved steps to child for its operations
-    4. Repeat until we reach the target blueprint
+    Supports blueprint inheritance via the 'extends' field.
 
     Args:
         blueprint_path: Path to blueprint YAML file
         model_path: Path to model file
+        start_step: Optional start step override
+        stop_step: Optional stop step override
 
     Returns:
         Tuple of (GlobalDesignSpace, DSEConfig)
@@ -52,6 +54,19 @@ def parse_blueprint(blueprint_path: str, model_path: str) -> Tuple[GlobalDesignS
 
     # Extract config from merged data
     blueprint_config = extract_config(merged_data)
+
+    # Override start_step/stop_step from parameters if provided
+    if start_step is not None:
+        blueprint_config.start_step = start_step
+    if stop_step is not None:
+        blueprint_config.stop_step = stop_step
+
+    # Log step range if specified
+    if blueprint_config.start_step or blueprint_config.stop_step:
+        logger.info(
+            f"Step range: start={blueprint_config.start_step or 'beginning'}, "
+            f"stop={blueprint_config.stop_step or 'end'}"
+        )
 
     # Parse steps from THIS blueprint only (not inherited steps)
     # Use raw_data to get only the steps defined in this file

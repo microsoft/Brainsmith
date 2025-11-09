@@ -57,10 +57,9 @@ warnings.simplefilter("ignore")
 
 def generate_bert_model(args):
     """Generate quantized BERT model from HuggingFace with Brevitas quantization.
-    
+
     This matches the functionality from old end2end_bert.py::gen_initial_bert_model()
     """
-    print(f"Generating BERT model with {args.num_hidden_layers} layers...")
     
     # Global consts used by Brevitas build step
     dtype = torch.float32
@@ -93,9 +92,7 @@ def generate_bert_model(args):
     model = symbolic_trace(model, input_names)
     
     # Replace SDPA with quantizable layers
-    print("Replacing SDPA with quantizable variants...")
     model = replace_sdpa_with_quantizable_layers(model)
-    print("Replacement done.")
     
     # Configure quantization
     unsigned_hidden_act = config.hidden_act == 'relu'
@@ -176,9 +173,8 @@ def generate_bert_model(args):
     debug_path = os.path.join(args.output_dir, "debug_models")
     os.makedirs(debug_path, exist_ok=True)
     onnx.save(model, os.path.join(debug_path, "00_initial_brevitas.onnx"))
-    print(f"Saved initial Brevitas model to debug_models/00_initial_brevitas.onnx")
-    print(f"  - Model inputs: {[i.name for i in model.graph.input]}")
-    print(f"  - Model outputs: {[o.name for o in model.graph.output]}")
+    print(f"  - Model inputs: {len(model.graph.input)} tensors")
+    print(f"  - Model outputs: {len(model.graph.output)} tensors")
     print(f"  - Number of nodes: {len(model.graph.node)}")
     
     return model
@@ -201,7 +197,6 @@ def run_brainsmith_dse(model, args):
     # Also save to debug directory for comparison
     debug_dir = os.path.join(args.output_dir, "debug_models")
     onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
-    print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
     
     # Run cleanup
     cleanup(
@@ -220,9 +215,8 @@ def run_brainsmith_dse(model, args):
     
     # Get blueprint path from args
     blueprint_path = Path(__file__).parent / args.blueprint
-    
+
     # Create the FPGA accelerator
-    print("Creating FPGA accelerator...")
     results = explore_design_space(
         model_path=os.path.join(args.output_dir, "df_input.onnx"),
         blueprint_path=str(blueprint_path),
@@ -288,7 +282,6 @@ def main():
     
     # Determine output directory
     build_dir = get_config().build_dir
-    print(build_dir)
     args.output_dir = os.path.join(str(build_dir), args.output)
     
     # Clean up existing directory if --force flag is set
@@ -296,19 +289,14 @@ def main():
         print(f"Removing existing output directory: {args.output_dir}")
         shutil.rmtree(args.output_dir)
     
-    print("=" * 70)
-    print("BERT Demo Using Brainsmith DFC")
-    print("=" * 70)
-    print(f"Configuration:")
-    print(f"  Hidden layers: {args.num_hidden_layers}")
-    print(f"  Hidden size: {args.hidden_size}")
-    print(f"  Attention heads: {args.num_attention_heads}")
-    print(f"  Intermediate size: {args.intermediate_size}")
-    print(f"  Bitwidth: {args.bitwidth}")
-    print(f"  Sequence length: {args.seqlen}")
-    print(f"  Blueprint: {args.blueprint}")
-    print(f"  Output directory: {args.output_dir}")
-    print("=" * 70)
+    print("=" * 60)
+    print("BERT Demo - Brainsmith Dataflow Core")
+    print("=" * 60)
+    print(f"Model: {args.num_hidden_layers} layers, hidden={args.hidden_size}, heads={args.num_attention_heads}, intermediate={args.intermediate_size}")
+    print(f"Quantization: {args.bitwidth}-bit, sequence length={args.seqlen}")
+    print(f"Blueprint: {args.blueprint}")
+    print(f"Output: {args.output_dir}")
+    print("=" * 60)
     
     try:
         # Step 1: Generate BERT model

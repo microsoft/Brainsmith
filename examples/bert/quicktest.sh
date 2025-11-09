@@ -46,7 +46,7 @@ if [ "$COLLECT_DIAGNOSTICS" = "1" ]; then
     echo "Diagnostics collection ENABLED"
 fi
 
-echo "Running BERT Modern Demo Quick Test"
+echo "Running BERT Quick Test"
 echo "==================================="
 
 # Change to demo directory
@@ -62,7 +62,6 @@ python gen_folding_config.py \
     -o ./configs/quicktest_folding.json
 
 # Run BERT demo
-echo "Running BERT demo with 1 layer..."
 python bert_demo.py \
     -o quicktest \
     -n 4 \

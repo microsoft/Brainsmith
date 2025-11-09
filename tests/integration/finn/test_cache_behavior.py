@@ -36,7 +36,7 @@ class TestCacheBehavior:
 
         Validates cache hit behavior improves performance.
         """
-        from tests.fixtures.blueprints import create_finn_blueprint
+        from tests.fixtures.dse.blueprints import create_finn_blueprint
 
         # Create blueprint
         blueprint_path = create_finn_blueprint(
@@ -99,10 +99,10 @@ class TestCacheBehavior:
         2. Corrupt cached ONNX file
         3. Re-execute (should detect corruption and rebuild)
         """
-        from tests.fixtures.blueprints import create_finn_blueprint
+        from tests.fixtures.dse.blueprints import create_finn_blueprint
 
         # Create blueprint (use minimal pipeline for cache test)
-        from tests.fixtures.blueprints import FINN_PIPELINE_MINIMAL
+        from tests.fixtures.dse.blueprints import FINN_PIPELINE_MINIMAL
 
         blueprint_path = create_finn_blueprint(
             tmp_path,
@@ -179,7 +179,7 @@ class TestCacheBehavior:
         2. Execute with clock_ns=10.0 (different config)
         3. Verify cache miss - both executions produce outputs
         """
-        from tests.fixtures.blueprints import create_finn_blueprint
+        from tests.fixtures.dse.blueprints import create_finn_blueprint
 
         output_dir = test_workspace / "config_change"
 
@@ -245,7 +245,7 @@ class TestCacheBehavior:
         2. Replace cached ONNX with invalid but parseable file
         3. Re-execute (should detect invalid ONNX and rebuild)
         """
-        from tests.fixtures.blueprints import create_finn_blueprint
+        from tests.fixtures.dse.blueprints import create_finn_blueprint
 
         # Create blueprint
         blueprint_path = create_finn_blueprint(

@@ -62,29 +62,45 @@ logger = logging.getLogger(__name__)
 # Test Helpers
 # ============================================================================
 
-def mock_kernel_class(name: str, op_type: str):
-    """Create minimal kernel class for registry unit tests.
+class MockFactory:
+    """Factory for creating minimal registry components in tests."""
 
-    Note: For discovery tests, use real test plugins in isolated_env fixture.
-    This is only for testing direct decorator registration.
-    """
-    return type(name, (), {'__name__': name, 'op_type': op_type})
+    @staticmethod
+    def kernel(name: str, op_type: str):
+        """Create minimal kernel class for registry unit tests."""
+        cls = type(name, (), {'__name__': name, 'op_type': op_type})
+        cls.__module__ = 'tests.unit.test_registry_edge_cases'
+        return cls
+
+    @staticmethod
+    def backend(name: str, target_kernel: str, language: str):
+        """Create minimal backend class for registry unit tests."""
+        cls = type(name, (), {
+            '__name__': name,
+            'target_kernel': target_kernel,
+            'language': language,
+        })
+        cls.__module__ = 'tests.unit.test_registry_edge_cases'
+        return cls
+
+    @staticmethod
+    def step(name: str):
+        """Create minimal step function for registry unit tests."""
+        def step_fn(model, cfg):
+            return model
+        step_fn.__name__ = name
+        return step_fn
 
 
-def mock_backend_class(name: str, target_kernel: str, language: str):
-    """Create minimal backend class for registry unit tests."""
-    return type(name, (), {
-        '__name__': name,
-        'target_kernel': target_kernel,
-        'language': language,
-    })
-
-
-def mock_step_function(name: str):
-    """Create minimal step function for registry unit tests."""
-    fn = lambda model, cfg: model
-    fn.__name__ = name
-    return fn
+@pytest.fixture
+def cached_env(empty_env):
+    """Environment with component caching enabled."""
+    config_file = empty_env / 'brainsmith.yaml'
+    config_file.write_text("""cache_components: true
+component_sources: {}
+""")
+    reset_config()
+    yield empty_env
 
 
 # ============================================================================
@@ -98,10 +114,10 @@ class TestRegistrationTiming:
     def test_decorator_before_discovery(self, empty_env):
         """Register component via decorator before discovery - should be available immediately."""
         # Register without calling discover_components first
-        test_step = mock_step_function('test_before_discovery')
-        registered_step = step(test_step, name='test_before_discovery', source='custom')
+        test_step = MockFactory.step('test_before_discovery')
+        registered_step = step(test_step, name='test_before_discovery')
 
-        # Verify it's in the index immediately
+        # Verify it's in the index immediately (defaults to 'custom' source)
         assert 'custom:test_before_discovery' in _component_index
         meta = _component_index['custom:test_before_discovery']
         assert meta.loaded_obj is registered_step
@@ -119,8 +135,9 @@ class TestRegistrationTiming:
         initial_count = len(_component_index)
 
         # Register new component after discovery
-        MockKernel = mock_kernel_class('MockKernelAfter', op_type='MockOp')
-        kernel(MockKernel, name='MockKernelAfter', source='test')
+        MockKernel = MockFactory.kernel('MockKernelAfter', op_type='MockOp')
+        with source_context('test'):
+            kernel(MockKernel, name='MockKernelAfter')
 
         # Verify both exist
         assert len(_component_index) > initial_count
@@ -133,11 +150,13 @@ class TestRegistrationTiming:
 
     def test_double_registration_different_source(self, empty_env):
         """Double registration with different sources - both should exist."""
-        MockKernel1 = mock_kernel_class('SharedName', op_type='Op1')
-        MockKernel2 = mock_kernel_class('SharedName', op_type='Op2')
+        MockKernel1 = MockFactory.kernel('SharedName', op_type='Op1')
+        MockKernel2 = MockFactory.kernel('SharedName', op_type='Op2')
 
-        kernel(MockKernel1, name='SharedName', source='user')
-        kernel(MockKernel2, name='SharedName', source='custom')
+        with source_context('user'):
+            kernel(MockKernel1, name='SharedName')
+        with source_context('custom'):
+            kernel(MockKernel2, name='SharedName')
 
         # Both should exist
         assert 'user:SharedName' in _component_index
@@ -145,17 +164,12 @@ class TestRegistrationTiming:
         assert _component_index['user:SharedName'].loaded_obj is MockKernel1
         assert _component_index['custom:SharedName'].loaded_obj is MockKernel2
 
-    def test_registration_with_explicit_source(self, empty_env):
-        """Explicit source parameter should override context."""
-        test_step = mock_step_function('explicit_source_step')
+    def test_source_parameter_not_allowed(self, empty_env):
+        """Decorator source parameter is not supported (use context instead)."""
+        test_step = MockFactory.step('my_step')
 
-        # Context says 'context_source', but decorator param says 'explicit_source'
-        with source_context('context_source'):
-            step(test_step, name='explicit_source_step', source='explicit_source')
-
-        # Explicit parameter should win
-        assert 'explicit_source:explicit_source_step' in _component_index
-        assert 'context_source:explicit_source_step' not in _component_index
+        with pytest.raises(ValueError, match="'source' parameter not supported"):
+            step(test_step, name='my_step', source='explicit')
 
 
 # ============================================================================
@@ -166,18 +180,9 @@ class TestRegistrationTiming:
 class TestManifestCaching:
     """Test edge cases in manifest caching logic."""
 
-    def test_fresh_discovery_no_manifest(self, empty_env):
+    def test_fresh_discovery_no_manifest(self, cached_env):
         """No manifest exists - should do full discovery and create manifest."""
-        # empty_env creates a project with cache_components: false
-        # Let's modify the config to enable caching
-        config_file = empty_env / '.brainsmith' / 'config.yaml'
-        config_file.write_text("""
-cache_components: true
-component_sources: {}
-""")
-        reset_config()
-
-        manifest_path = empty_env / '.brainsmith' / 'component_manifest.json'
+        manifest_path = cached_env / '.brainsmith' / 'component_manifest.json'
         assert not manifest_path.exists()
 
         # Discover with cache enabled
@@ -198,17 +203,9 @@ component_sources: {}
         total = len(data['kernels']) + len(data['backends']) + len(data['steps'])
         assert total > 0
 
-    def test_load_from_valid_manifest(self, empty_env):
+    def test_load_from_valid_manifest(self, cached_env):
         """Valid cached manifest - should load from cache without imports."""
-        # Enable caching
-        config_file = empty_env / '.brainsmith' / 'config.yaml'
-        config_file.write_text("""
-cache_components: true
-component_sources: {}
-""")
-        reset_config()
-
-        manifest_path = empty_env / '.brainsmith' / 'component_manifest.json'
+        manifest_path = cached_env / '.brainsmith' / 'component_manifest.json'
 
         # Create valid v2.0 manifest (type-stratified, no per-component mtimes)
         manifest = {
@@ -310,8 +307,9 @@ component_sources: {}
     def test_force_refresh_clears_index(self, empty_env):
         """force_refresh=True - should clear index and ignore cache."""
         # Register a component
-        test_step = mock_step_function('will_be_cleared')
-        step(test_step, name='will_be_cleared', source='test')
+        test_step = MockFactory.step('will_be_cleared')
+        with source_context('test'):
+            step(test_step, name='will_be_cleared')
 
         assert 'test:will_be_cleared' in _component_index
 
@@ -341,8 +339,8 @@ class TestThreadSafety:
 
         def register_in_context(source_name, step_name):
             with source_context(source_name):
-                test_step = mock_step_function(step_name)
-                step(test_step, name=step_name, source=None)  # Let context provide source
+                test_step = MockFactory.step(step_name)
+                step(test_step, name=step_name)  # Let context provide source
 
                 # Verify current source
                 results[threading.current_thread().name] = _current_source.get()
@@ -371,8 +369,9 @@ class TestThreadSafety:
     def test_concurrent_registration(self, empty_env):
         """Multiple threads registering components - all should succeed."""
         def register_kernel(idx):
-            MockKernel = mock_kernel_class(f'ConcurrentKernel{idx}', op_type=f'Op{idx}')
-            kernel(MockKernel, name=f'ConcurrentKernel{idx}', source='test')
+            MockKernel = MockFactory.kernel(f'ConcurrentKernel{idx}', op_type=f'Op{idx}')
+            with source_context('test'):
+                kernel(MockKernel, name=f'ConcurrentKernel{idx}')
 
         threads = [threading.Thread(target=register_kernel, args=(i,)) for i in range(10)]
 
@@ -465,8 +464,9 @@ class TestNameResolution:
 
     def test_short_name_single_source(self, empty_env):
         """Short name with only one source - should resolve correctly."""
-        MockKernel = mock_kernel_class('UniqueKernel', op_type='Unique')
-        kernel(MockKernel, name='UniqueKernel', source='brainsmith')
+        MockKernel = MockFactory.kernel('UniqueKernel', op_type='Unique')
+        with source_context('brainsmith'):
+            kernel(MockKernel, name='UniqueKernel')
 
         registry_state._components_discovered = True
         discovery_module._components_discovered = True
@@ -478,29 +478,34 @@ class TestNameResolution:
     def test_short_name_priority(self, empty_env):
         """Short name in multiple sources - should use priority order."""
         # Register same name in different sources
-        K1 = mock_kernel_class('SharedKernel', op_type='Op1')
-        K2 = mock_kernel_class('SharedKernel', op_type='Op2')
-        K3 = mock_kernel_class('SharedKernel', op_type='Op3')
+        K1 = MockFactory.kernel('SharedKernel', op_type='Op1')
+        K2 = MockFactory.kernel('SharedKernel', op_type='Op2')
+        K3 = MockFactory.kernel('SharedKernel', op_type='Op3')
 
-        kernel(K1, name='SharedKernel', source='finn')
-        kernel(K2, name='SharedKernel', source='user')
-        kernel(K3, name='SharedKernel', source='brainsmith')
+        with source_context('finn'):
+            kernel(K1, name='SharedKernel')
+        with source_context('custom'):
+            kernel(K2, name='SharedKernel')
+        with source_context('brainsmith'):
+            kernel(K3, name='SharedKernel')
 
         registry_state._components_discovered = True
         discovery_module._components_discovered = True
 
-        # Should resolve to user (higher priority than brainsmith/finn)
-        # Priority: ['project', 'user', 'brainsmith', 'finn']
+        # Should resolve to brainsmith (higher priority than finn/custom)
+        # Priority: ['project', 'brainsmith', 'finn', 'custom']
         full_name = _resolve_component_name('SharedKernel', 'kernel')
-        assert full_name == 'user:SharedKernel'
+        assert full_name == 'brainsmith:SharedKernel'
 
     def test_qualified_name_bypasses_priority(self, empty_env):
         """Qualified name (source:name) - should bypass priority resolution."""
-        K1 = mock_kernel_class('ExplicitKernel', op_type='Op1')
-        K2 = mock_kernel_class('ExplicitKernel', op_type='Op2')
+        K1 = MockFactory.kernel('ExplicitKernel', op_type='Op1')
+        K2 = MockFactory.kernel('ExplicitKernel', op_type='Op2')
 
-        kernel(K1, name='ExplicitKernel', source='user')
-        kernel(K2, name='ExplicitKernel', source='finn')
+        with source_context('user'):
+            kernel(K1, name='ExplicitKernel')
+        with source_context('finn'):
+            kernel(K2, name='ExplicitKernel')
 
         registry_state._components_discovered = True
 
@@ -515,11 +520,8 @@ class TestNameResolution:
         """Request nonexistent component - should raise KeyError with helpful message."""
         registry_state._components_discovered = True
 
-        with pytest.raises(KeyError) as exc_info:
+        with pytest.raises(KeyError, match=r"(?i)DoesNotExist.*not found"):
             get_kernel('DoesNotExist')
-
-        # Should have helpful error message
-        assert 'not found' in str(exc_info.value).lower()
 
 # ============================================================================
 # TestLazyLoading - Double-load, missing imports, etc.
@@ -679,9 +681,9 @@ class TestSourceContext:
 
     def test_context_isolation(self, empty_env):
         """Multiple sequential contexts - should be independent."""
-        s1 = mock_step_function('step1')
-        s2 = mock_step_function('step2')
-        s3 = mock_step_function('step3')
+        s1 = MockFactory.step('step1')
+        s2 = MockFactory.step('step2')
+        s3 = MockFactory.step('step3')
 
         with source_context('source1'):
             step(s1, name='step1')
@@ -699,7 +701,7 @@ class TestSourceContext:
 
     def test_default_source_without_context(self, empty_env):
         """No source_context - should default to 'custom'."""
-        MockKernel = mock_kernel_class('DefaultSourceKernel', op_type='Default')
+        MockKernel = MockFactory.kernel('DefaultSourceKernel', op_type='Default')
 
         # Register without source_context and without explicit source
         kernel(MockKernel, name='DefaultSourceKernel')
@@ -718,11 +720,12 @@ class TestBackendLinking:
 
     def test_backend_links_to_existing_kernel(self, empty_env):
         """Backend registered after kernel - should link immediately."""
-        MockKernel = mock_kernel_class('LinkKernel', op_type='LinkOp')
-        kernel(MockKernel, name='LinkKernel', source='test')
+        MockKernel = MockFactory.kernel('LinkKernel', op_type='LinkOp')
+        MockBackend = MockFactory.backend('LinkKernel_hls', 'test:LinkKernel', 'hls')
 
-        MockBackend = mock_backend_class('LinkKernel_hls', 'test:LinkKernel', 'hls')
-        backend(MockBackend, name='LinkKernel_hls', source='test')
+        with source_context('test'):
+            kernel(MockKernel, name='LinkKernel')
+            backend(MockBackend, name='LinkKernel_hls')
 
         # Kernel should have backend in its list
         kernel_meta = _component_index['test:LinkKernel']
@@ -731,8 +734,9 @@ class TestBackendLinking:
 
     def test_backend_links_to_missing_kernel(self, empty_env):
         """Backend registered but kernel doesn't exist - backend still registers."""
-        MockBackend = mock_backend_class('Orphan_hls', 'missing:OrphanKernel', 'hls')
-        backend(MockBackend, name='Orphan_hls', source='test')
+        MockBackend = MockFactory.backend('Orphan_hls', 'missing:OrphanKernel', 'hls')
+        with source_context('test'):
+            backend(MockBackend, name='Orphan_hls')
 
         # Backend should be registered even if kernel missing
         assert 'test:Orphan_hls' in _component_index
@@ -741,13 +745,15 @@ class TestBackendLinking:
 
     def test_kernel_backends_list_populated(self, empty_env):
         """Kernel should track all its backends."""
-        MockKernel = mock_kernel_class('MultiBackendKernel', op_type='Multi')
-        kernel(MockKernel, name='MultiBackendKernel', source='test')
+        MockKernel = MockFactory.kernel('MultiBackendKernel', op_type='Multi')
 
-        # Register multiple backends
-        for lang in ['hls', 'rtl']:
-            MockBackend = mock_backend_class(f'MultiBackendKernel_{lang}', 'test:MultiBackendKernel', lang)
-            backend(MockBackend, name=f'MultiBackendKernel_{lang}', source='test')
+        with source_context('test'):
+            kernel(MockKernel, name='MultiBackendKernel')
+
+            # Register multiple backends
+            for lang in ['hls', 'rtl']:
+                MockBackend = MockFactory.backend(f'MultiBackendKernel_{lang}', 'test:MultiBackendKernel', lang)
+                backend(MockBackend, name=f'MultiBackendKernel_{lang}')
 
         kernel_meta = _component_index['test:MultiBackendKernel']
         assert kernel_meta.kernel_backends is not None
@@ -756,17 +762,18 @@ class TestBackendLinking:
 
     def test_list_backends_for_kernel(self, empty_env):
         """List backends with language and source filtering."""
-        MockKernel = mock_kernel_class('FilterKernel', op_type='Filter')
-        kernel(MockKernel, name='FilterKernel', source='test')
+        MockKernel = MockFactory.kernel('FilterKernel', op_type='Filter')
 
         # Register backends with different languages
-        B1 = mock_backend_class('FilterKernel_hls1', 'test:FilterKernel', 'hls')
-        B2 = mock_backend_class('FilterKernel_hls2', 'test:FilterKernel', 'hls')
-        B3 = mock_backend_class('FilterKernel_rtl', 'test:FilterKernel', 'rtl')
+        B1 = MockFactory.backend('FilterKernel_hls1', 'test:FilterKernel', 'hls')
+        B2 = MockFactory.backend('FilterKernel_hls2', 'test:FilterKernel', 'hls')
+        B3 = MockFactory.backend('FilterKernel_rtl', 'test:FilterKernel', 'rtl')
 
-        backend(B1, name='FilterKernel_hls1', source='test')
-        backend(B2, name='FilterKernel_hls2', source='test')
-        backend(B3, name='FilterKernel_rtl', source='test')
+        with source_context('test'):
+            kernel(MockKernel, name='FilterKernel')
+            backend(B1, name='FilterKernel_hls1')
+            backend(B2, name='FilterKernel_hls2')
+            backend(B3, name='FilterKernel_rtl')
 
         registry_state._components_discovered = True
 
@@ -787,16 +794,18 @@ class TestBackendLinking:
     def test_backend_registered_before_kernel(self, empty_env):
         """Backend registered before kernel - linking happens in _link_backends_to_kernels()."""
         # Register backend first
-        MockBackend = mock_backend_class('EarlyBackend_hls', 'test:LateKernel', 'hls')
-        backend(MockBackend, name='EarlyBackend_hls', source='test')
+        MockBackend = MockFactory.backend('EarlyBackend_hls', 'test:LateKernel', 'hls')
+        MockKernel = MockFactory.kernel('LateKernel', op_type='Late')
 
-        # Backend registered, but kernel_backends won't be linked yet
-        backend_meta = _component_index['test:EarlyBackend_hls']
-        assert backend_meta.backend_target == 'test:LateKernel'
+        with source_context('test'):
+            backend(MockBackend, name='EarlyBackend_hls')
 
-        # Register kernel later
-        MockKernel = mock_kernel_class('LateKernel', op_type='Late')
-        kernel(MockKernel, name='LateKernel', source='test')
+            # Backend registered, but kernel_backends won't be linked yet
+            backend_meta = _component_index['test:EarlyBackend_hls']
+            assert backend_meta.backend_target == 'test:LateKernel'
+
+            # Register kernel later
+            kernel(MockKernel, name='LateKernel')
 
         # Manually trigger linking (normally happens at end of discover_components)
         from brainsmith.registry._discovery import _link_backends_to_kernels
@@ -806,3 +815,47 @@ class TestBackendLinking:
         kernel_meta = _component_index['test:LateKernel']
         assert kernel_meta.kernel_backends is not None
         assert 'test:EarlyBackend_hls' in kernel_meta.kernel_backends
+
+
+# ============================================================================
+# TestInfrastructureMetadata - Infrastructure kernel flag
+# ============================================================================
+
+@pytest.mark.fast
+class TestInfrastructureMetadata:
+    """Test infrastructure kernel metadata flag."""
+
+    def test_default_is_infrastructure_false(self, empty_env):
+        """Kernels default to is_infrastructure=False."""
+        MockKernel = MockFactory.kernel('ComputationalKernel', 'Comp')
+        kernel(MockKernel, name='ComputationalKernel')
+
+        from brainsmith.registry import get_component_metadata
+        meta = get_component_metadata('custom:ComputationalKernel', 'kernel')
+        assert meta.is_infrastructure is False
+
+    def test_explicit_is_infrastructure_true(self, empty_env):
+        """Infrastructure kernels can be marked explicitly."""
+        MockKernel = MockFactory.kernel('InfraKernel', 'Infra')
+        kernel(MockKernel, name='InfraKernel', is_infrastructure=True)
+
+        from brainsmith.registry import get_component_metadata
+        meta = get_component_metadata('custom:InfraKernel', 'kernel')
+        assert meta.is_infrastructure is True
+
+    def test_is_infrastructure_preserved_in_metadata(self, empty_env):
+        """is_infrastructure flag is preserved in ComponentMetadata."""
+        # Register one of each type
+        CompKernel = MockFactory.kernel('CompKernel', 'Comp')
+        InfraKernel = MockFactory.kernel('InfraKernel', 'Infra')
+
+        kernel(CompKernel, name='CompKernel', is_infrastructure=False)
+        kernel(InfraKernel, name='InfraKernel', is_infrastructure=True)
+
+        from brainsmith.registry import get_component_metadata
+
+        comp_meta = get_component_metadata('custom:CompKernel', 'kernel')
+        assert comp_meta.is_infrastructure is False
+
+        infra_meta = get_component_metadata('custom:InfraKernel', 'kernel')
+        assert infra_meta.is_infrastructure is True

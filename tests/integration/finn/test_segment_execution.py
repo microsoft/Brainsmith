@@ -30,10 +30,10 @@ class TestSegmentExecution:
         Tests basic execution path: quantized model → finn:streamline
         Validates segment completion, artifacts, and model output.
         """
-        from tests.fixtures.blueprints import create_finn_blueprint
+        from tests.fixtures.dse.blueprints import create_finn_blueprint
 
         # Create minimal FINN blueprint with single fast step
-        from tests.fixtures.blueprints import FINN_PIPELINE_MINIMAL
+        from tests.fixtures.dse.blueprints import FINN_PIPELINE_MINIMAL
 
         blueprint_path = create_finn_blueprint(
             tmp_path,
@@ -87,7 +87,7 @@ class TestSegmentExecution:
         Tests branching: model → finn:streamline → [option1, skip]
         Validates both branch paths execute correctly.
         """
-        from tests.fixtures.blueprints import create_blueprint_file, FULL_BLUEPRINT
+        from tests.fixtures.dse.blueprints import create_blueprint_file, FULL_BLUEPRINT
 
         # Create branching blueprint
         blueprint_yaml = """
@@ -95,7 +95,6 @@ name: branching_test
 clock_ns: 10.0
 output: estimates
 board: Pynq-Z1
-save_intermediate_models: true
 design_space:
   steps:
     - finn:streamline
@@ -142,7 +141,7 @@ design_space:
         Tests that when execution branches, child segments receive
         the parent's output model as their input.
         """
-        from tests.fixtures.blueprints import create_blueprint_file
+        from tests.fixtures.dse.blueprints import create_blueprint_file
 
         # Create branching blueprint
         blueprint_yaml = """
@@ -150,7 +149,6 @@ name: artifact_sharing
 clock_ns: 10.0
 output: estimates
 board: Pynq-Z1
-save_intermediate_models: true
 design_space:
   steps:
     - finn:streamline
@@ -193,7 +191,7 @@ design_space:
         Tests that segment failures are properly captured and don't
         crash the entire tree execution.
         """
-        from tests.fixtures.blueprints import create_finn_blueprint
+        from tests.fixtures.dse.blueprints import create_finn_blueprint
 
         # Create blueprint with intentionally problematic configuration
         # Note: This test validates error handling, actual failure depends on FINN behavior

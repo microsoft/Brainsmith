@@ -18,7 +18,6 @@ from typing import Optional
 
 from brainsmith.dse._parser import parse_blueprint
 from brainsmith.dse._builder import DSETreeBuilder
-from brainsmith.dse.design_space import _slice_steps
 from brainsmith.dse.tree import DSETree
 from brainsmith.dse.runner import SegmentRunner
 from brainsmith._internal.finn.adapter import FINNAdapter
@@ -32,20 +31,19 @@ def explore_design_space(
     blueprint_path: str,
     output_dir: Optional[str] = None,
     start_step_override: Optional[str] = None,
-    stop_step_override: Optional[str] = None
+    stop_step_override: Optional[str] = None,
+    verbosity: str = "normal"
 ) -> TreeExecutionResult:
     """
-    Explore the design space for an FPGA accelerator.
-
-    Transforms a neural network model into an FPGA accelerator through
-    blueprint-driven design space exploration and synthesis.
+    Explore design space and synthesize FPGA accelerator from neural network model.
 
     Args:
         model_path: Path to ONNX model file
         blueprint_path: Path to Blueprint YAML file
         output_dir: Output directory (defaults to $BSMITH_BUILD_DIR/dfc_YYYYMMDD_HHMMSS)
-        start_step_override: Override blueprint start_step (CLI takes precedence)
-        stop_step_override: Override blueprint stop_step (CLI takes precedence)
+        start_step_override: Override blueprint start_step
+        stop_step_override: Override blueprint stop_step
+        verbosity: Logging verbosity (quiet | normal | verbose | debug)
 
     Returns:
         TreeExecutionResult containing build artifacts and statistics
@@ -53,7 +51,7 @@ def explore_design_space(
     Raises:
         FileNotFoundError: If model or blueprint file doesn't exist
         ValueError: If blueprint is invalid or tree exceeds size limits
-        RuntimeError: If no successful builds were produced
+        ExecutionError: If no successful builds were produced
     """
     # Verify files exist
     model_path_obj = Path(model_path)
@@ -76,40 +74,38 @@ def explore_design_space(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Exploring design space for FPGA accelerator:")
-    logger.info(f"  Model: {model_path}")
-    logger.info(f"  Blueprint: {blueprint_path}")
-    logger.info(f"  Output: {output_dir}")
+    # Configure logging with output directory for file logging
+    from brainsmith._internal.logging import setup_logging
+    config = get_config()
+    setup_logging(level=verbosity, output_dir=output_path, config=config.logging)
 
-    # Parse blueprint
-    design_space, blueprint_config = parse_blueprint(blueprint_path, str(Path(model_path).absolute()))
+    logger.info(f"Exploring design space for dataflow accelerator:")
+    logger.info(f"    Model: {model_path}")
+    logger.info(f"    Blueprint: {blueprint_path}")
+    logger.info(f"    Output: {output_dir}")
 
-    # Apply CLI overrides (CLI > blueprint)
-    start_step = start_step_override or blueprint_config.start_step
-    stop_step = stop_step_override or blueprint_config.stop_step
+    # Parse blueprint (with optional step slicing)
+    design_space, blueprint_config = parse_blueprint(
+        blueprint_path,
+        str(Path(model_path).absolute()),
+        start_step=start_step_override,
+        stop_step=stop_step_override
+    )
 
-    # Slice steps if specified
-    if start_step or stop_step:
-        logger.info(f"Applying step range: start={start_step or 'beginning'}, stop={stop_step or 'end'}")
-        design_space.steps = _slice_steps(design_space.steps, start_step, stop_step)
-    
     # Build DSE tree
     tree_builder = DSETreeBuilder()
     tree = tree_builder.build_tree(design_space, blueprint_config)
-    
-    logger.info(f"Design space: {len(design_space.steps)} steps, "
-                f"{len(design_space.kernel_backends)} kernels")
-    
+
+    logger.debug(f"Design space: {len(design_space.steps)} steps, "
+                 f"{len(design_space.kernel_backends)} kernels")
+
     # Log tree statistics
     stats = tree.get_statistics()
-    logger.info(f"DSE tree:")
-    logger.info(f"  - Total paths: {stats['total_paths']:,}")
-    logger.info(f"  - Total segments: {stats['total_segments']:,}")
-    logger.info(f"  - Segment efficiency: {stats['segment_efficiency']}%")
-    
-    # Explore the DSE tree
-    logger.info("Starting design space exploration...")
-    
+    logger.debug(f"DSE tree:")
+    logger.debug(f"  - Total paths: {stats['total_paths']:,}")
+    logger.debug(f"  - Total segments: {stats['total_segments']:,}")
+    logger.debug(f"  - Segment efficiency: {stats['segment_efficiency']}%")
+
     # Create runner and execute
     finn_adapter = FINNAdapter()
     runner = SegmentRunner(finn_adapter, tree.root.finn_config)
@@ -118,7 +114,7 @@ def explore_design_space(
         initial_model=Path(model_path),
         output_dir=Path(output_dir)
     )
-    
+
     # Validate results
     results.validate_success(Path(output_dir))
 
@@ -145,6 +141,13 @@ def build_tree(
 
     Separates tree construction from execution for inspection and validation.
 
+    Args:
+        design_space: GlobalDesignSpace with steps and kernel backends
+        config: DSEConfig with FINN configuration
+
+    Returns:
+        DSETree ready for execution
+
     Raises:
         ValueError: If tree exceeds max_combinations limit
     """
@@ -164,10 +167,17 @@ def execute_tree(
     Separates execution from tree construction for custom execution strategies.
 
     Args:
-        runner: Custom segment runner (optional, uses default if None)
+        tree: Pre-built DSETree to execute
+        model_path: Path to initial ONNX model
+        config: DSEConfig (used for validation)
+        output_dir: Base output directory
+        runner: Custom segment runner (uses default if None)
+
+    Returns:
+        TreeExecutionResult with segment results
 
     Raises:
-        RuntimeError: If no successful builds were produced
+        ExecutionError: If no successful builds were produced
     """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)

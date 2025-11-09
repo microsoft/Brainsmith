@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import List
 import pytest
 
+from .constants import FIXTURE_RANDOM_SEED
+
 
 def create_simple_model(
     input_shape: List[int] = [1, 3, 32, 32],
@@ -141,6 +143,10 @@ def quantized_onnx_model(tmp_path) -> Path:
     This is the minimal quantized model that can go through FINN pipelines.
     Fast to generate (<1 second) for integration tests.
 
+    Seed Management:
+        Uses fixed seed (42) for deterministic weight/parameter generation.
+        All test runs produce identical model for reproducibility.
+
     Returns:
         Path to saved quantized ONNX model file
     """
@@ -193,7 +199,8 @@ def quantized_onnx_model(tmp_path) -> Path:
     model = ModelWrapper(model)
 
     # Set quantization parameters (4-bit)
-    np.random.seed(42)  # Deterministic
+    # Fixed seed for deterministic test data generation
+    np.random.seed(FIXTURE_RANDOM_SEED)
 
     # Input quantization
     model.set_initializer("inp_scale", np.array([0.1], dtype=np.float32))
@@ -237,6 +244,11 @@ def brevitas_fc_model(tmp_path_factory):
 
     Session-scoped: Built once per test session (~15 seconds).
 
+    Seed Management:
+        Uses fixed seeds (torch: 42, numpy: 42) for deterministic generation.
+        Session scope requires identical model across all tests in run.
+        Changing seed requires modifying this fixture directly.
+
     Returns:
         Path: Path to generated FINN-compatible ONNX model
     """
@@ -266,6 +278,11 @@ def brevitas_fc_model(tmp_path_factory):
         return model_path
 
     # 1. Build Brevitas model
+
+    # Set seeds for deterministic weights (required for session-scoped caching)
+    torch.manual_seed(FIXTURE_RANDOM_SEED)
+    np.random.seed(FIXTURE_RANDOM_SEED)
+
     class BrevitasFC(nn.Module):
         """Simple 2-layer FC network with Brevitas quantization."""
 

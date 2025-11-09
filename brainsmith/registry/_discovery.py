@@ -29,14 +29,13 @@ from pathlib import Path
 from importlib.metadata import entry_points
 from typing import Dict, List, Any
 
-from ._state import _component_index, _components_discovered
+from ._state import _component_index, _components_discovered, _discovered_sources
 from ._decorators import _register_kernel, _register_backend, _register_step, source_context, _convert_lazy_import_spec
 from ._metadata import ComponentMetadata, ComponentType, ImportSpec, resolve_lazy_class
 from .constants import (
     SOURCE_BRAINSMITH,
     SOURCE_FINN,
     SOURCE_PROJECT,
-    SOURCE_USER,
     DEFAULT_SOURCE_PRIORITY,
 )
 from ._manifest import (
@@ -195,6 +194,7 @@ def _index_entry_point_components(
             if component_type_enum == ComponentType.KERNEL:
                 infer_spec = meta.get('infer_transform')
                 metadata.kernel_infer = _convert_lazy_import_spec(infer_spec)
+                metadata.is_infrastructure = meta.get('is_infrastructure', False)
             elif component_type_enum == ComponentType.BACKEND:
                 metadata.backend_target = meta.get('target_kernel')
                 metadata.backend_language = meta.get('language')
@@ -218,6 +218,7 @@ def _index_entry_point_components(
             if component_type_enum == ComponentType.KERNEL:
                 infer_spec = meta.get('infer_transform')
                 metadata.kernel_infer = _convert_lazy_import_spec(infer_spec)
+                metadata.is_infrastructure = meta.get('is_infrastructure', False)
             elif component_type_enum == ComponentType.BACKEND:
                 metadata.backend_target = meta.get('target_kernel')
                 metadata.backend_language = meta.get('language')
@@ -356,6 +357,8 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
         # Resolve lazy infer_transform if needed
         infer_transform = resolve_lazy_class(meta.kernel_infer)
 
+        # Note: _register_kernel now preserves existing manifest metadata
+        # when entry already exists, so no need to pass is_infrastructure here
         _register_kernel(obj, name=meta.name, infer_transform=infer_transform)
         logger.debug(f"Registered kernel: {meta.full_name}")
 
@@ -381,28 +384,28 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
 # ============================================================================
 
 def discover_components(use_cache: bool = True, force_refresh: bool = False):
-    """Discover and load all components from configured sources.
+    """Discover components from all configured sources.
 
-    This loads:
-    1. Core brainsmith components (kernels, steps) via direct imports
-    2. Component packages from component_sources (must have __init__.py)
-    3. Entry points from pip-installed packages (e.g., FINN)
+    Discovers kernels, backends, and steps from:
+    - Core brainsmith components
+    - Project components (if configured)
+    - Entry points from installed packages (e.g., FINN)
+    - Custom component sources
 
-    Components self-register during import using the global registry.
-
-    This is called automatically on first component lookup.
+    Called automatically on first component lookup.
 
     Args:
-        use_cache: If True, try to load from cached manifest
-        force_refresh: If True, ignore cache and regenerate manifest
+        use_cache: Use cached manifest if available
+        force_refresh: Ignore cache and regenerate manifest
     """
     global _components_discovered
 
     # Handle force refresh - reset discovery state to allow re-discovery
     if force_refresh and _components_discovered:
-        logger.info("Force refresh requested - resetting discovery state")
+        logger.debug("Force refresh requested - resetting discovery state")
         _components_discovered = False
         _component_index.clear()
+        _discovered_sources.clear()
 
     # Skip if already discovered (and not forcing refresh)
     if _components_discovered:
@@ -424,41 +427,48 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         # Try cached manifest
         if use_cache and not force_refresh and manifest_path.exists():
             try:
-                logger.info(f"Loading component manifest from {manifest_path}")
+                logger.debug(f"Loading component manifest from {manifest_path}")
                 manifest = _load_manifest(manifest_path)
 
                 # Check if cache is stale
                 if _is_manifest_stale(manifest):
-                    logger.info("Manifest is stale - performing full discovery")
+                    logger.debug("Manifest is stale - performing full discovery")
                     # Don't return, fall through to full discovery
                 else:
                     _populate_index_from_manifest(manifest)
                     _components_discovered = True
 
-                    logger.info(
+                    logger.debug(
                         f"Loaded {len(_component_index)} components from cache"
                     )
                     return
             except Exception as e:
                 logger.warning(f"Failed to load manifest cache: {e}")
-                logger.info("Falling back to full discovery...")
+                logger.debug("Falling back to full discovery...")
 
         # Full discovery
-        logger.info("Discovering components from all sources...")
+        logger.debug("Discovering components from all sources...")
+
+        # Get config for component sources
+        config = get_config()
 
         # 1. Core brainsmith components (eager imports with source_context)
         # Decorators fire during import and auto-populate registry + index
+        _discovered_sources.add(SOURCE_BRAINSMITH)
         with source_context(SOURCE_BRAINSMITH):
-            import brainsmith.kernels
-            import brainsmith.steps
+            import brainsmith.kernels  # noqa: E402
+            import brainsmith.steps    # noqa: E402
 
-        logger.info(f"Loaded core brainsmith components")
+        logger.debug(f"Loaded core brainsmith components")
 
-        # 2. User/project components (filesystem)
-        _load_component_sources()
-
-        # 3. Entry point components (FINN, etc.)
+        # 2. Entry point components (FINN, etc.)
         _load_entry_point_components()
+
+        # 3. Active project components (SOURCE_PROJECT at project root)
+        _load_project_components(config)
+
+        # 4. Other filesystem-based component sources (custom sources)
+        _load_other_component_sources(config)
 
         _components_discovered = True
 
@@ -482,39 +492,74 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
             try:
                 manifest = _build_manifest_from_index()
                 _save_manifest(manifest, manifest_path)
-                logger.info(f"Saved manifest cache to {manifest_path}")
+                logger.debug(f"Regenerated and saved manifest cache to {manifest_path}")
             except Exception as e:
                 logger.warning(f"Failed to save manifest cache: {e}")
         else:
             logger.debug("Skipping manifest save (caching disabled)")
 
 
-def _load_component_sources():
-    """Load component packages from configured component sources.
+def _load_project_components(config):
+    """Load active project components from SOURCE_PROJECT.
 
-    Scans component_sources from config, imports each package that has
-    an __init__.py file. The __init__.py must import and register
-    its components.
+    Project components use structured layout:
+        project_dir/kernels/__init__.py → project kernels
+        project_dir/steps/__init__.py → project steps
+
+    This is phase 3 of discovery, after brainsmith core and entry points.
+
+    Args:
+        config: SystemConfig instance with component_sources configured
     """
-    try:
-        from brainsmith.settings import get_config
-        component_sources = get_config().component_sources
-    except Exception as e:
-        logger.warning(f"Could not load component sources config: {e}")
+    source_path = config.component_sources.get(SOURCE_PROJECT)
+
+    if not source_path:
+        logger.debug("No SOURCE_PROJECT configured, skipping project components")
         return
 
-    for source_name, source_path in component_sources.items():
-        # Skip protected sources:
-        # - brainsmith: loaded via direct import
-        # - finn: loaded via entry points
-        # - project, user: optional __init__.py-based component packages
-        if source_name in (SOURCE_BRAINSMITH, SOURCE_FINN):
+    if not source_path.exists():
+        logger.debug(f"Project component source does not exist: {source_path}")
+        return
+
+    # Register project source as discovered
+    _discovered_sources.add(SOURCE_PROJECT)
+
+    # Load structured layout (project_dir/kernels/, project_dir/steps/)
+    for component_type in ['kernels', 'steps']:
+        type_dir = source_path / component_type
+        init_file = type_dir / '__init__.py'
+
+        if init_file.exists():
+            _load_component_package(SOURCE_PROJECT, type_dir)
+            logger.debug(f"Loaded project {component_type} from {type_dir}")
+        else:
+            logger.debug(f"No project {component_type} at {type_dir}")
+
+
+def _load_other_component_sources(config):
+    """Load custom filesystem-based component sources.
+
+    Loads components from component_sources, excluding protected sources
+    (brainsmith, finn) and SOURCE_PROJECT (loaded separately).
+    This is phase 4 of discovery, after project components.
+
+    Args:
+        config: SystemConfig instance with component_sources configured
+    """
+    for source_name, source_path in config.component_sources.items():
+        # Skip protected sources (loaded separately):
+        # - brainsmith: loaded via direct import in phase 1
+        # - finn: loaded via entry points in phase 2
+        # - project: loaded in phase 3
+        if source_name in (SOURCE_BRAINSMITH, SOURCE_FINN, SOURCE_PROJECT):
             continue
 
-        if not source_path.exists():
+        if not source_path or not source_path.exists():
             logger.debug(f"Component source '{source_name}' does not exist: {source_path}")
             continue
 
+        # Register custom source as discovered
+        _discovered_sources.add(source_name)
         _load_component_package(source_name, source_path)
 
 
@@ -535,7 +580,7 @@ def _load_component_package(source_name: str, source_path: Path):
     """
     init_file = source_path / '__init__.py'
     if not init_file.exists():
-        logger.warning(
+        logger.debug(
             f"Component source '{source_name}' has no __init__.py, skipping. "
             f"Component packages must have __init__.py that registers components. "
             f"Path: {source_path}"
@@ -556,7 +601,7 @@ def _load_component_package(source_name: str, source_path: Path):
 
     try:
         # Handle module name collisions using spec-based import
-        # Multiple plugin sources may have the same directory name (e.g., 'plugins')
+        # Multiple component sources may have the same directory name (e.g., 'kernels', 'steps')
         # Use importlib.util to import from specific file path to avoid sys.path ambiguity
 
         # Create a unique module name to avoid cache collisions
@@ -571,7 +616,7 @@ def _load_component_package(source_name: str, source_path: Path):
             with source_context(source_name):
                 spec.loader.exec_module(module)
 
-            logger.info(f"Loaded component source '{source_name}' from {source_path}")
+            logger.debug(f"Loaded component source '{source_name}' from {source_path}")
         else:
             raise ImportError(f"Could not create module spec for {init_path}")
 
@@ -590,10 +635,12 @@ def _load_component_package(source_name: str, source_path: Path):
 def _load_entry_point_components():
     """Load components from pip package entry points.
 
-    Scans entry points in group 'brainsmith.plugins'. Each entry point
+    Scans entry points in group 'brainsmith.plugins' (a Python packaging
+    entry point group, not a filesystem directory). Each entry point
     should return a dict of component metadata that we register.
 
-    Entry points are registered with their entry point name as source.
+    Entry points are registered with their entry point name as source
+    (e.g., 'finn' from the finn package).
     """
     logger.debug("Scanning entry points")
 
@@ -615,7 +662,9 @@ def _load_entry_point_components():
                     logger.error(f"Entry point '{ep.name}' returned {type(components)}, expected dict")
                     continue
 
-                logger.info(f"Loading component source: {source_name}")
+                # Register this source as discovered
+                _discovered_sources.add(source_name)
+                logger.debug(f"Loading component source: {source_name}")
 
                 # Register all components under this source
                 with source_context(source_name):
@@ -624,7 +673,7 @@ def _load_entry_point_components():
                     _index_entry_point_components(source_name, 'backend', components.get('backends', []))
                     _index_entry_point_components(source_name, 'step', components.get('steps', []))
 
-                logger.info(
+                logger.debug(
                     f"✓ Loaded {source_name}: "
                     f"{len(components.get('kernels', []))} kernels, "
                     f"{len(components.get('backends', []))} backends, "

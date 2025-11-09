@@ -12,8 +12,15 @@ from brainsmith.dse.types import SegmentStatus
 
 
 class DSETree:
-    """Design space exploration tree structure and operations."""
-    
+    """Design space exploration tree structure.
+
+    Represents the complete exploration space as a tree of segments,
+    where each segment contains steps to execute between branch points.
+
+    Attributes:
+        root: Root segment of the tree
+    """
+
     def __init__(self, root: DSESegment):
         self.root = root
 

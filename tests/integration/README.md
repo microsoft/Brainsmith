@@ -151,7 +151,7 @@ poetry run pytest tests/integration/finn/ -v --durations=10
 
 ### Planned Markers
 ```python
-@pytest.mark.rtl_sim  # RTL simulation tests (30min - hours)
+@pytest.mark.rtlsim  # RTL simulation tests (30min - hours)
 @pytest.mark.slow     # Slow tests (hours)
 @pytest.mark.timeout(14400)  # 4 hour max
 ```
@@ -216,7 +216,7 @@ poetry run pytest -m fast -v
 poetry run pytest -m finn_build -v
 
 # Future: RTL simulation tests
-poetry run pytest -m rtl_sim -v
+poetry run pytest -m rtlsim -v
 
 # Future: Hardware tests
 poetry run pytest -m hardware -v
@@ -269,7 +269,7 @@ Key modules:
 @pytest.mark.finn_build  # Real FINN execution (1-30 min)
 
 # Future (placeholders)
-@pytest.mark.rtl_sim     # RTL simulation tests (30min - hours)
+@pytest.mark.rtlsim     # RTL simulation tests (30min - hours)
 @pytest.mark.slow        # Slow tests (hours)
 @pytest.mark.bitfile     # Bitfile generation (hours - days)
 @pytest.mark.hardware    # Requires actual FPGA hardware
