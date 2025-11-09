@@ -4,8 +4,16 @@
 FROM ubuntu:22.04
 LABEL maintainer="Thomas Keller <thomaskeller@microsoft.com>, Mahdi Ghandi <Mahdi.Ghandi@microsoft.com>"
 
-# Install system dependencies
+# Set timezone and non-interactive mode to avoid prompts
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=US/Pacific
+
+# Install system dependencies and Python 3.11
 RUN apt-get update && \
+    apt-get install -y \
+    software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa -y && \
+    apt-get update && \
     apt-get install -y \
     build-essential \
     libc6-dev-i386 \
@@ -25,11 +33,10 @@ RUN apt-get update && \
     zip \
     locales \
     lsb-core \
-    python3 \
-    python-is-python3 \
+    python3.11 \
+    python3.11-venv \
+    python3.11-dev \
     python3-pip \
-    python3-setuptools-scm \
-    python3-venv \
     pybind11-dev \
     libfmt-dev \
     libboost-dev \
@@ -37,7 +44,9 @@ RUN apt-get update && \
     libgetdata-dev \
     libtinfo5 \
     g++-10 \
-    curl
+    curl && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
 RUN echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
 RUN locale-gen "en_US.UTF-8"
 
