@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # API Reference
 
 Complete API documentation for Brainsmith's public interfaces.

@@ -81,7 +81,7 @@ stop_step: "generate_estimates"    # Stop at this step (inclusive)
 
 **CLI overrides** (take precedence):
 ```bash
-smith dfc model.onnx blueprint.yaml --start-step streamline --stop-step streamline
+smith model.onnx blueprint.yaml --start-step streamline --stop-step streamline
 ```
 
 ### finn_config

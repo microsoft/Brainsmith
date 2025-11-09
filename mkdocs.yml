@@ -52,6 +52,15 @@ exclude_docs: |
 
 plugins:
   - search
+  - glightbox:
+      touchNavigation: true
+      loop: false
+      effect: zoom
+      width: 100%
+      zoomable: true
+      draggable: true
+      auto_caption: false
+      caption_position: bottom
   - mkdocstrings:
       handlers:
         python:
@@ -106,7 +115,6 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - Tutorials (Coming Soon): tutorials/index.md
   - Developer Guide:
     - Overview: developer-guide/index.md
     - Hardware Kernels: developer-guide/hardware-kernels.md
@@ -119,6 +127,7 @@ nav:
     - Dataflow Modeling: api/dataflow.md
     - Settings: api/settings.md
     - CLI: api/cli.md
+  - Tutorials (Coming Soon): tutorials/index.md
 
 extra_css:
   - stylesheets/extra.css

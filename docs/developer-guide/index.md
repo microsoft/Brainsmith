@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Developer Guide
 
 Technical documentation for extending Brainsmith and understanding its architecture.
@@ -11,9 +16,3 @@ Technical documentation for extending Brainsmith and understanding its architect
 **[Blueprint Schema Reference](blueprint-schema.md)** - Complete YAML schema for design space configuration files.
 
 **[Multi-Layer Offload](multi-layer-offload.md)** - Graph partitioning and heterogeneous execution strategies.
-
-## Additional Resources
-
-**Experimental Docs** - `experimental/` contains older comprehensive docs with conceptual depth (outdated APIs, older terminology).
-
-**See Also** - [API Reference](../api/index.md) · [Getting Started](../getting-started.md)

@@ -1,46 +1,42 @@
+---
+hide:
+  - toc
+---
 
 # Brainsmith
 
 ## Compile Neural Networks to FPGA Accelerators
 
-Brainsmith transforms ONNX models into dataflow accelerators for FPGAs. Through design space exploration, it evaluates hardware configurations to find designs that balance throughput and resource usage.
+Brainsmith is an end-to-end compiler to transform ONNX models into dataflow accelerators for FPGAs. Through design space exploration, it evaluates hardware configurations to find the optimal configuration for your use case.
+
+<div class="comparison-grid" markdown>
+
+<div class="comparison-item" markdown>
+
+<div class="comparison-title">ONNX Model</div>
+
+<img src="images/mha_onnx.png" alt="ONNX Graph Structure">
+
+</div>
+
+<div class="comparison-arrow">
+→
+</div>
+
+<div class="comparison-item" markdown>
+
+<div class="comparison-title">Dataflow Core</div>
+
+<img src="images/bert_dfc.png" alt="Generated Dataflow Accelerator">
+
+</div>
+
+</div>
 
 **Automated RTL generation from ONNX models. Design space exploration to identify optimal configurations.**
 
 [Get Started](getting-started.md){ .md-button .md-button--primary }
 [View on GitHub](https://github.com/microsoft/brainsmith){ .md-button }
-
----
-
-## From ONNX to Hardware
-
-<div class="grid" markdown style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 2rem; align-items: center; margin: 2rem 0;">
-
-<div markdown style="text-align: center;">
-
-**Your ONNX Model**
-
-Standard neural network representation from PyTorch, TensorFlow, or ONNX Runtime
-
-<img src="images/mha_onnx.png" alt="ONNX Graph Structure" style="width: 100%; max-height: 400px; object-fit: contain; margin-top: 1rem;">
-
-</div>
-
-<div style="font-size: 3rem; color: #666; text-align: center;">
-→
-</div>
-
-<div markdown style="text-align: center;">
-
-**Dataflow Core**
-
-Streaming architecture with configurable parallelization and memory hierarchy
-
-<img src="images/bert_dfc.png" alt="Generated Dataflow Accelerator" style="width: 100%; max-height: 400px; object-fit: contain; margin-top: 1rem;">
-
-</div>
-
-</div>
 
 ---
 
@@ -94,7 +90,7 @@ Generate an accelerator with a single command:
 
 ```bash
 # Design space exploration and RTL generation
-smith dfc model.onnx blueprint.yaml
+smith model.onnx blueprint.yaml
 
 # Output: RTL + performance estimates + resource reports
 ```
@@ -103,7 +99,6 @@ Or use the Python API for programmatic control:
 
 ```python
 from brainsmith import explore_design_space
-from brainsmith.dse import SegmentStatus
 
 # Explore design space
 results = explore_design_space(
@@ -195,9 +190,9 @@ Explore FPGA deployment as an alternative to GPU inference. Design space explora
 
 The BERT example demonstrates the design space exploration workflow:
 
-- Evaluated configurations ranging from 1 FPS to 5000+ FPS on ZCU104 (250MHz)
 - Design space exploration identifies resource/performance tradeoffs
-- Compatible with Xilinx Zynq/Ultrascale+ platforms using Vivado 2024.2
+- Example targets V80 platform using Vivado 2024.2
+- Compatible with Xilinx Zynq/Ultrascale+ platforms
 
 *Results from examples/bert - your mileage may vary based on model and target platform*
 
@@ -226,7 +221,7 @@ design_space:
 Run design space exploration:
 
 ```bash
-smith dfc bert.onnx blueprint.yaml --output-dir ./results
+smith bert.onnx blueprint.yaml --output-dir ./results
 ```
 
 Results include:
@@ -243,6 +238,8 @@ Brainsmith is MIT-licensed and builds upon a foundation of proven open-source to
 - [FINN](https://github.com/Xilinx/finn) - Dataflow compiler for quantized neural networks
 - [QONNX](https://github.com/fastmachinelearning/qonnx) - Quantized ONNX representation
 - [Brevitas](https://github.com/Xilinx/brevitas) - PyTorch quantization library
+
+Brainsmith extends FINN with automated design space exploration, blueprint inheritance, and a schema-driven kernel system. FINN provides the low-level RTL generation and QONNX transformations.
 
 Developed through collaboration between **Microsoft** and **AMD**.
 

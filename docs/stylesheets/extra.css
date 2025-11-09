@@ -18,6 +18,13 @@
     max-width: 100%;
 }
 
+/* Optimal line length for readability (best practice: 50-75 chars) */
+.md-content__inner {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 /* Overflow handling for code blocks and tables */
 .md-content pre {
     overflow-x: auto;
@@ -39,6 +46,10 @@
     .md-sidebar--primary {
         width: 15rem;  /* Slightly narrower navigation sidebar */
     }
+
+    .md-content {
+        padding-right: 5rem;
+    }
 }
 
 /* Responsive design for tablet/mobile (below 1220px) */
@@ -59,7 +70,7 @@
 /* Mobile-specific adjustments (<960px) */
 @media screen and (max-width: 60em) {
     .md-grid {
-        padding: 0 0.5rem;
+        padding: 0 1.5rem;
     }
 
     .md-sidebar--secondary {
@@ -67,6 +78,166 @@
     }
 
     .md-content {
-        padding: 0 0.5rem;
+        padding: 0 1.5rem;
+    }
+}
+
+/* ============================================
+   DARK MODE IMAGE FIXES
+   ============================================ */
+
+/* General image styling for dark mode */
+[data-md-color-scheme="slate"] .md-content img {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Specific white backgrounds for dark-content images */
+[data-md-color-scheme="slate"] .md-content img[src*="mha_onnx"],
+[data-md-color-scheme="slate"] .md-content img[src*="bert_dfc"] {
+    background-color: #ffffff;
+    padding: 0.5rem;
+}
+
+/* Hover effect for images */
+[data-md-color-scheme="slate"] .md-content img:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Light mode image styling (subtle enhancement) */
+[data-md-color-scheme="default"] .md-content img {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+[data-md-color-scheme="default"] .md-content img:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================
+   VISUAL HIERARCHY ENHANCEMENTS
+   ============================================ */
+
+/* Section headers with bottom border */
+.md-content h2 {
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--md-primary-fg-color);
+}
+
+/* First h2 has less top margin */
+.md-content h2:first-of-type {
+    margin-top: 1.5rem;
+}
+
+/* Enhanced card hover effects */
+.md-content .grid.cards > :is(ul, ol) > li {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.md-content .grid.cards > :is(ul, ol) > li:hover {
+    transform: translateY(-4px);
+}
+
+[data-md-color-scheme="slate"] .md-content .grid.cards > :is(ul, ol) > li:hover {
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+[data-md-color-scheme="default"] .md-content .grid.cards > :is(ul, ol) > li:hover {
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* ============================================
+   COMPARISON GRID LAYOUT
+   ============================================ */
+
+/* Comparison grid container */
+.comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 3rem;
+    align-items: center;
+    margin: 2rem 0;
+}
+
+/* Comparison items with subtle background */
+.comparison-item {
+    text-align: center;
+    padding: 2rem;
+    border-radius: 12px;
+    transition: transform 0.2s ease;
+}
+
+[data-md-color-scheme="slate"] .comparison-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-md-color-scheme="default"] .comparison-item {
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.comparison-item:hover {
+    transform: scale(1.02);
+}
+
+/* Arrow styling */
+.comparison-arrow {
+    font-size: 3rem;
+    color: var(--md-primary-fg-color);
+    opacity: 0.6;
+}
+
+/* Comparison item headers (styled like h3 but not in TOC) */
+.comparison-item .comparison-title {
+    display: block;
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--md-primary-fg-color);
+}
+
+/* Fallback for actual h3 elements if present */
+.comparison-item h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    color: var(--md-primary-fg-color);
+}
+
+.comparison-item p {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin-bottom: 1rem;
+}
+
+/* Comparison images */
+.comparison-item img {
+    width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    margin-top: 1rem;
+}
+
+/* Responsive comparison grid */
+@media screen and (max-width: 60em) {
+    .comparison-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+
+    .comparison-arrow {
+        transform: rotate(90deg);
+        margin: 1rem 0;
     }
 }
