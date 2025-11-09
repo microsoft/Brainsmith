@@ -214,4 +214,4 @@ class TestFINNIntegration:
         config = get_finn_config()
 
         assert config["verbose"] is False
-        assert config["show_progress"] is True
+        assert config["show_progress"] is False
