@@ -89,7 +89,8 @@ def bert_streamlining_step(model: Any, cfg: Any) -> Any:
         MoveScalarMulPastMatMul(),
         MoveScalarLinearPastInvariants(),
         AbsorbMulIntoMultiThreshold(),
-        AbsorbAddIntoMultiThreshold()
+        AbsorbAddIntoMultiThreshold(),
+        RoundAndClipThresholds()
     ]:
         model = model.transform(transform)
 

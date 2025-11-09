@@ -14,10 +14,13 @@ design_space:
     - DuplicateStreams
     - ElementwiseBinaryOp
     - Shuffle
+    - Crop
+    - Lookup
     - Softmax
     - finn:Thresholding
     - finn:MVAU
 
+>>>>>>> develop:examples/blueprints/bert.yaml
   steps:
     - "qonnx_to_finn"
     # Topology optimization
@@ -26,7 +29,7 @@ design_space:
     # Core Brainsmith steps
     - "build_dataflow_graph"  # ONNX --> Kernels
     - "build_hw_graph"        # Kernels --> HW Backends
-    # - "loop_rolling"
+    - "loop_rolling"
     - "transpose_decomposition"
     - "brainsmith:target_fps_parallelization"
     - "apply_parallelization_config"
