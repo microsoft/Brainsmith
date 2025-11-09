@@ -104,7 +104,7 @@ class InsertInfrastructureKernels(Transformation):
             logger.debug("No infrastructure kernels to insert")
             return (model, False)
 
-        logger.info(f"Inserting {len(self.kernel_classes)} infrastructure kernel(s)")
+        logger.debug(f"Inserting {len(self.kernel_classes)} infrastructure kernel(s)")
 
         for kernel_cls in self.kernel_classes:
             # Get kernel name for lookup
@@ -127,7 +127,7 @@ class InsertInfrastructureKernels(Transformation):
             graph_modified = graph_modified or modified
 
             if modified:
-                logger.info(f"  ✓ {kernel_name} inserted")
+                logger.debug(f"  ✓ {kernel_name} inserted")
             else:
                 logger.debug(f"  - {kernel_name} not needed (no insertion)")
 

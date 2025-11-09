@@ -95,17 +95,17 @@ def explore_design_space(
     # Build DSE tree
     tree_builder = DSETreeBuilder()
     tree = tree_builder.build_tree(design_space, blueprint_config)
-    
-    logger.info(f"Design space: {len(design_space.steps)} steps, "
-                f"{len(design_space.kernel_backends)} kernels")
-    
+
+    logger.debug(f"Design space: {len(design_space.steps)} steps, "
+                 f"{len(design_space.kernel_backends)} kernels")
+
     # Log tree statistics
     stats = tree.get_statistics()
-    logger.info(f"DSE tree:")
-    logger.info(f"  - Total paths: {stats['total_paths']:,}")
-    logger.info(f"  - Total segments: {stats['total_segments']:,}")
-    logger.info(f"  - Segment efficiency: {stats['segment_efficiency']}%")
-    
+    logger.debug(f"DSE tree:")
+    logger.debug(f"  - Total paths: {stats['total_paths']:,}")
+    logger.debug(f"  - Total segments: {stats['total_segments']:,}")
+    logger.debug(f"  - Segment efficiency: {stats['segment_efficiency']}%")
+
     # Explore the DSE tree
     logger.info("Starting design space exploration...")
     

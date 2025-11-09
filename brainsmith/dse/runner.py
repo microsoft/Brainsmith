@@ -119,8 +119,8 @@ class SegmentRunner:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Executing tree with fail_fast={self.fail_fast}")
-        logger.info(f"Output directory: {output_dir}")
+        logger.debug(f"Executing tree with fail_fast={self.fail_fast}")
+        logger.debug(f"Output directory: {output_dir}")
 
         results = {}
         skipped = set()
@@ -144,7 +144,7 @@ class SegmentRunner:
                 continue
 
             # Execute segment
-            logger.info(f"{indent}Executing: {segment.segment_id}")
+            logger.debug(f"{indent}Executing: {segment.segment_id}")
 
             # Skip empty segments (e.g., root with immediate branches)
             if not segment.steps:
@@ -248,7 +248,7 @@ class SegmentRunner:
                 output_model.unlink()
 
         # Cache miss or invalid - execute build
-        logger.info(f"Building segment: {segment.segment_id}")
+        logger.debug(f"Building segment: {segment.segment_id}")
 
         # Create FINN config
         finn_config = self._make_finn_config(segment, segment_dir)
@@ -268,7 +268,7 @@ class SegmentRunner:
             if final_model:
                 # Copy to expected location
                 self.finn_adapter.prepare_model(final_model, output_model)
-                logger.info(f"Completed segment: {segment.segment_id} ({time.time() - start_time:.1f}s)")
+                logger.debug(f"Completed segment: {segment.segment_id} ({time.time() - start_time:.1f}s)")
                 return SegmentResult(
                     segment_id=segment.segment_id,
                     status=SegmentStatus.COMPLETED,

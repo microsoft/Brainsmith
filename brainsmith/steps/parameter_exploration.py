@@ -51,9 +51,9 @@ def explore_kernel_params_step(model, cfg):
           - explore_kernel_params  # Add after kernel inference
           - create_dataflow_partition
     """
-    logger.info("=" * 80)
-    logger.info("Exploring kernel parallelization parameters...")
-    logger.info("=" * 80)
+    logger.debug("=" * 80)
+    logger.debug("Exploring kernel parallelization parameters...")
+    logger.debug("=" * 80)
 
     # Find all KernelOp nodes
     kernel_nodes = []
@@ -78,17 +78,17 @@ def explore_kernel_params_step(model, cfg):
         logger.info("Skipping parameter exploration")
         return model
 
-    logger.info(f"Found {len(kernel_nodes)} KernelOp nodes to explore:")
+    logger.debug(f"Found {len(kernel_nodes)} KernelOp nodes to explore:")
     for node, _ in kernel_nodes:
-        logger.info(f"  - {node.name} ({node.op_type})")
+        logger.debug(f"  - {node.name} ({node.op_type})")
 
     # Explore each kernel
     all_results = []
     total_start = time.time()
 
     for node, kernel_op in kernel_nodes:
-        logger.info("-" * 80)
-        logger.info(f"Exploring {node.name} ({node.op_type})...")
+        logger.debug("-" * 80)
+        logger.debug(f"Exploring {node.name} ({node.op_type})...")
 
         # Get valid ranges
         try:
@@ -102,16 +102,16 @@ def explore_kernel_params_step(model, cfg):
             continue
 
         # Log parameter space
-        logger.info(f"  Parameters: {list(valid_ranges.keys())}")
+        logger.debug(f"  Parameters: {list(valid_ranges.keys())}")
         for param_name, param_values in valid_ranges.items():
-            logger.info(f"    {param_name}: {len(param_values)} values "
+            logger.debug(f"    {param_name}: {len(param_values)} values "
                        f"(range: {min(param_values)}-{max(param_values)})")
 
         # Calculate total configs
         total_configs = 1
         for param_values in valid_ranges.values():
             total_configs *= len(param_values)
-        logger.info(f"  Total configurations: {total_configs:,}")
+        logger.debug(f"  Total configurations: {total_configs:,}")
 
         # Explore configurations
         results = _explore_kernel_configs(node.name, kernel_op, model, total_configs)
@@ -120,9 +120,9 @@ def explore_kernel_params_step(model, cfg):
     total_elapsed = time.time() - total_start
 
     # Log summary
-    logger.info("=" * 80)
-    logger.info("Parameter Exploration Summary")
-    logger.info("=" * 80)
+    logger.debug("=" * 80)
+    logger.debug("Parameter Exploration Summary")
+    logger.debug("=" * 80)
 
     total_kernels = len(all_results)
     total_configs_explored = sum(r["configs_explored"] for r in all_results)
@@ -145,7 +145,7 @@ def explore_kernel_params_step(model, cfg):
         _save_results(output_path, all_results, total_elapsed)
         logger.info(f"Results saved to: {output_path}")
 
-    logger.info("=" * 80)
+    logger.debug("=" * 80)
 
     return model
 
@@ -172,7 +172,7 @@ def _explore_kernel_configs(
     failed = 0
     config_details = []
 
-    logger.info(f"  Exploring {expected_count:,} configurations...")
+    logger.debug(f"  Exploring {expected_count:,} configurations...")
 
     for i, config in enumerate(iter_valid_configurations(kernel_op, model)):
         config_start = time.time()
@@ -217,13 +217,13 @@ def _explore_kernel_configs(
 
         # Log progress every 10 configs
         if (i + 1) % 10 == 0 or (i + 1) == expected_count:
-            logger.info(f"    Progress: {i+1}/{expected_count} configs "
+            logger.debug(f"    Progress: {i+1}/{expected_count} configs "
                        f"({successful} successful, {failed} failed)")
 
     elapsed = time.time() - start_time
 
-    logger.info(f"  Completed in {elapsed:.2f}s")
-    logger.info(f"  Success rate: {successful}/{expected_count} "
+    logger.debug(f"  Completed in {elapsed:.2f}s")
+    logger.debug(f"  Success rate: {successful}/{expected_count} "
                f"({100*successful/max(expected_count,1):.1f}%)")
 
     return {

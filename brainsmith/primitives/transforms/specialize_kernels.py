@@ -13,6 +13,7 @@ Architecture:
 - Domain determined by backend's source via get_domain_for_backend()
 """
 
+import logging
 import numpy as np
 import warnings
 from onnx import helper
@@ -20,6 +21,8 @@ from qonnx.transformation.base import Transformation
 
 from finn.util.basic import getHWCustomOp, get_dsp_block, is_versal
 from brainsmith.registry import get_domain_for_backend, get_component_metadata
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -233,6 +236,8 @@ class SpecializeKernels(Transformation):
         Returns:
             Backend name if viable backend found, None otherwise
         """
+        logger.debug(f"Selecting backend for {node.name} ({node.op_type}), trying: {backend_list}")
+
         for backend_name in backend_list:
             try:
                 # Get backend metadata
@@ -241,7 +246,10 @@ class SpecializeKernels(Transformation):
 
                 # Check if backend is viable
                 if self._check_backend_viable(node, language, model):
+                    logger.debug(f"Selected backend {backend_name} ({language}) for {node.name}")
                     return backend_name
+                else:
+                    logger.debug(f"Backend {backend_name} ({language}) not viable for {node.name}")
 
             except KeyError:
                 warnings.warn(f"Backend not found in registry: {backend_name}")
@@ -270,13 +278,20 @@ class SpecializeKernels(Transformation):
         optype = node.op_type
 
         if optype == "StreamingDataWidthConverter":
-            return _dwc_rtl_possible(node, model)
+            viable = _dwc_rtl_possible(node, model)
+            logger.debug(f"RTL constraint check for {node.name} (DWC): {viable}")
+            return viable
         elif optype == "MVAU":
-            return _mvu_rtl_possible(node, self.fpgapart, model)
+            viable = _mvu_rtl_possible(node, self.fpgapart, model)
+            logger.debug(f"RTL constraint check for {node.name} (MVAU): {viable}")
+            return viable
         elif optype == "VectorVectorActivation":
-            return _vvu_rtl_possible(node, self.fpgapart, model)
+            viable = _vvu_rtl_possible(node, self.fpgapart, model)
+            logger.debug(f"RTL constraint check for {node.name} (VVU): {viable}")
+            return viable
         else:
             # For other ops, assume RTL is viable if it exists
+            logger.debug(f"RTL assumed viable for {node.name} ({optype})")
             return True
 
     def _create_specialized_node(self, node, backend_name):
@@ -318,6 +333,5 @@ class SpecializeKernels(Transformation):
         new_node.attribute.append(
             helper.make_attribute("backend", language)
         )
-        print(f"Specialized node {node.name} ({node.op_type}) to backend {backend_name} of type {language}.")
 
         return new_node

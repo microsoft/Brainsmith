@@ -187,13 +187,13 @@ def _is_manifest_stale(manifest: Dict[str, Any]) -> bool:
     try:
         generated_at_str = manifest.get('generated_at')
         if not generated_at_str:
-            logger.info("Cache stale: missing generated_at timestamp")
+            logger.debug("Cache stale: missing generated_at timestamp")
             return True
 
         # Parse ISO format timestamp to Unix timestamp for comparison
         generated_at = datetime.fromisoformat(generated_at_str).timestamp()
     except (ValueError, TypeError) as e:
-        logger.info(f"Cache stale: invalid generated_at timestamp: {e}")
+        logger.debug(f"Cache stale: invalid generated_at timestamp: {e}")
         return True
 
     # Helper function for DRY mtime checking
@@ -202,13 +202,13 @@ def _is_manifest_stale(manifest: Dict[str, Any]) -> bool:
         try:
             current_mtime = os.path.getmtime(file_path)
             if current_mtime > generated_at:
-                logger.info(
+                logger.debug(
                     f"Cache stale: {description} modified after manifest generation "
                     f"(file: {current_mtime}, manifest: {generated_at})"
                 )
                 return True
         except OSError as e:
-            logger.info(f"Cache stale: cannot access {description}: {e}")
+            logger.debug(f"Cache stale: cannot access {description}: {e}")
             return True
         return False
 

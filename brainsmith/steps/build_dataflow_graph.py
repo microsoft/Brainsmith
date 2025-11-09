@@ -56,10 +56,10 @@ def build_dataflow_graph(model: Any, cfg: Any) -> Any:
 
             if metadata.is_infrastructure:
                 infrastructure_kernels.append(kernel_class)
-                logger.info(f"  {kernel_name} (infrastructure)")
+                logger.debug(f"  {kernel_name} (infrastructure)")
             else:
                 computational_kernels.append(kernel_class)
-                logger.info(f"  {kernel_name} (computational)")
+                logger.debug(f"  {kernel_name} (computational)")
         except KeyError:
             logger.warning(f"  Kernel not found in registry: {kernel_name}")
 

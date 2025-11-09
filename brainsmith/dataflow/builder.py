@@ -369,11 +369,11 @@ class DesignSpaceBuilder:
         if spec is not None and derived_dt != graph_dt:
             name_str = f"'{schema_name}'" if schema_name else f"'{tensor_name}'"
             if direction == "input":
-                logger.info(
+                logger.debug(
                     f"Input {name_str}: schema optimized {graph_dt.name} → {derived_dt.name}"
                 )
             elif direction == "output":
-                logger.info(
+                logger.debug(
                     f"Output {name_str} datatype: schema derived {derived_dt.name}, "
                     f"graph has {graph_dt.name} - using schema"
                 )

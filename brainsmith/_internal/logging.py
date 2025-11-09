@@ -239,5 +239,5 @@ def get_finn_config() -> dict:
     """
     return {
         "verbose": False,  # Don't add FINN's handlers
-        "show_progress": True,  # We handle progress via finn.builder.*
+        "show_progress": False,  # We handle progress via finn.builder.*
     }

@@ -357,7 +357,12 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
         # Resolve lazy infer_transform if needed
         infer_transform = resolve_lazy_class(meta.kernel_infer)
 
-        _register_kernel(obj, name=meta.name, infer_transform=infer_transform)
+        _register_kernel(
+            obj,
+            name=meta.name,
+            infer_transform=infer_transform,
+            is_infrastructure=meta.is_infrastructure
+        )
         logger.debug(f"Registered kernel: {meta.full_name}")
 
     elif meta.component_type == ComponentType.BACKEND:
@@ -400,7 +405,7 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
 
     # Handle force refresh - reset discovery state to allow re-discovery
     if force_refresh and _components_discovered:
-        logger.info("Force refresh requested - resetting discovery state")
+        logger.debug("Force refresh requested - resetting discovery state")
         _components_discovered = False
         _component_index.clear()
         _discovered_sources.clear()
@@ -425,24 +430,24 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         # Try cached manifest
         if use_cache and not force_refresh and manifest_path.exists():
             try:
-                logger.info(f"Loading component manifest from {manifest_path}")
+                logger.debug(f"Loading component manifest from {manifest_path}")
                 manifest = _load_manifest(manifest_path)
 
                 # Check if cache is stale
                 if _is_manifest_stale(manifest):
-                    logger.info("Manifest is stale - performing full discovery")
+                    logger.debug("Manifest is stale - performing full discovery")
                     # Don't return, fall through to full discovery
                 else:
                     _populate_index_from_manifest(manifest)
                     _components_discovered = True
 
-                    logger.info(
+                    logger.debug(
                         f"Loaded {len(_component_index)} components from cache"
                     )
                     return
             except Exception as e:
                 logger.warning(f"Failed to load manifest cache: {e}")
-                logger.info("Falling back to full discovery...")
+                logger.debug("Falling back to full discovery...")
 
         # Full discovery
         logger.info("Discovering components from all sources...")
@@ -457,7 +462,7 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
             import brainsmith.kernels  # noqa: E402
             import brainsmith.steps    # noqa: E402
 
-        logger.info(f"Loaded core brainsmith components")
+        logger.debug(f"Loaded core brainsmith components")
 
         # 2. Entry point components (FINN, etc.)
         _load_entry_point_components()
@@ -490,7 +495,7 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
             try:
                 manifest = _build_manifest_from_index()
                 _save_manifest(manifest, manifest_path)
-                logger.info(f"Regenerated and saved manifest cache to {manifest_path}")
+                logger.debug(f"Regenerated and saved manifest cache to {manifest_path}")
             except Exception as e:
                 logger.warning(f"Failed to save manifest cache: {e}")
         else:
@@ -529,7 +534,7 @@ def _load_project_components(config):
 
         if init_file.exists():
             _load_component_package(SOURCE_PROJECT, type_dir)
-            logger.info(f"Loaded project {component_type} from {type_dir}")
+            logger.debug(f"Loaded project {component_type} from {type_dir}")
         else:
             logger.debug(f"No project {component_type} at {type_dir}")
 
@@ -578,7 +583,7 @@ def _load_component_package(source_name: str, source_path: Path):
     """
     init_file = source_path / '__init__.py'
     if not init_file.exists():
-        logger.info(
+        logger.debug(
             f"Component source '{source_name}' has no __init__.py, skipping. "
             f"Component packages must have __init__.py that registers components. "
             f"Path: {source_path}"
@@ -614,7 +619,7 @@ def _load_component_package(source_name: str, source_path: Path):
             with source_context(source_name):
                 spec.loader.exec_module(module)
 
-            logger.info(f"Loaded component source '{source_name}' from {source_path}")
+            logger.debug(f"Loaded component source '{source_name}' from {source_path}")
         else:
             raise ImportError(f"Could not create module spec for {init_path}")
 
@@ -662,7 +667,7 @@ def _load_entry_point_components():
 
                 # Register this source as discovered
                 _discovered_sources.add(source_name)
-                logger.info(f"Loading component source: {source_name}")
+                logger.debug(f"Loading component source: {source_name}")
 
                 # Register all components under this source
                 with source_context(source_name):
@@ -671,7 +676,7 @@ def _load_entry_point_components():
                     _index_entry_point_components(source_name, 'backend', components.get('backends', []))
                     _index_entry_point_components(source_name, 'step', components.get('steps', []))
 
-                logger.info(
+                logger.debug(
                     f"✓ Loaded {source_name}: "
                     f"{len(components.get('kernels', []))} kernels, "
                     f"{len(components.get('backends', []))} backends, "

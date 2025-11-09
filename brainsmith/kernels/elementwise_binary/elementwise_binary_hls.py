@@ -33,7 +33,6 @@ from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import numpy_to_hls_code
 from brainsmith.kernels.elementwise_binary.elementwise_binary import ElementwiseBinaryOp
 from brainsmith.registry import backend
-from brainsmith.codegen import HLSCodeBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -757,19 +756,15 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         Returns:
             List of C++ code lines for header section
         """
-        builder = HLSCodeBuilder()
-
-        # Header comment
         input_pattern = self.get_nodeattr("input_pattern")
         func = self.get_nodeattr("func")
-        builder.comment(f"Elementwise binary operation: {func} ({input_pattern})")
 
-        # Output buffer declaration (PE is template parameter, use raw)
-        builder.raw(f"{tmpl_args['OutType']} out[PE];")
-        builder.pragma("ARRAY_PARTITION variable=out complete dim=1")
-        builder.blank_line()
-
-        return builder.generate()
+        return [
+            f"// Elementwise binary operation: {func} ({input_pattern})",
+            f"{tmpl_args['OutType']} out[PE];",
+            "#pragma HLS ARRAY_PARTITION variable=out complete dim=1",
+            ""
+        ]
 
     def _generate_buffer_declarations(self, pe: int, lhs_is_streaming: bool, rhs_is_streaming: bool) -> list[str]:
         """Generate input buffer declarations for broadcasting.
@@ -785,29 +780,26 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         Returns:
             List of C++ code lines for buffer declarations
         """
-        builder = HLSCodeBuilder()
-        has_buffers = False
+        code = []
 
         # LHS buffer declaration (if streaming with broadcasting)
         if lhs_is_streaming:
             lhs_buffer = self._get_buffer_declaration("lhs", pe)
             if lhs_buffer:  # Only if broadcasting requires buffer
-                builder.raw(lhs_buffer.declaration)
-                builder.pragma(lhs_buffer.partition_pragma[13:])  # Strip "#pragma HLS "
-                has_buffers = True
+                code.append(lhs_buffer.declaration)
+                code.append(lhs_buffer.partition_pragma)
 
         # RHS buffer declaration (if streaming with broadcasting)
         if rhs_is_streaming:
             rhs_buffer = self._get_buffer_declaration("rhs", pe)
             if rhs_buffer:  # Only if broadcasting requires buffer
-                builder.raw(rhs_buffer.declaration)
-                builder.pragma(rhs_buffer.partition_pragma[13:])  # Strip "#pragma HLS "
-                has_buffers = True
+                code.append(rhs_buffer.declaration)
+                code.append(rhs_buffer.partition_pragma)
 
-        if has_buffers:
-            builder.blank_line()
+        if code:
+            code.append("")
 
-        return builder.generate()
+        return code
 
     def _generate_loop_headers(self, output_shape: tuple, ndim: int) -> list[str]:
         """Generate nested loop opening statements and pipeline pragma.
@@ -819,18 +811,18 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         Returns:
             List of C++ for loop headers with pipeline pragma
         """
-        builder = HLSCodeBuilder()
+        code = []
 
         # Generate loop nest over output shape dimensions
         for d, size in enumerate(output_shape[:-1]):  # Exclude last (PE) dimension
             indent = "    " * d
-            builder.raw(f"{indent}for(unsigned int i{d} = 0; i{d} < {size}; i{d}++) {{")
+            code.append(f"{indent}for(unsigned int i{d} = 0; i{d} < {size}; i{d}++) {{")
 
         # Pipeline pragma at innermost loop level
         indent = "    " * ndim
-        builder.raw(f"{indent}#pragma HLS pipeline II=1 style=flp")
+        code.append(f"{indent}#pragma HLS pipeline II=1 style=flp")
 
-        return builder.generate()
+        return code
 
     def _generate_lhs_stream_read(self, tmpl_args: dict, loop_counters: tuple, ndim: int, lhs_is_streaming: bool) -> list[str]:
         """Generate LHS stream read with unpacking.
@@ -847,30 +839,30 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         if not lhs_is_streaming:
             return []
 
-        builder = HLSCodeBuilder()
+        code = []
         indent = "    " * ndim
 
         lhs_read_cond = self._get_read_condition("lhs", loop_counters)
         lhs_index = self._get_indexing_expression("lhs", loop_counters, "pe")
 
-        builder.raw(f"{indent}// Read LHS from stream")
+        code.append(f"{indent}// Read LHS from stream")
         if lhs_read_cond != "true":
-            builder.raw(f"{indent}if({lhs_read_cond}) {{")
+            code.append(f"{indent}if({lhs_read_cond}) {{")
             inner_indent = indent + "    "
         else:
             inner_indent = indent
 
-        builder.raw(f"{inner_indent}const auto lhs_packed = in0_V.read();")
-        builder.raw(f"{inner_indent}const auto lhs_slice = {tmpl_args['LhsSlice']}(lhs_packed);")
-        builder.raw(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
-        builder.raw(f"{inner_indent}#pragma HLS unroll")
-        builder.raw(f"{inner_indent}    lhs{lhs_index} = lhs_slice(pe, 0);")
-        builder.raw(f"{inner_indent}}}")
+        code.append(f"{inner_indent}const auto lhs_packed = in0_V.read();")
+        code.append(f"{inner_indent}const auto lhs_slice = {tmpl_args['LhsSlice']}(lhs_packed);")
+        code.append(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
+        code.append(f"{inner_indent}#pragma HLS unroll")
+        code.append(f"{inner_indent}    lhs{lhs_index} = lhs_slice(pe, 0);")
+        code.append(f"{inner_indent}}}")
 
         if lhs_read_cond != "true":
-            builder.raw(f"{indent}}}")
+            code.append(f"{indent}}}")
 
-        return builder.generate()
+        return code
 
     def _generate_rhs_stream_read(self, tmpl_args: dict, loop_counters: tuple, ndim: int, rhs_is_streaming: bool) -> list[str]:
         """Generate RHS stream read with broadcast-aware conditional.
@@ -887,30 +879,30 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         if not rhs_is_streaming:
             return []
 
-        builder = HLSCodeBuilder()
+        code = []
         indent = "    " * ndim
 
         rhs_read_cond = self._get_read_condition("rhs", loop_counters)
         rhs_index = self._get_indexing_expression("rhs", loop_counters, "pe")
 
-        builder.raw(f"{indent}// Read RHS from stream")
+        code.append(f"{indent}// Read RHS from stream")
         if rhs_read_cond != "true":
-            builder.raw(f"{indent}if({rhs_read_cond}) {{")
+            code.append(f"{indent}if({rhs_read_cond}) {{")
             inner_indent = indent + "    "
         else:
             inner_indent = indent
 
-        builder.raw(f"{inner_indent}const auto rhs_packed = in1_V.read();")
-        builder.raw(f"{inner_indent}const auto rhs_slice = {tmpl_args['RhsSlice']}(rhs_packed);")
-        builder.raw(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
-        builder.raw(f"{inner_indent}#pragma HLS unroll")
-        builder.raw(f"{inner_indent}    rhs{rhs_index} = rhs_slice(pe, 0);")
-        builder.raw(f"{inner_indent}}}")
+        code.append(f"{inner_indent}const auto rhs_packed = in1_V.read();")
+        code.append(f"{inner_indent}const auto rhs_slice = {tmpl_args['RhsSlice']}(rhs_packed);")
+        code.append(f"{inner_indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
+        code.append(f"{inner_indent}#pragma HLS unroll")
+        code.append(f"{inner_indent}    rhs{rhs_index} = rhs_slice(pe, 0);")
+        code.append(f"{inner_indent}}}")
 
         if rhs_read_cond != "true":
-            builder.raw(f"{indent}}}")
+            code.append(f"{indent}}}")
 
-        return builder.generate()
+        return code
 
     def _generate_pe_operations(self, op_str: str, loop_counters: tuple, ndim: int) -> list[str]:
         """Generate PE-parallel computation and output write.
@@ -923,29 +915,29 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         Returns:
             List of C++ code lines for PE operations
         """
-        builder = HLSCodeBuilder()
+        code = []
         indent = "    " * ndim
 
         # PE-parallel operations
-        builder.raw(f"{indent}// PE-parallel operations")
-        builder.raw(f"{indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
-        builder.raw(f"{indent}#pragma HLS unroll")
+        code.append(f"{indent}// PE-parallel operations")
+        code.append(f"{indent}for(unsigned int pe = 0; pe < PE; pe++) {{")
+        code.append(f"{indent}#pragma HLS unroll")
 
         # Get values from buffers (streaming) or params.hpp (static)
         lhs_index_expr = self._get_indexing_expression("lhs", loop_counters, "pe")
-        builder.raw(f"{indent}    const auto lhs_val = lhs{lhs_index_expr};")
+        code.append(f"{indent}    const auto lhs_val = lhs{lhs_index_expr};")
 
         rhs_index_expr = self._get_indexing_expression("rhs", loop_counters, "pe")
-        builder.raw(f"{indent}    const auto rhs_val = rhs{rhs_index_expr};")
+        code.append(f"{indent}    const auto rhs_val = rhs{rhs_index_expr};")
 
-        builder.raw(f"{indent}    out[pe] = {op_str.format('lhs_val', 'rhs_val')};")
-        builder.raw(f"{indent}}}")
+        code.append(f"{indent}    out[pe] = {op_str.format('lhs_val', 'rhs_val')};")
+        code.append(f"{indent}}}")
 
         # Write output
-        builder.raw(f"{indent}// Write output")
-        builder.raw(f"{indent}out0_V.write(flatten(out));")
+        code.append(f"{indent}// Write output")
+        code.append(f"{indent}out0_V.write(flatten(out));")
 
-        return builder.generate()
+        return code
 
     def _generate_loop_closings(self, ndim: int) -> list[str]:
         """Generate nested loop closing braces.
@@ -956,11 +948,11 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         Returns:
             List of closing brace lines
         """
-        builder = HLSCodeBuilder()
+        code = []
         for d in range(ndim - 1, -1, -1):
             indent = "    " * d
-            builder.raw(f"{indent}}}")
-        return builder.generate()
+            code.append(f"{indent}}}")
+        return code
 
     def dataoutstrm(self):
         """Write output stream to numpy file for C++ simulation."""

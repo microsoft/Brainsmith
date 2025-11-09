@@ -88,7 +88,7 @@ class FINNAdapter:
         abs_input = input_model.absolute()
         abs_output = output_dir.absolute()
 
-        logger.info("FINN build: input=%s, output=%s", abs_input, abs_output)
+        logger.debug("FINN build: input=%s, output=%s", abs_input, abs_output)
 
         # FINN requires os.chdir() for relative paths in build outputs
         # This is NOT THREAD-SAFE and affects the entire process.
@@ -127,10 +127,10 @@ class FINNAdapter:
 
             # FINN output goes directly to console (controlled by no_stdout_redirect flag)
             steps_count = len(config.steps) if config.steps else 0
-            logger.info("Executing FINN build with %d steps", steps_count)
+            logger.debug("Executing FINN build with %d steps", steps_count)
             exit_code = build_dataflow_cfg(str(abs_input), config)
 
-            logger.info("FINN exit code: %d", exit_code)
+            logger.debug("FINN exit code: %d", exit_code)
 
             if exit_code != 0:
                 raise RuntimeError(f"FINN build failed with exit code {exit_code}")
@@ -139,7 +139,7 @@ class FINNAdapter:
             output_model = self._discover_output_model(abs_output)
             self._verify_output_model(output_model)
 
-            logger.info("Found output: %s", output_model)
+            logger.debug("Found output: %s", output_model)
             return output_model
 
         finally:

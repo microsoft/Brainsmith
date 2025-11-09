@@ -73,9 +73,9 @@ def build_hw_graph(model: Any, cfg: Any) -> Any:
         - Returns the dataflow partition model, not the parent model
         - Saves parent model to intermediate_models/dataflow_parent.onnx if enabled
     """
-    logger.info("=" * 80)
+    logger.debug("=" * 80)
     logger.info("Building hardware dataflow graph (partitioning + specialization)...")
-    logger.info("=" * 80)
+    logger.debug("=" * 80)
 
     # ========================================================================
     # Phase 1: Create Dataflow Partition
@@ -127,7 +127,7 @@ def build_hw_graph(model: Any, cfg: Any) -> Any:
     sdp_node_inst = getHWCustomOp(sdp_node, parent_model)
     dataflow_model_filename = sdp_node_inst.get_nodeattr("model")
 
-    logger.info(f"Dataflow partition extracted: {dataflow_model_filename}")
+    logger.debug(f"Dataflow partition extracted: {dataflow_model_filename}")
 
     # Save parent model if requested
     if cfg.save_intermediate_models:
@@ -162,16 +162,16 @@ def build_hw_graph(model: Any, cfg: Any) -> Any:
 
     # Apply user config if provided (manual overrides)
     if cfg.specialize_layers_config_file is not None:
-        logger.info(f"Applying user config: {cfg.specialize_layers_config_file}")
+        logger.debug(f"Applying user config: {cfg.specialize_layers_config_file}")
         model = model.transform(GiveUniqueNodeNames())
         model = model.transform(ApplyConfig(cfg.specialize_layers_config_file))
 
     # Run registry-based backend specialization
-    logger.info("Running registry-based backend specialization...")
+    logger.debug("Running registry-based backend specialization...")
     model = model.transform(SpecializeKernels(cfg))
 
     # Clean up and infer properties
-    logger.info("Running cleanup transformations...")
+    logger.debug("Running cleanup transformations...")
     for transform in [
         GiveUniqueNodeNames(),
         InferShapes(),
@@ -179,8 +179,8 @@ def build_hw_graph(model: Any, cfg: Any) -> Any:
     ]:
         model = model.transform(transform)
 
-    logger.info("=" * 80)
+    logger.debug("=" * 80)
     logger.info("Hardware dataflow graph construction complete")
-    logger.info("=" * 80)
+    logger.debug("=" * 80)
 
     return model
