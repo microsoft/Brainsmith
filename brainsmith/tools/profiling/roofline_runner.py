@@ -5,7 +5,7 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-from roofline import roofline_analysis 
+from .roofline import roofline_analysis 
 # DLRM Model definitions
 dlrm_params = { # Parameters common to all BERT models
     'attn_kernel_fusion' : True,

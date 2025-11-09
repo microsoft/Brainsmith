@@ -15,8 +15,8 @@ from typing import Dict
 import logging
 
 from .base import InterfacePragma, PragmaError
-from brainsmith.core.dataflow.constraint_types import DatatypeConstraintGroup
-from brainsmith.core.dataflow.types import InterfaceType
+from brainsmith.dataflow.constraint_types import DatatypeConstraintGroup
+from brainsmith.dataflow.types import InterfaceType
 from brainsmith.tools.kernel_integrator.metadata import InterfaceMetadata, KernelMetadata
 from ..types import PragmaType
 

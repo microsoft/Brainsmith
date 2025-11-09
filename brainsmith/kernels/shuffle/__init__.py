@@ -2,6 +2,7 @@
 # Licensed under the MIT License.
 
 # Import the main operator, backends, and inference transform for Shuffle
+# Components auto-register via decorators
 from .shuffle import Shuffle
 from .shuffle_hls import Shuffle_hls
 from .infer_shuffle import InferShuffle

@@ -84,7 +84,7 @@ def eltwisemul(pe: int) -> dict:
 
 
 def softmax(simd: int) -> dict:
-    """Generate HWSoftmax configuration."""
+    """Generate Softmax configuration."""
     return {
         'SIMD': simd
     }
@@ -150,7 +150,7 @@ def generate_config(args) -> dict:
         # SoftMax - 1 per layer
         for m in range(1):
             d = softmax(args.other)
-            config[f"HWSoftmax_hls_{m + (n * 1)}"] = d
+            config[f"Softmax_hls_{m + (n * 1)}"] = d
 
         # LayerNorms - 2 per layer
         for m in range(2):

@@ -13,15 +13,15 @@ from onnx.helper import make_node
 from qonnx.core.datatype import DataType
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 
 
-@kernel(
-    description="Hardware shuffle (rearrange and transpose) operation",
-    author="Shane Fleming"
-)
+@kernel(name='Shuffle', op_type='Shuffle')
 class Shuffle(HWCustomOp):
     """Abstraction layer for HW Shuffle (rearrange and transpose) layers."""
+
+    # Lazy import spec for infer transform (avoids circular imports)
+    infer_transform = 'brainsmith.kernels.shuffle.infer_shuffle:InferShuffle'
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)

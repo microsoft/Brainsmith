@@ -5,23 +5,29 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
 
-import torch
 import numpy as np
-import torch.nn.functional as F
 from qonnx.core.datatype import DataType
 import warnings
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from brainsmith.core.plugins import kernel
+from brainsmith.registry import kernel
 
 # TODO: Explain any shape assumptions -- TAFK
 
-@kernel(
-    description="Hardware implementation of LayerNorm",
-    author="Thomas Keller"
-)
+@kernel
 class LayerNorm(HWCustomOp):
-    """Abstraction layer for HW implementation of the LayerNorm layer."""
+    """Abstraction layer for HW implementation of the LayerNorm layer.
+
+    Metadata for registry (namespace-based component registry):
+    - op_type: ONNX operation type
+    - infer_transform: Associated shape inference transformation
+    """
+
+    # Metadata for namespace-based registry
+    op_type = "LayerNorm"
+
+    # Lazy import spec for infer transform (avoids circular imports)
+    infer_transform = 'brainsmith.kernels.layernorm.infer_layernorm:InferLayerNorm'
 
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
@@ -53,6 +59,9 @@ class LayerNorm(HWCustomOp):
 
     # Executes elementwise operation in python
     def _execute_node_python(self, context, graph):
+        import torch  # Lazy import (torch is slow ~3s)
+        import torch.nn.functional as F
+
         node = self.onnx_node
         # Get tensor values
         in_values = context[node.input[0]]

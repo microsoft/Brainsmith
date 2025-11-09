@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Iterator, TYPE_CHECKING
 from enum import Enum
 
-from brainsmith.core.dataflow.types import Direction, ProtocolType, InterfaceType
+from brainsmith.dataflow.types import Direction, ProtocolType, InterfaceType
 
 if TYPE_CHECKING:
     from .pragmas import Pragma

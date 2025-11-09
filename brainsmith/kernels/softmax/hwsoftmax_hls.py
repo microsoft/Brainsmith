@@ -12,25 +12,20 @@ import os
 
 from finn.custom_op.fpgadataflow import templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from brainsmith.kernels.softmax.hwsoftmax import HWSoftmax
+from brainsmith.kernels.softmax.hwsoftmax import Softmax
 from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
-from brainsmith.core.plugins import backend
+from brainsmith.registry import backend
 
-@backend(
-    name="HWSoftmaxHLS",
-    kernel="HWSoftmax",
-    language="hls",
-    description="HLS implementation of HWSoftmax",
-    author="Shane Fleming"
-)
-class HWSoftmax_hls(HWSoftmax, HLSBackend):
+
+@backend(name='Softmax_hls', target_kernel='brainsmith:Softmax', language='hls')
+class Softmax_hls(Softmax, HLSBackend):
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
         my_attrs = {}
-        my_attrs.update(HWSoftmax.get_nodeattr_types(self))
+        my_attrs.update(Softmax.get_nodeattr_types(self))
         my_attrs.update(HLSBackend.get_nodeattr_types(self))
         return my_attrs
 

@@ -1,13 +1,13 @@
 ## Brainsmith
 
-Brainsmith automates design space exploration (DSE) and implementation of neural networks on FPGA, from PyTorch to RTL.
+Brainsmith automates the creation of dataflow core accelerators and implementation of neural networks on FPGA, from PyTorch to RTL.
 
 ## Pre-Release
 
 **This repository is in a pre-release state and under active co-development by Microsoft and AMD.**
 
 ### Pre-release features:
-- **Plugin system** - Extensible architecture for registering custom kernels, transforms, and build steps
+- **Component registry** - Extensible architecture for registering custom kernels, transforms, and build steps
 - **Blueprint interface** - YAML-based declarative configuration with inheritance support for defining design spaces
 - **Segment-based execution** - Efficient DSE through intelligent computation reuse between exploration branches
 - **BERT demo** - Example end-to-end acceleration (PyTorch to stitched-IP RTL accelerator)
@@ -25,38 +25,102 @@ Brainsmith automates design space exploration (DSE) and implementation of neural
 ### Dependencies
 1. Ubuntu 22.04+
 2. Vivado Design Suite 2024.2 (migration to 2025.1 in process)
-3. Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+3. Python 3.10+ and [Poetry](https://python-poetry.org/docs/#installation)
+4. [Optional] [direnv](https://direnv.net/) for automatic environment activation
+5. [Optional] Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
 
-
-### 1. Set key environment variables
+### 1. Installation Options
 
 ```bash
-# Brainsmith env vars with example paths
-export BSMITH_ROOT=/home/user/brainsmith/
-export BSMITH_BUILD_DIR=/home/user/builds/brainsmith
-export BSMITH_XILINX_PATH="/tools/Xilinx"
-export BSMITH_XILINX_VERSION="2024.2"
-export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
+# Clone and setup brainsmith
+git clone https://github.com/microsoft/brainsmith.git ./brainsmith
+cd brainsmith
 ```
 
-### 2. Run end-to-end test to validate environment 
+#### Option A: Local Development with Poetry
 
 ```bash
-# Start persistent development container
-./smithy start
+# Run automated setup (creates .venv and initializes project)
+./setup-venv.sh
 
-# Attach shell to container 
-./smithy shell
-# Run example
+# Activate Python virtual environment
+source .venv/bin/activate
+
+# Edit configuration for your Xilinx installation
+vim .brainsmith/config.yaml  # Set xilinx_path, xilinx_version
+
+# Verify setup
+brainsmith project show
+```
+
+#### Option B: Docker-based Development
+```bash
+# Customize key environment variables in ctl-docker.sh as needed
+export BSMITH_XILINX_PATH=/opt/Xilinx/Vivado/2024.2
+export BSMITH_XILINX_VERSION=2024.2
+export XILINXD_LICENSE_FILE=/path/to/your/license.lic
+
+# Start container with automatic setup
+./ctl-docker.sh start
+
+# Open interactive shell
+./ctl-docker.sh shell
+# Verify setup
+brainsmith project show
+
+# OR run commands directly
+./ctl-docker.sh "brainsmith project show"
+```
+
+### 2. Working with Multiple Projects
+
+If you want to isolate work from the brainsmith repository, you can create separate project directories:
+
+```bash
+# Activate brainsmith venv (always required)
+source /path/to/brainsmith/.venv/bin/activate
+
+# Create a new project directory
+brainsmith project init ~/my-fpga-project
+cd ~/my-fpga-project
+
+# Edit project-specific configuration
+vim .brainsmith/config.yaml
+
+# [Optional] Enable direnv for automatic environment activation
+brainsmith project allow-direnv
+# Otherwise, manually activate project environment
+source .brainsmith/env.sh
+```
+
+### 3. Validate installation with simple example
+
+```bash
 ./examples/bert/quicktest.sh
-
-# OR execute one-off command 
-./smithy ./examples/bert/quicktest.sh
 ```
+
+### 4. Create your own Dataflow Core accelerator
+
+```bash
+# Create dataflow core with default command
+smith model.onnx blueprint.yaml
+
+# Or specify output directory
+smith model.onnx blueprint.yaml --output-dir ./results
+```
+
+## CLI Overview
+
+Brainsmith provides two complementary CLI commands:
+
+- **`brainsmith`** - Application configuration, setup, and environment management
+- **`smith`** - Operational commands for dataflow core creation and kernel generation
+
+For detailed command reference, see the [CLI API documentation](docs/cli_api_reference.md).
 
 ## Documentation
 
-For detailed documentation and guides, see the [documentation overview](docs/README.md).
+For detailed documentation and guides, see the `prerelease-docs` directory.
 
 ## License
 

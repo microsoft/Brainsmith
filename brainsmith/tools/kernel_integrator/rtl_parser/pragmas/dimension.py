@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 import logging
 
 from .base import InterfacePragma, PragmaError
-from brainsmith.core.dataflow.types import InterfaceType
+from brainsmith.dataflow.types import InterfaceType
 from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
 
 logger = logging.getLogger(__name__)
