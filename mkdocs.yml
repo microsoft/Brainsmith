@@ -48,6 +48,7 @@ use_directory_urls: true
 exclude_docs: |
   kernels/_template.md
   api/_template.md
+  developer-guide/experimental/
 
 plugins:
   - search
@@ -106,6 +107,12 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Tutorials (Coming Soon): tutorials/index.md
+  - Developer Guide:
+    - Overview: developer-guide/index.md
+    - Hardware Kernels: developer-guide/hardware-kernels.md
+    - Blueprint Schema: developer-guide/blueprint-schema.md
+    - Component Registry: developer-guide/registry-user-guide.md
+    - CLI Architecture: developer-guide/cli-architecture.md
   - API Reference:
     - Overview: api/index.md
     - Design Space Exploration: api/dse.md

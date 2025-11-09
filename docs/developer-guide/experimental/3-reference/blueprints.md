@@ -112,7 +112,14 @@ finn_config:
 
 ### Kernels
 
-Kernels define the hardware implementations available for neural network layers. When the `infer_kernels` step is executed, Brainsmith automatically maps layers to these kernels.
+Kernels define the available hardware implementations for the dataflow graph. The `kernels:` section controls which backends are available during the `specialize_layers` step.
+
+**Two kernel types:**
+
+- **Computational kernels** are pattern-matched from ONNX operations during the `build_dataflow_graph` step (e.g., ONNX MatMul → MVAU, ONNX Softmax → Softmax)
+- **Infrastructure kernels** are inserted by topology transforms that analyze graph structure (e.g., DuplicateStreams for tensor fanout, FIFO for buffering)
+
+Both types use the backends you specify in this section.
 
 ```yaml
 kernels:
@@ -132,15 +139,18 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
 ```
 Then use `LayerNorm_hls` in the blueprint, not just `hls`.
 
-Common FINN kernels:
+**Common computational kernels** (pattern-matched during `build_dataflow_graph`):
 - `MVAU` - Matrix-Vector-Activation Unit (dense/linear layers)
 - `Thresholding` - Quantized activation functions
+- `LayerNorm` - Layer normalization
+- `Softmax` - Softmax activation
 - `ElementwiseBinaryOperation` - Element-wise operations
 - `Pool` - Pooling layers
-- `LayerNorm` - Layer normalization
-- `HWSoftmax` - Hardware softmax
-- `DuplicateStreams` - Stream duplication
-- `Shuffle` - Tensor shuffling/reshaping
+
+**Common infrastructure kernels** (inserted by topology transforms):
+- `DuplicateStreams` - Stream duplication for tensor fanout (inserted by `insert_duplicate_streams` or `infer_dataflow_graph`)
+- `StreamingFIFO` - FIFO buffering for timing closure
+- `StreamingDataWidthConverter` - Data width conversion for stream width mismatches
 
 ### Steps
 
@@ -161,8 +171,16 @@ steps:
   # Optional steps - creates paths with and without
   - ["minimize_bit_width", ~]         # ~ means skip this step
 
-  # Special step for kernel inference
-  - "infer_kernels"                   # Maps layers to hardware kernels
+  # Dataflow graph construction (two-phase: infrastructure + computational)
+  - "build_dataflow_graph"            # Auto-splits kernels, inserts infrastructure + patterns
+
+  # Advanced: Manual control (if not using build_dataflow_graph)
+  # - "insert_duplicate_streams"      # Insert DuplicateStreams only
+  # - "infer_kernels_manual"          # Pattern-match computational only
+
+  # Post-inference infrastructure (optional, run after build_dataflow_graph)
+  - "insert_fifo"                     # Insert FIFOs for buffering
+  - "insert_dwc"                      # Insert data width converters
 
   # Common FINN pipeline steps
   - "create_dataflow_partition"       # Partition into dataflow regions

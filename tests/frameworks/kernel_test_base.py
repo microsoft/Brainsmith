@@ -24,7 +24,6 @@ from finn.util.basic import getHWCustomOp
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.onnx_exec import execute_onnx
-from qonnx.transformation.base import Transformation
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.transformation.infer_shapes import InferShapes
 
@@ -246,6 +245,63 @@ class KernelTestBase(ABC):
 
         return op
 
+    def _compute_golden_reference(
+        self,
+        quant_model: ModelWrapper,
+        inputs: Dict[str, np.ndarray],
+    ) -> Dict[str, np.ndarray]:
+        """Compute golden reference using QONNX execution on Stage 1 model.
+
+        Args:
+            quant_model: ModelWrapper WITH DataType annotations
+            inputs: Test data (pre-quantized)
+
+        Returns:
+            Expected outputs from QONNX execution
+        """
+        return execute_onnx(quant_model, inputs, return_full_exec_context=False)
+
+    def _build_stage1_model(self, kernel_test_config: "KernelTestConfig") -> ModelWrapper:
+        """Build Stage 1 model with QONNX annotations.
+
+        Args:
+            kernel_test_config: Test configuration
+
+        Returns:
+            Stage 1 model (ONNX + annotations, no kernel inference)
+        """
+        model, _ = self._prepare_model_with_annotations(kernel_test_config)
+        model = model.transform(InferShapes())
+        model = model.transform(InferDataTypes())
+        return model
+
+    def _build_test_inputs(self, kernel_test_config: "KernelTestConfig") -> Dict[str, np.ndarray]:
+        """Build test inputs with deterministic seed.
+
+        Args:
+            kernel_test_config: Test configuration
+
+        Returns:
+            Dict mapping input names to test data arrays
+        """
+        return self._generate_test_inputs(kernel_test_config)
+
+    def _build_golden_outputs(
+        self,
+        stage1_model: ModelWrapper,
+        test_inputs: Dict[str, np.ndarray]
+    ) -> Dict[str, np.ndarray]:
+        """Build golden outputs from Stage 1 model.
+
+        Args:
+            stage1_model: Stage 1 model
+            test_inputs: Test inputs
+
+        Returns:
+            Expected outputs from QONNX execution
+        """
+        return self._compute_golden_reference(stage1_model, test_inputs)
+
     # ========================================================================
     # Shared Utility: Execute and Validate Against Golden Reference
     # ========================================================================
@@ -330,7 +386,7 @@ class KernelTestBase(ABC):
         return [get_backend(name) for name in backend_names]
 
     # ========================================================================
-    # Shared Utility 3: Backend Specialization (Stage 2 → Stage 3) - v5.0
+    # Shared Utility 3: Backend Specialization (Stage 2 → Stage 3)
     # ========================================================================
 
     def specialize_to_backend(
@@ -374,7 +430,7 @@ class KernelTestBase(ABC):
         return op, model
 
     # ========================================================================
-    # Shared Utility 4: Stage-Aware Parameter Configuration (v2.4)
+    # Shared Utility 4: Stage-Aware Parameter Configuration
     # ========================================================================
 
     def get_stage(self, op) -> int:
@@ -403,7 +459,7 @@ class KernelTestBase(ABC):
         return hasattr(op, 'kernel_schema')
 
     # ========================================================================
-    # Shared Utility 5: Auto-Configuration from Fixture (v2.5)
+    # Shared Utility 5: Auto-Configuration from Fixture
     # ========================================================================
 
     def auto_configure_from_fixture(
@@ -423,9 +479,6 @@ class KernelTestBase(ABC):
             stage: Pipeline stage (2=kernel, 3=backend)
             config: KernelTestConfig with declarative parameters
         """
-        if config is None:
-            return  # Backward compatibility: v2.4 tests don't use config
-
         # FINN nodes: use direct nodeattr setting
         if not self.is_brainsmith(op):
             self._apply_finn_config(op, config, stage)

@@ -1,60 +1,14 @@
-"""Test configuration via composition (v4.0).
+"""Test configuration via composition.
 
 Compositional test configuration separating concerns into reusable sub-configs.
-Each sub-config owns a distinct concern: model structure, design parameters,
-platform configuration, or validation criteria.
 
-Architecture:
-    ModelStructure: What we're testing (operation, shapes, dtypes)
-    DesignParameters: How we configure it (PE, SIMD, backend variants)
-    PlatformConfig: Where we run it (FPGA part)
-    ValidationConfig: How we validate it (tolerances)
+Sub-configs:
+- ModelStructure: What we're testing (operation, shapes, dtypes)
+- DesignParameters: How we configure it (PE, SIMD, backend variants)
+- PlatformConfig: Where we run it (FPGA part)
+- ValidationConfig: How we validate it (tolerances)
 
-Usage:
-    # Minimal configuration
-    config = KernelTestConfig(
-        test_id="add_int8_baseline",
-        model=ModelStructure(
-            operation="Add",
-            input_shapes={"input": (1, 64), "param": (1, 64)},
-            input_dtypes={"input": DataType["INT8"], "param": DataType["INT8"]}
-        )
-    )
-
-    # Full configuration with reusable sub-configs
-    ZYNQ_7020 = PlatformConfig(fpgapart="xc7z020clg400-1")
-    PE8_DESIGN = DesignParameters(input_streams={0: 8})
-    TIGHT_VALIDATION = ValidationConfig(
-        tolerance_python={"rtol": 1e-10, "atol": 1e-12}
-    )
-
-    config = KernelTestConfig(
-        test_id="add_int8_pe8_cppsim",
-        model=ModelStructure("Add", shapes, dtypes),
-        design=PE8_DESIGN,
-        platform=ZYNQ_7020,
-        validation=TIGHT_VALIDATION
-    )
-
-    # Reuse sub-configs across multiple tests
-    configs = [
-        KernelTestConfig(
-            test_id=f"add_{dtype}_{size}",
-            model=ModelStructure("Add", shapes[size], dtypes[dtype]),
-            platform=ZYNQ_7020,
-            validation=TIGHT_VALIDATION
-        )
-        for dtype in ["int8", "int16"]
-        for size in ["small", "large"]
-    ]
-
-v4.0 Changes from v3.0:
-- Composition over monolithic structure
-- Reusable sub-configs (share platform/validation across tests)
-- Immutability where appropriate (frozen dataclasses)
-- No auto-generation (explicit test_id required)
-- No factory methods (dataclasses are simple enough)
-- backend_variants moved to DesignParameters (it's a design choice)
+See tests/README.md for usage examples.
 """
 
 from dataclasses import dataclass, field

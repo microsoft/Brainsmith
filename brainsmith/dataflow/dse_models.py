@@ -775,6 +775,78 @@ class KernelDesignPoint:
     # Interface Stream Navigation (Index-Based)
     # =========================================================================
 
+    def _with_stream_helper(
+        self,
+        interface_list: List[InterfaceDesignPoint],
+        interface_type: str,
+        index: int,
+        value: int
+    ) -> 'KernelDesignPoint':
+        """Helper for with_input_stream and with_output_stream.
+
+        Args:
+            interface_list: List of interfaces (input_list or output_list)
+            interface_type: "Input" or "Output" (for error messages)
+            index: Interface index (0-based)
+            value: Parallelism value
+
+        Returns:
+            New KernelDesignPoint with updated parallelism
+
+        Raises:
+            IndexError: If index out of range
+            ValueError: If interface has no parallelism parameter
+        """
+        if index < 0 or index >= len(interface_list):
+            raise IndexError(
+                f"{interface_type} index {index} out of range [0, {len(interface_list)})"
+            )
+
+        param = interface_list[index].design_space.parallelism_param
+        if param is None:
+            raise ValueError(
+                f"{interface_type} interface {index} has no stream parallelism parameter"
+            )
+
+        return self.with_dimension(param, value)
+
+    def _with_stream_percentage_helper(
+        self,
+        interface_list: List[InterfaceDesignPoint],
+        interface_type: str,
+        index: int,
+        percentage: float,
+        rounding: Literal['natural', 'down', 'up']
+    ) -> 'KernelDesignPoint':
+        """Helper for with_input_stream_percentage and with_output_stream_percentage.
+
+        Args:
+            interface_list: List of interfaces (input_list or output_list)
+            interface_type: "Input" or "Output" (for error messages)
+            index: Interface index (0-based)
+            percentage: Value from 0.0 to 1.0
+            rounding: How to round fractional indices
+
+        Returns:
+            New KernelDesignPoint with parallelism at percentage
+
+        Raises:
+            IndexError: If index out of range
+            ValueError: If interface has no parallelism parameter
+        """
+        if index < 0 or index >= len(interface_list):
+            raise IndexError(
+                f"{interface_type} index {index} out of range [0, {len(interface_list)})"
+            )
+
+        param = interface_list[index].design_space.parallelism_param
+        if param is None:
+            raise ValueError(
+                f"{interface_type} interface {index} has no stream parallelism parameter"
+            )
+
+        return self.with_percentage(param, percentage, rounding)
+
     def with_input_stream(self, index: int, value: int) -> 'KernelDesignPoint':
         """Set input interface stream parallelism by index.
 
@@ -796,18 +868,7 @@ class KernelDesignPoint:
             >>> # Set first input to PE=16
             >>> point2 = point.with_input_stream(0, 16)
         """
-        if index < 0 or index >= len(self.input_list):
-            raise IndexError(
-                f"Input index {index} out of range [0, {len(self.input_list)})"
-            )
-
-        param = self.input_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Input interface {index} has no stream parallelism parameter"
-            )
-
-        return self.with_dimension(param, value)
+        return self._with_stream_helper(self.input_list, "Input", index, value)
 
     def with_output_stream(self, index: int, value: int) -> 'KernelDesignPoint':
         """Set output interface stream parallelism by index.
@@ -823,18 +884,7 @@ class KernelDesignPoint:
             IndexError: If index out of range
             ValueError: If interface has no parallelism parameter or value invalid
         """
-        if index < 0 or index >= len(self.output_list):
-            raise IndexError(
-                f"Output index {index} out of range [0, {len(self.output_list)})"
-            )
-
-        param = self.output_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Output interface {index} has no stream parallelism parameter"
-            )
-
-        return self.with_dimension(param, value)
+        return self._with_stream_helper(self.output_list, "Output", index, value)
 
     def with_input_stream_percentage(
         self,
@@ -856,18 +906,9 @@ class KernelDesignPoint:
             IndexError: If index out of range
             ValueError: If interface has no parallelism parameter or percentage invalid
         """
-        if index < 0 or index >= len(self.input_list):
-            raise IndexError(
-                f"Input index {index} out of range [0, {len(self.input_list)})"
-            )
-
-        param = self.input_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Input interface {index} has no stream parallelism parameter"
-            )
-
-        return self.with_percentage(param, percentage, rounding)
+        return self._with_stream_percentage_helper(
+            self.input_list, "Input", index, percentage, rounding
+        )
 
     def with_output_stream_percentage(
         self,
@@ -889,18 +930,9 @@ class KernelDesignPoint:
             IndexError: If index out of range
             ValueError: If interface has no parallelism parameter or percentage invalid
         """
-        if index < 0 or index >= len(self.output_list):
-            raise IndexError(
-                f"Output index {index} out of range [0, {len(self.output_list)})"
-            )
-
-        param = self.output_list[index].design_space.parallelism_param
-        if param is None:
-            raise ValueError(
-                f"Output interface {index} has no stream parallelism parameter"
-            )
-
-        return self.with_percentage(param, percentage, rounding)
+        return self._with_stream_percentage_helper(
+            self.output_list, "Output", index, percentage, rounding
+        )
 
     # =========================================================================
     # Interface Stream Query Helpers

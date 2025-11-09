@@ -133,46 +133,28 @@ Project settings are loaded from multiple sources with the following priority
 3. **Project config file** - `brainsmith.yaml` in project root
 4. **Built-in defaults** - Field defaults in `SystemConfig`
 
-#### Core Paths
+!!! info "Relative Path Resolution"
+    - **CLI args**: Resolve from current working directory
+    - **YAML/env**: Resolve from project root
+
+#### Brainsmith Settings
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `build_dir` | `Path` | `"build"` | Build directory for compilation artifacts. Relative paths resolve to `project_dir`. |
-| `project_dir` | `Path` | *auto-detected* | Project root directory (parent of `.brainsmith/`). Auto-detected via upward directory walk or `BSMITH_PROJECT_DIR`. |
-| `bsmith_dir` | `Path` | *auto-detected* | Brainsmith installation root (cached property). |
 | `component_sources` | `Dict[str, Path | None]` | `{'project': None}` | Filesystem-based component source paths. `'project'` defaults to `project_dir` (supports `kernels/` and `steps/` subdirectories). Core namespace (`'brainsmith'`) and entry points (`'finn'`) are loaded automatically. |
 | `source_priority` | `List[str]` | `['project', 'brainsmith', 'finn', 'custom']` | Component source resolution priority (first match wins). Custom sources are auto-appended if not listed. |
 | `source_module_prefixes` | `Dict[str, str]` | `{'brainsmith.': 'brainsmith', 'finn.': 'finn'}` | Module prefix → source name mapping for component classification. |
 | `components_strict` | `bool` | `True` | Enable strict component loading (fail on errors vs. warn). Set to `false` for development. |
-| `cache_components` | `bool` | `True` | Enable manifest caching for component discovery (auto-invalidates on file changes). |
+| `cache_components` | `bool` | `True` | Enable manifest caching for component discovery. |
 
-All relative paths are resolved from the *point of configuration*...
-
-
-!!! note "Path Resolution"
-    - **Absolute paths**: Used as-is
-    - **Relative paths from CLI**: Resolve to current working directory
-    - **Relative paths from YAML/env**: Resolve to `project_dir`
+#### External Tool Settings
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `component_sources` | `Dict[str, Path \| None]` | `{'project': None}` | Filesystem-based component source paths. `'project'` defaults to `project_dir` (supports `kernels/` and `steps/` subdirectories). Core namespace (`'brainsmith'`) and entry points (`'finn'`) are loaded automatically. |
-| `source_priority` | `List[str]` | `['project', 'brainsmith', 'finn', 'custom']` | Component source resolution priority (first match wins). Custom sources are auto-appended if not listed. |
-| `source_module_prefixes` | `Dict[str, str]` | `{'brainsmith.': 'brainsmith', 'finn.': 'finn'}` | Module prefix → source name mapping for component classification. |
-| `components_strict` | `bool` | `True` | Enable strict component loading (fail on errors vs. warn). Set to `false` for development. |
-| `cache_components` | `bool` | `True` | Enable manifest caching for component discovery (auto-invalidates on file changes). |
-
-
-
-#### Xilinx Configuration
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
+| `netron_port` | `int` | `8080` | Port for Netron neural network visualization server. |
 | `xilinx_path` | `Path` | `"/tools/Xilinx"` | Xilinx root installation path. |
 | `xilinx_version` | `str` | `"2024.2"` | Xilinx tool version (e.g., `"2024.2"`, `"2025.1"`). |
-| `vivado_path` | `Path \| None` | *auto-detected* | Path to Vivado. Auto-detected from `{xilinx_path}/Vivado/{xilinx_version}`. |
-| `vitis_path` | `Path \| None` | *auto-detected* | Path to Vitis. Auto-detected from `{xilinx_path}/Vitis/{xilinx_version}`. |
-| `vitis_hls_path` | `Path \| None` | *auto-detected* | Path to Vitis HLS. Auto-detected from `{xilinx_path}/Vitis_HLS/{xilinx_version}`. |
 | `vivado_ip_cache` | `Path \| None` | `{build_dir}/vivado_ip_cache` | Vivado IP cache directory for faster builds. |
 | `vendor_platform_paths` | `str` | `"/opt/xilinx/platforms"` | Colon-separated vendor platform repository paths. |
 
@@ -182,15 +164,9 @@ All relative paths are resolved from the *point of configuration*...
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `default_workers` | `int` | `4` | Default number of workers for parallel operations. Exported as `NUM_DEFAULT_WORKERS`. |
-| `netron_port` | `int` | `8080` | Port for Netron neural network visualization server. |
-
-#### Logging Configuration
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
 | `logging.level` | `str` | `"normal"` | Console verbosity: `quiet` \| `normal` \| `verbose` \| `debug`. |
-| `logging.finn_tools` | `Dict[str, str] \| None` | `None` | Per-tool log levels for FINN tools (e.g., `{'vivado': 'WARNING', 'hls': 'INFO'}`). |
-| `logging.suppress_patterns` | `List[str] \| None` | `None` | Regex patterns to suppress from console output (file logs unaffected). |
+| `logging.finn_tools` | `Dict[str, str]` | `None` | Per-tool log levels for FINN tools (e.g., `{'vivado': 'WARNING', 'hls': 'INFO'}`). |
+| `logging.suppress_patterns` | `List[str]` | `None` | Regex patterns to suppress from console output (file logs unaffected). |
 | `logging.max_log_size_mb` | `int` | `0` | Maximum log file size in MB (0 = no rotation). |
 | `logging.keep_backups` | `int` | `3` | Number of rotated log backups to keep. |
 
@@ -267,7 +243,7 @@ PyTorch → ONNX → Hardware Kernels → HLS/RTL → IP Cores → Bitfile
 - **IP packaging**: Creating Vivado IP cores
 - **Simulation**: Verifying correctness with RTL simulation
 
-Check `build/quicktest/build_dataflow.log` for detailed progress and diagnostics.
+Check `build/quicktest/briansmith.log` for detailed progress and diagnostics.
 
 ---
 
@@ -335,6 +311,7 @@ finn_config:
 ```
 
 Higher target FPS will:
+
 - Increase parallelization factors (PE/SIMD parameters)
 - Use more FPGA resources (LUTs, DSPs, BRAM)
 - Reduce latency per inference
@@ -398,81 +375,13 @@ finn_config:
   fifosim_n_inferences: 2           # Faster FIFO sizing
 ```
 
-The parent blueprint (`bert_demo.yaml`) defines the core design space:
-
-```yaml
-# bert_demo.yaml - Inherits from blueprints/bert.yaml
-name: "BERT Demo"
-extends: "${BSMITH_DIR}/examples/blueprints/bert.yaml"
-
-clock_ns: 5.0           # 200MHz target clock
-output: "bitfile"
-board: "V80"
-
-finn_config:
-  target_fps: 3000                  # High performance target
-  standalone_thresholds: true
-```
-
 ---
 
+## Getting Help
 
-### Getting Help
-
-**Build logs:** Check `<output_dir>/build_dataflow.log` for detailed error messages and transformation steps.
+**Build logs:** Check `<output_dir>/brainsmith.log` for detailed error messages and transformation steps.
 
 **Resources:**
 - [GitHub Issues](https://github.com/microsoft/brainsmith/issues) - Report bugs or search existing issues
 - [GitHub Discussions](https://github.com/microsoft/brainsmith/discussions) - Ask questions and share experiences
 
----
-
-## Next Steps
-
-### Explore Design Space Trade-offs
-
-Compare different configurations by varying performance targets. From `examples/bert/`:
-
-```bash
-# Create low-resource configuration
-cat > bert_lowres.yaml << 'EOF'
-name: "BERT Low Resource"
-extends: "${BSMITH_DIR}/examples/bert/bert_quicktest.yaml"
-finn_config:
-  target_fps: 1
-EOF
-
-# Create high-performance configuration
-cat > bert_highperf.yaml << 'EOF'
-name: "BERT High Performance"
-extends: "${BSMITH_DIR}/examples/bert/bert_quicktest.yaml"
-finn_config:
-  target_fps: 50
-EOF
-
-# Compare resource usage
-python bert_demo.py -o output_lowres -l 1 --blueprint bert_lowres.yaml
-python bert_demo.py -o output_highperf -l 1 --blueprint bert_highperf.yaml
-
-# Check results
-cat output_lowres/final_output/report/estimate_reports.json
-cat output_highperf/final_output/report/estimate_reports.json
-```
-
-### Try Custom Models
-
-**From PyTorch to FPGA:**
-
-1. **Quantize** - Use Brevitas to quantize your PyTorch model to low precision (INT8, INT4, etc.)
-2. **Export** - Export to ONNX format with `brevitas.export`
-3. **Create blueprint** - Start with an existing blueprint and modify the kernel list
-4. **Build** - Run design space exploration:
-   ```bash
-   smith my_model.onnx my_blueprint.yaml -o my_output
-   ```
-
-### Learn More
-
-- **[API Reference](api/index.md)** - Programmatic access to Brainsmith functions
-- **[Example Blueprints](https://github.com/microsoft/brainsmith/tree/main/examples/blueprints)** - Pre-built configurations for common architectures
-- **[GitHub Discussions](https://github.com/microsoft/brainsmith/discussions)** - Community support and examples

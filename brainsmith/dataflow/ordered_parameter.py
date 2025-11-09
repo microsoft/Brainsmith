@@ -70,9 +70,11 @@ class OrderedParameter:
 
         # Validate unique
         if len(self.values) != len(set(self.values)):
-            duplicates = [v for v in self.values if self.values.count(v) > 1]
+            # Find duplicates efficiently (O(n) instead of O(n²))
+            seen = set()
+            duplicates = {v for v in self.values if v in seen or seen.add(v)}
             raise ValueError(
-                f"OrderedParameter '{self.name}' has duplicate values: {set(duplicates)}"
+                f"OrderedParameter '{self.name}' has duplicate values: {duplicates}"
             )
 
         # Validate default (if specified)

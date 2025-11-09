@@ -24,7 +24,7 @@ Key classes:
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Union, Dict, Any, Callable, Set, TYPE_CHECKING
+from typing import List, Optional, Sequence, Union, Dict, Any, Callable, Set, TYPE_CHECKING, Literal
 from abc import ABC, abstractmethod
 
 from qonnx.core.datatype import BaseDataType
@@ -71,26 +71,40 @@ class ParameterSpec:
         - Order doesn't matter
         - Examples: ram_style={"distributed", "block"}, res_type={"lut", "dsp"}
 
+    **Type Declaration (Hybrid Approach):**
+
+    - **Literal values**: Type inferred from first value (optional to specify)
+    - **Callable values**: Type MUST be explicitly specified
+
     Attributes:
         name: Dimension name (e.g., "ram_style", "depth")
         values: Valid values for this dimension
             - list/tuple: Ordered sequence (enables navigation methods)
             - set/frozenset: Discrete categories (membership only)
             - Callable: Computed from BuildContext (for context-dependent values)
+        type: Value type ("int" or "string")
+            - Required for callable values
+            - Optional for literal values (inferred from first value)
+            - Validated against values if both provided
         default: Default value (None = auto-select: min for ordered, first for discrete)
 
     Examples:
-        >>> # Ordered parameter (list/tuple → OrderedParameter with navigation)
+        >>> # Ordered parameter - type inferred
         >>> ParameterSpec("depth", [128, 256, 512, 1024], default=256)
-        >>> # Enables: .with_min("depth"), .with_step_up("depth"), .sweep_percentage("depth", [...])
 
-        >>> # Discrete parameter (set/frozenset → frozenset, membership only)
+        >>> # Discrete parameter - type inferred
         >>> ParameterSpec("ram_style", {"distributed", "block"}, default="distributed")
-        >>> # Enables: .sweep_dimension("ram_style") - iterates all values
 
-        >>> # Auto-default (will use min for ordered, first for discrete)
-        >>> ParameterSpec("num_layers", [1, 2, 4, 8])  # Uses min (1)
-        >>> ParameterSpec("res_type", {"lut", "dsp"})  # Uses sorted first
+        >>> # Callable parameter - type required
+        >>> ParameterSpec("depth", lambda ctx: compute_depths(ctx), type="int", default=256)
+
+        >>> # Explicit type for documentation (optional)
+        >>> ParameterSpec("mode", {"fast", "accurate"}, type="string")
+
+    Validation:
+        - Callable values without type → ValueError
+        - Type mismatch with literal values → ValueError
+        - Invalid type (not "int" or "string") → ValueError
 
     Note:
         Tiling dimensions (PE, SIMD) are ALWAYS ordered (auto-wrapped in OrderedParameter)
@@ -101,12 +115,107 @@ class ParameterSpec:
         Set[Union[int, str]],
         Callable[['BuildContext'], Set[Union[int, str]]]
     ]
+    type: Optional[Literal["int", "string"]] = None
     default: Optional[Union[int, str]] = None
+
+    def __post_init__(self):
+        """Validate type specification against values."""
+        # Callable values MUST specify type
+        if callable(self.values):
+            if self.type is None:
+                raise ValueError(
+                    f"ParameterSpec '{self.name}': Callable values require explicit type declaration. "
+                    f"Specify type='int' or type='string'."
+                )
+            if self.type not in ("int", "string"):
+                raise ValueError(
+                    f"ParameterSpec '{self.name}': Invalid type '{self.type}'. "
+                    f"Must be 'int' or 'string'."
+                )
+            return  # Cannot validate callable values without context
+
+        # Validate type matches literal values (if type specified)
+        if self.type is not None:
+            if self.type not in ("int", "string"):
+                raise ValueError(
+                    f"ParameterSpec '{self.name}': Invalid type '{self.type}'. "
+                    f"Must be 'int' or 'string'."
+                )
+
+            first_val = next(iter(self.values))
+            expected_type = int if self.type == "int" else str
+
+            if not isinstance(first_val, expected_type):
+                actual_type = type(first_val).__name__
+                raise ValueError(
+                    f"ParameterSpec '{self.name}': Type mismatch. "
+                    f"Declared type='{self.type}' but values contain {actual_type}. "
+                    f"First value: {first_val!r}"
+                )
 
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
+def _infer_nodeattr_type(param_spec: ParameterSpec) -> tuple[str, bool, Union[int, str]]:
+    """Infer FINN nodeattr type specification from ParameterSpec.
+
+    Uses explicit type if provided, otherwise infers from first value.
+    This function handles the translation from ParameterSpec (DSE model)
+    to FINN nodeattr format (type_code, required, default).
+
+    Args:
+        param_spec: ParameterSpec to infer type from
+
+    Returns:
+        Tuple of (type_code, required, default_value) where:
+        - type_code: "i" for int, "s" for string
+        - required: Always False for DSE parameters
+        - default_value: Explicit default or inferred minimum/first
+
+    Note:
+        For callable values with explicit type, we use that type.
+        Default falls back to 1 for int (safe minimum) and first sorted
+        value for string.
+
+    Examples:
+        >>> spec = ParameterSpec("depth", [128, 256, 512], default=256)
+        >>> _infer_nodeattr_type(spec)
+        ("i", False, 256)
+
+        >>> spec = ParameterSpec("mode", {"fast", "slow"})
+        >>> _infer_nodeattr_type(spec)
+        ("s", False, "fast")  # sorted first
+
+        >>> spec = ParameterSpec("depth", lambda ctx: [128, 256], type="int", default=128)
+        >>> _infer_nodeattr_type(spec)
+        ("i", False, 128)
+    """
+    # Use explicit type if provided (required for callables)
+    if param_spec.type is not None:
+        type_code = "i" if param_spec.type == "int" else "s"
+        default = param_spec.default if param_spec.default is not None else (1 if param_spec.type == "int" else "")
+        return (type_code, False, default)
+
+    # Infer from first value (literal values only)
+    if callable(param_spec.values):
+        # Should not reach here - ParameterSpec.__post_init__ enforces type for callables
+        raise ValueError(
+            f"ParameterSpec '{param_spec.name}': Cannot infer type from callable without explicit type declaration."
+        )
+
+    first_val = next(iter(param_spec.values))
+
+    if isinstance(first_val, int):
+        # Integer parameter: use minimum as default
+        default = param_spec.default if param_spec.default is not None else min(param_spec.values)
+        return ("i", False, default)
+    else:
+        # String parameter: use sorted first as default
+        default = param_spec.default if param_spec.default is not None else sorted(param_spec.values)[0]
+        return ("s", False, default)
+
 
 def _extract_tiling_params(block_tiling: Optional[TilingSpec], stream_tiling: Optional[TilingSpec]) -> List[str]:
     """Extract unique string parameters from tiling specs."""
@@ -265,33 +374,32 @@ class KernelSchema:
     def validate(self) -> None:
         """Validate the schema structure."""
 
-        # Check unique input names
-        input_names = [inp.name for inp in self.inputs]
-        if len(input_names) != len(set(input_names)):
-            raise ValueError(f"Duplicate input names in kernel '{self.name}'")
+        # Create sets directly (no intermediate lists)
+        input_names = {inp.name for inp in self.inputs}
+        output_names = {out.name for out in self.outputs}
 
-        # Check unique output names
-        output_names = [out.name for out in self.outputs]
-        if len(output_names) != len(set(output_names)):
+        # Check for duplicates (comparing lengths to original counts)
+        if len(input_names) != len(self.inputs):
+            raise ValueError(f"Duplicate input names in kernel '{self.name}'")
+        if len(output_names) != len(self.outputs):
             raise ValueError(f"Duplicate output names in kernel '{self.name}'")
 
-        # Check input/output names don't conflict (globally unique)
-        input_name_set = set(input_names)
-        output_name_set = set(output_names)
-        conflicts = input_name_set & output_name_set
+        # Check for conflicts between inputs and outputs
+        conflicts = input_names & output_names
         if conflicts:
             raise ValueError(
                 f"Interface names must be unique across inputs and outputs in kernel '{self.name}'. "
                 f"Duplicate names: {', '.join(sorted(conflicts))}"
             )
 
-        # Check internal datatype names don't conflict with interfaces
-        all_interface_names = input_name_set | output_name_set
-        for internal_name in self.internal_datatypes.keys():
-            if internal_name in all_interface_names:
-                raise ValueError(
-                    f"Internal datatype '{internal_name}' conflicts with interface name in kernel '{self.name}'"
-                )
+        # Check internal datatypes (use set operation instead of loop)
+        all_interface_names = input_names | output_names
+        internal_conflicts = set(self.internal_datatypes) & all_interface_names
+        if internal_conflicts:
+            raise ValueError(
+                f"Internal datatypes conflict with interface names in kernel '{self.name}': "
+                f"{', '.join(sorted(internal_conflicts))}"
+            )
 
     def _validate_transformation_fields(self) -> None:
         """Validate transformation-related fields are consistent."""
@@ -348,19 +456,7 @@ class KernelSchema:
 
         # DSE parameters (resource parameters)
         for param_name, param_spec in self.dse_parameters.items():
-            # Determine type from values
-            if callable(param_spec.values):
-                # Callable - assume int for now (can't inspect without context)
-                attrs[param_name] = ("i", False, param_spec.default if param_spec.default is not None else 1)
-            else:
-                # Set - check first value type
-                first_val = next(iter(param_spec.values))
-                if isinstance(first_val, int):
-                    default = param_spec.default if param_spec.default is not None else min(param_spec.values)
-                    attrs[param_name] = ("i", False, default)
-                else:
-                    default = param_spec.default if param_spec.default is not None else sorted(param_spec.values)[0]
-                    attrs[param_name] = ("s", False, default)
+            attrs[param_name] = _infer_nodeattr_type(param_spec)
 
         # Kernel-specific parameters (structural)
         attrs.update(self.kernel_params)

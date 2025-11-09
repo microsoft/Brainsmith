@@ -24,10 +24,10 @@ from brainsmith.registry import backend
 class Crop_hls(Crop, HLSBackend):
     """HLS backend for Crop kernel (KernelOp-based).
 
-    This backend adapts the modern schema-driven Crop implementation
+    This backend adapts the schema-driven Crop implementation
     to work with FINN's HLS code generation system.
 
-    Key differences from legacy LegacyCrop_hls:
+    Key features:
     - Uses uppercase "SIMD" (KernelOp convention)
     - Extracts shapes from design_point (not nodeattrs)
     - Follows Arete principle: no shape storage
@@ -89,7 +89,7 @@ class Crop_hls(Crop, HLSBackend):
             f"""
             constexpr unsigned  SIMD   = {simd};
             constexpr unsigned  H      = {height};
-            constexpr unsigned  W      = {width // simd};
+            constexpr unsigned  W      = {width};
             constexpr unsigned  CF     = {channel_fold};
             constexpr unsigned  CROP_N = {self.get_nodeattr("crop_north")};
             constexpr unsigned  CROP_E = {self.get_nodeattr("crop_east")};
@@ -140,57 +140,8 @@ class Crop_hls(Crop, HLSBackend):
     def execute_node(self, context, graph):
         # Ensure design space initialized (QONNX creates fresh instances)
         self._ensure_initialized_for_execution(graph)
-
-        mode = self.get_nodeattr("exec_mode")
-        node = self.onnx_node
-        folded_ishape = self.get_folded_input_shape()
-        export_dt = self.get_input_datatype()
-
-        if mode == "cppsim":
-            code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-        elif mode == "rtlsim":
-            code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
-
-        inp = context[node.input[0]]
-        inp = inp.reshape(folded_ishape)
-        np.save(os.path.join(code_gen_dir, "input_0.npy"), inp)
-
-        if mode == "cppsim":
-            code_gen_dir = self.get_nodeattr("code_gen_dir_cppsim")
-            # execute the precompiled model
-            super().exec_precompiled_singlenode_model()
-            # Load output npy file
-            super().npy_to_dynamic_output(context)
-        elif mode =="rtlsim":
-            sim = self.get_rtlsim()
-            nbits = self.get_instream_width()
-            rtlsim_inp = npy_to_rtlsim_input(
-                f"{code_gen_dir}/input_0.npy", export_dt, nbits
-            )
-            super().reset_rtlsim(sim)
-            super().toggle_clk(sim)
-
-            io_dict = {
-                "inputs" : {"in0" : rtlsim_inp},
-                "outputs" : {"out0" : []}
-            }
-            self.rtlsim_multi_io(sim, io_dict)
-
-            out = io_dict["outputs"]["out0"]
-            target_bits = export_dt.bitwidth()
-            packed_bits = self.get_outstream_width()
-            out_npy_path = f"{code_gen_dir}/output_0.npy"
-            out_shape = self.get_folded_output_shape()
-            rtlsim_output_to_npy(out, out_npy_path, export_dt, out_shape, packed_bits, target_bits)
-
-            # load and reshape output
-            output = np.load(out_npy_path)
-            oshape = self.get_normal_output_shape()
-            output = np.asarray([output], dtype=np.float32,).reshape(*oshape)
-            context[node.output[0]] = output
-
-        else:
-            raise Exception(f"Unsupported execution mode: {mode}")
+        # Delegate to HLSBackend for both cppsim and rtlsim execution
+        HLSBackend.execute_node(self, context, graph)
 
     def compile_singlenode_code(self):
         """
@@ -214,12 +165,17 @@ class Crop_hls(Crop, HLSBackend):
         builder.append_sources(code_gen_dir + "/*.cpp")
         builder.append_sources("$BSMITH_DIR/deps/cnpy/cnpy.cpp")
         builder.append_includes("-lz")
-        builder.append_includes(
-            '-fno-builtin -fno-inline -Wl,-rpath,"$VITIS_PATH/lnx64/lib/csim" -L$VITIS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'
-        )
-        builder.append_includes( #TODO: [STF]I have a feeling this should/could be removed for shuffle as it's all FP related?
-            "-L$VITIS_PATH/lnx64/tools/fpo_v7_1 -lgmp -lmpfr -lIp_floating_point_v7_1_bitacc_cmodel"
-        )
+        # Split HLS simulation library flags (must be separate arguments)
+        builder.append_includes("-fno-builtin")
+        builder.append_includes("-fno-inline")
+        builder.append_includes('-Wl,-rpath,"$VITIS_PATH/lnx64/lib/csim"')
+        builder.append_includes("-L$VITIS_PATH/lnx64/lib/csim")
+        builder.append_includes("-lhlsmc++-GCC46")
+        # Split floating point library flags
+        builder.append_includes("-L$VITIS_PATH/lnx64/tools/fpo_v7_1")
+        builder.append_includes("-lgmp")
+        builder.append_includes("-lmpfr")
+        builder.append_includes("-lIp_floating_point_v7_1_bitacc_cmodel")
         builder.set_executable_path(code_gen_dir + "/node_model")
         builder.build(code_gen_dir)
         self.set_nodeattr("executable_path", builder.executable_path)

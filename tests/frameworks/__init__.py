@@ -12,7 +12,7 @@ Architecture:
 
 Frameworks:
 - KernelTest: Test one kernel implementation vs golden reference
-- KernelParityTest: Test FINN vs Brainsmith parity + both vs golden (v6.0)
+- KernelParityTest: Test FINN vs Brainsmith parity + both vs golden
 
 Configuration:
 - KernelTestConfig: Compositional configuration with sub-configs

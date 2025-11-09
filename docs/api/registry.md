@@ -28,14 +28,20 @@ class ElementwiseBinaryOp(KernelOp):
 
 ```python
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from brainsmith.registry import backend
+from brainsmith.registry import backend, get_kernel
+
+# Get the kernel class
+ElementwiseBinaryOp = get_kernel('ElementwiseBinaryOp')
 
 @backend(target_kernel='ElementwiseBinaryOp', language='hls')
-class ElementwiseBinary_hls(HLSBackend):
+class ElementwiseBinary_hls(ElementwiseBinaryOp, HLSBackend):
     """HLS backend for ElementwiseBinaryOp."""
 
     def get_nodeattr_types(self):
-        return {}  # Inherits from kernel
+        # Combine attributes from kernel and backend
+        my_attrs = ElementwiseBinaryOp.get_nodeattr_types(self)
+        my_attrs.update(HLSBackend.get_nodeattr_types(self))
+        return my_attrs
 ```
 
 ---

@@ -13,7 +13,7 @@ Two-phase construction separates expensive setup from fast configuration: Design
 ```python
 import brainsmith.dataflow as df
 from brainsmith.registry import kernel
-from onnx import NodeProto
+from onnx import NodeProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 
 @kernel(description="Hardware LayerNorm", author="Your Name")
@@ -109,6 +109,9 @@ depth_param = df.ParameterSpec("depth", [128, 256, 512], default=256)
 
 # Discrete parameter (set for unordered categories)
 ram_param = df.ParameterSpec("ram_style", {"distributed", "block"}, default="distributed")
+
+# Callable parameter (explicit type required)
+dynamic_param = df.ParameterSpec("depth", lambda ctx: [128, 256], type="int", default=128)
 
 # Use in kernel schema
 schema = df.KernelSchema(

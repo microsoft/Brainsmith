@@ -1,1 +1,0 @@
-"""Crop kernel tests."""

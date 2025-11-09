@@ -41,31 +41,6 @@ class KernelTest(KernelTestBase):
     Provides 6 inherited tests: 3 pipeline validation + 3 execution (Python/cppsim/rtlsim)
     """
 
-    def _compute_golden_reference(
-        self,
-        quant_model: ModelWrapper,
-        inputs: Dict[str, np.ndarray],
-    ) -> Dict[str, np.ndarray]:
-        """Compute golden reference using QONNX execution on Stage 1 model.
-
-        This is an internal helper. Tests should not call directly.
-
-        Golden reference runs QONNX on the Stage 1 model WITH DataType annotations:
-        - Model has QONNX DataType annotations on tensors (NO Quant nodes)
-        - Executes ONNX operations with pre-quantized input data
-        - Uses quantized values as golden reference (not floating-point)
-
-        All Stage 1 models contain standard ONNX operations that QONNX can execute.
-
-        Args:
-            quant_model: ModelWrapper WITH DataType annotations (NO Quant nodes)
-            inputs: Test data (pre-quantized, input names as keys)
-
-        Returns:
-            Expected outputs from QONNX execution
-        """
-        return execute_onnx(quant_model, inputs, return_full_exec_context=False)
-
     @pytest.fixture(scope="function")
     def stage1_model(
         self, kernel_test_config: "KernelTestConfig", model_cache
@@ -88,13 +63,7 @@ class KernelTest(KernelTestBase):
         """
 
         def builder():
-            model, _ = self._prepare_model_with_annotations(kernel_test_config)
-
-            # Run shape/datatype inference (required for QONNX execution)
-            model = model.transform(InferShapes())
-            model = model.transform(InferDataTypes())
-
-            return model
+            return self._build_stage1_model(kernel_test_config)
 
         return model_cache.get_stage1_model(kernel_test_config.test_id, builder)
 
@@ -102,7 +71,7 @@ class KernelTest(KernelTestBase):
     def test_inputs(
         self, kernel_test_config: "KernelTestConfig", model_cache
     ) -> Dict[str, np.ndarray]:
-        """Generate test inputs with deterministic seed (v3.0).
+        """Generate test inputs with deterministic seed.
 
         Uses session-scoped model_cache for computational reuse across tests
         with the same test_id.
@@ -117,7 +86,7 @@ class KernelTest(KernelTestBase):
         """
 
         def builder():
-            return self._generate_test_inputs(kernel_test_config)
+            return self._build_test_inputs(kernel_test_config)
 
         return model_cache.get_test_inputs(kernel_test_config.test_id, builder)
 
@@ -148,7 +117,7 @@ class KernelTest(KernelTestBase):
         """
 
         def builder():
-            return self._compute_golden_reference(stage1_model, test_inputs)
+            return self._build_golden_outputs(stage1_model, test_inputs)
 
         return model_cache.get_golden_reference(kernel_test_config.test_id, builder)
 
@@ -185,10 +154,7 @@ class KernelTest(KernelTestBase):
             runner = PipelineRunner()
 
             def configure_stage_2(op, m):
-                # Apply imperative configuration (optional override)
-                if hasattr(self, 'configure_parameters'):
-                    self.configure_parameters(op, m, stage=2)
-                # Apply declarative configuration from fixture (v3.0)
+                # Apply declarative configuration from fixture
                 self.auto_configure_from_fixture(
                     op, m, stage=2, config=kernel_test_config
                 )
@@ -245,10 +211,7 @@ class KernelTest(KernelTestBase):
                 base_op, base_model, kernel_test_config
             )
 
-            # Configure backend-specific parameters (optional override)
-            if hasattr(self, 'configure_parameters'):
-                self.configure_parameters(op, model, stage=3)
-            # Apply declarative configuration from fixture (v3.0)
+            # Apply declarative configuration from fixture
             self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
 
             return op, model
@@ -263,7 +226,7 @@ class KernelTest(KernelTestBase):
         """Validate that kernel inference creates hardware node.
 
         Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
+            kernel_test_config: Unified test configuration
             stage2_model: Cached Stage 2 model fixture
 
         Pipeline:
@@ -296,7 +259,7 @@ class KernelTest(KernelTestBase):
         """Validate tensor shapes remain correct through inference pipeline.
 
         Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
+            kernel_test_config: Unified test configuration
             stage2_model: Cached Stage 2 model fixture
         """
         op, model = stage2_model
@@ -344,7 +307,7 @@ class KernelTest(KernelTestBase):
         """Validate tensor datatypes remain correct through inference pipeline.
 
         Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
+            kernel_test_config: Unified test configuration
             stage2_model: Cached Stage 2 model fixture
         """
         op, model = stage2_model
@@ -393,23 +356,8 @@ class KernelTest(KernelTestBase):
         test_inputs: Dict[str, np.ndarray],
         golden_outputs: Dict[str, np.ndarray],
     ):
-        """Test Python execution (execute_node) matches QONNX golden reference.
-
-        Uses cached Stage 2 model from fixture for computational reuse across
-        test depths (python/cppsim/rtlsim).
-
-        Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-            stage2_model: Cached Stage 2 model fixture (NEW: replaces run_inference_pipeline)
-            test_inputs: From fixture (generated test data)
-            golden_outputs: From fixture (Stage 1 golden reference)
-
-        Validates:
-        1. Kernel inference creates correct HW node
-        2. Python execution produces correct results
-        3. Results match Stage 1 QONNX golden reference (quantized) within tolerance
-        """
-        # Delegate to shared utility (v5.0 - eliminates duplication)
+        """Test Python execution matches QONNX golden reference."""
+        # Delegate to shared utility
         self._execute_and_validate_golden(
             stage2_model, test_inputs, golden_outputs,
             "python", "Python execution", kernel_test_config
@@ -427,35 +375,8 @@ class KernelTest(KernelTestBase):
         test_inputs: Dict[str, np.ndarray],
         golden_outputs: Dict[str, np.ndarray],
     ):
-        """Test HLS C++ simulation matches QONNX golden reference.
-
-        Uses cached Stage 3 model from fixture for computational reuse.
-        Stage 2 model is reused from test_python_execution_vs_golden.
-
-        Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-            stage3_model: Cached Stage 3 model fixture (NEW: replaces run_inference_pipeline)
-            test_inputs: From fixture (generated test data)
-            golden_outputs: From fixture (Stage 1 golden reference)
-
-        Validates complete code generation pipeline (3 stages):
-        1. ONNX → Base Kernel (Stage 1 → 2) [cached from stage2_model]
-        2. Base Kernel → HLS Backend (Stage 2 → 3) [cached here]
-        3. HLS Backend → C++ code → Compilation → Simulation
-
-        Results must match Stage 1 QONNX golden reference (quantized) within tolerance.
-
-        Requires:
-            - VITIS_PATH environment variable
-            - Backend configured via kernel_test_config.platform (PlatformConfig)
-            - HLS backend available for kernel
-
-        Control execution:
-            - Use @pytest.mark.cppsim to mark backend tests
-            - Skip with: pytest -m "not cppsim" -v
-            - If VITIS_PATH not set, CppSimExecutor will fail with clear error
-        """
-        # Delegate to shared utility (v5.0 - eliminates duplication)
+        """Test HLS C++ simulation matches QONNX golden reference."""
+        # Delegate to shared utility
         self._execute_and_validate_golden(
             stage3_model, test_inputs, golden_outputs,
             "cppsim", "HLS simulation (cppsim)", kernel_test_config
@@ -473,39 +394,8 @@ class KernelTest(KernelTestBase):
         test_inputs: Dict[str, np.ndarray],
         golden_outputs: Dict[str, np.ndarray],
     ):
-        """Test RTL simulation matches QONNX golden reference.
-
-        Uses cached Stage 3 model from fixture for computational reuse.
-        Stage 2 model reused from test_python_execution_vs_golden,
-        Stage 3 model reused from test_cppsim_execution_vs_golden.
-
-        Args:
-            kernel_test_config: Unified test configuration (v3.0, required)
-            stage3_model: Cached Stage 3 model fixture (NEW: replaces run_inference_pipeline)
-            test_inputs: From fixture (generated test data)
-            golden_outputs: From fixture (Stage 1 golden reference)
-
-        Validates complete HDL generation pipeline (3 stages):
-        1. ONNX → Base Kernel (Stage 1 → 2) [cached from stage2_model]
-        2. Base Kernel → Backend (Stage 2 → 3) [cached from stage3_model]
-        3. Backend → HDL → Synthesis → Simulation
-
-        For HLS backends: Synthesizes HLS → RTL using Vitis HLS first
-        For RTL backends: Uses generated HDL directly
-
-        Results must match Stage 1 QONNX golden reference (quantized) within tolerance.
-
-        Requires:
-            - Vivado installation with XSim
-            - Backend configured via kernel_test_config.platform (PlatformConfig)
-            - Backend available for kernel (HLS or RTL)
-
-        Control execution:
-            - Use @pytest.mark.rtlsim to mark backend tests
-            - Skip with: pytest -m "not rtlsim" -v
-            - If Vivado not found, RTLSimExecutor will fail with clear error
-        """
-        # Delegate to shared utility (v5.0 - eliminates duplication)
+        """Test RTL simulation matches QONNX golden reference."""
+        # Delegate to shared utility
         self._execute_and_validate_golden(
             stage3_model, test_inputs, golden_outputs,
             "rtlsim", "RTL simulation (rtlsim)", kernel_test_config

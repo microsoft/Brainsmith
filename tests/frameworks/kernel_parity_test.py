@@ -86,7 +86,7 @@ class KernelParityTest(KernelTestBase):
         pass
 
     # ========================================================================
-    # Reference-Based API (v6.0) - New Asymmetric Design
+    # Reference-Based API - Asymmetric Design
     # ========================================================================
 
     @abstractmethod
@@ -95,7 +95,7 @@ class KernelParityTest(KernelTestBase):
         model: ModelWrapper,
         target_node: str,
     ) -> Tuple[HWCustomOp, ModelWrapper]:
-        """Infer reference implementation (v6.0).
+        """Infer reference implementation.
 
         Reference implementation uses this method to transform ONNX → Reference Kernel.
         Primary implementation uses inherited infer_kernel() from base class.
@@ -122,7 +122,7 @@ class KernelParityTest(KernelTestBase):
 
     @abstractmethod
     def get_backend_variants_reference(self) -> List[Type]:
-        """Return backend variants for reference implementation (v6.0).
+        """Return backend variants for reference implementation.
 
         Reference implementation uses this method to specify HLS/RTL backends.
         Primary implementation uses inherited get_backend_variants() from base class.
@@ -146,7 +146,7 @@ class KernelParityTest(KernelTestBase):
         stage: int,
         config: "KernelTestConfig",
     ):
-        """Configure reference kernel parameters (v6.0).
+        """Configure reference kernel parameters.
 
         Reference implementation uses this method for configuration.
         Primary implementation uses inherited configure_kernel() from base class.
@@ -167,9 +167,9 @@ class KernelParityTest(KernelTestBase):
         model: ModelWrapper,
         config: "KernelTestConfig",
     ) -> Tuple[HWCustomOp, ModelWrapper]:
-        """Specialize reference to backend (v6.0).
+        """Specialize reference to backend.
 
-        New asymmetric API. Uses explicit backend variants (no method swapping!).
+        Uses explicit backend variants (no method swapping).
 
         Default: Uses get_backend_variants_reference() and shared logic.
         Override: Custom specialization for reference implementation.
@@ -190,23 +190,6 @@ class KernelParityTest(KernelTestBase):
 
         return specialize_to_backend(op, model, fpgapart, backend_variants)
 
-    def _compute_golden_reference(
-        self, quant_model: ModelWrapper, inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
-        """Compute golden reference using QONNX execution on Stage 1 model.
-
-        Same implementation as KernelTest - uses QONNX to execute Stage 1 model
-        with DataType annotations (no Quant nodes).
-
-        Args:
-            quant_model: ModelWrapper WITH DataType annotations
-            inputs: Test data (pre-quantized)
-
-        Returns:
-            Expected outputs from QONNX execution
-        """
-        return execute_onnx(quant_model, inputs, return_full_exec_context=False)
-
     @pytest.fixture(scope="function")
     def stage1_model(
         self, kernel_test_config: "KernelTestConfig", model_cache
@@ -224,13 +207,7 @@ class KernelParityTest(KernelTestBase):
         """
 
         def builder():
-            model, _ = self._prepare_model_with_annotations(kernel_test_config)
-
-            # Run shape/datatype inference (required for QONNX execution)
-            model = model.transform(InferShapes())
-            model = model.transform(InferDataTypes())
-
-            return model
+            return self._build_stage1_model(kernel_test_config)
 
         return model_cache.get_stage1_model(kernel_test_config.test_id, builder)
 
@@ -251,7 +228,7 @@ class KernelParityTest(KernelTestBase):
         """
 
         def builder():
-            return self._generate_test_inputs(kernel_test_config)
+            return self._build_test_inputs(kernel_test_config)
 
         return model_cache.get_test_inputs(kernel_test_config.test_id, builder)
 
@@ -278,12 +255,12 @@ class KernelParityTest(KernelTestBase):
         """
 
         def builder():
-            return self._compute_golden_reference(stage1_model, test_inputs)
+            return self._build_golden_outputs(stage1_model, test_inputs)
 
         return model_cache.get_golden_reference(kernel_test_config.test_id, builder)
 
     # ========================================================================
-    # Pytest Fixtures (v6.0)
+    # Pytest Fixtures
     # ========================================================================
 
     @pytest.fixture(scope="function")

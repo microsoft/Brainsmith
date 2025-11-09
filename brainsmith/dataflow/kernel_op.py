@@ -4,7 +4,30 @@
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
-"""Kernel operator base class."""
+"""Kernel operator base class.
+
+EXECUTION COMPATIBILITY NOTES
+==============================
+
+KernelOp uses lazy initialization for performance. When executed via QONNX's
+execute_onnx(), the executor creates fresh instances per node, losing cached
+design_space.
+
+If your kernel implements execute_node(), call _ensure_initialized_for_execution(graph)
+at the start:
+
+    def execute_node(self, context, graph):
+        # Ensure design_space initialized (QONNX executor creates fresh instances)
+        self._ensure_initialized_for_execution(graph)
+
+        # Now safe to access design_point (regenerates from design_space)
+        dtype = self.design_point.inputs["input"].datatype
+        # ... rest of execution logic
+
+This reconstructs ModelWrapper from the graph parameter to initialize design_space
+on demand. The overhead is minimal (~1ms) and only occurs when design_space is None
+(fresh instances). Design points regenerate automatically from nodeattrs.
+"""
 
 import logging
 import math
@@ -44,23 +67,10 @@ class KernelOp(HWCustomOp, ABC):
     Subclasses implement build_schema() to construct their KernelSchema.
 
     Caching Strategy:
-        - design_space: Cached (expensive to build, never invalidated except by structural changes)
-        - design_point: Always regenerated from nodeattrs (guarantees consistency)
+        - design_space: Cached (expensive to build, invalidated on structural changes)
+        - design_point: Regenerated from nodeattrs (guarantees consistency)
 
-    Execution Compatibility:
-        KernelOp uses lazy initialization for performance. When executed via
-        QONNX's execute_onnx(), the executor creates fresh instances per node,
-        losing cached design_space. To handle this, execute_node() implementations
-        should call _ensure_initialized_for_execution(graph) at entry:
-
-            def execute_node(self, context, graph):
-                self._ensure_initialized_for_execution(graph)
-                # Now safe to access design_point
-                # ... rest of implementation
-
-        This reconstructs ModelWrapper from the graph parameter to initialize
-        design_space on demand. The overhead is minimal (~1ms) and only occurs
-        when design_space is None (fresh instances).
+    For execution compatibility notes, see module docstring.
     """
 
     def __init__(self, onnx_node, **kwargs):
@@ -70,7 +80,7 @@ class KernelOp(HWCustomOp, ABC):
 
         # Design space caching for DSE performance
         # Design points are regenerated on each access to ensure consistency with nodeattrs
-        self._design_space: Optional['KernelDesignSpace'] = None  # Built once, never invalidated
+        self._design_space: Optional['KernelDesignSpace'] = None  # Cached, call invalidate() to rebuild
 
     @classmethod
     @abstractmethod

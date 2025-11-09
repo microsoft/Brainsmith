@@ -1,6 +1,6 @@
 ## Brainsmith
 
-Brainsmith automates the creation of dataflow core accelerators and implementation of neural networks on FPGA, from PyTorch to RTL.
+Brainsmith compiles ONNX models to optimized dataflow accelerator designs for FPGAs, intelligently exploring hardware configurations to find designs that maximize performance within your resource constraints.
 
 ## Pre-Release
 

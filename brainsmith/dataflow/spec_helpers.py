@@ -423,11 +423,12 @@ def _get_bounds(interface_obj, model) -> tuple[float, float]:
         return dt.min(), dt.max()
 
 
-def add_datatype(
+def _binary_op_datatype(
     a_interface: str,
-    b_interface: str
+    b_interface: str,
+    range_fn: Callable[[float, float, float, float], tuple[float, float]]
 ) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
-    """Compute addition output datatype (context-aware).
+    """Generic binary operation datatype builder.
 
     Automatically optimizes based on whether interfaces are static or dynamic:
     - Both dynamic: uses worst-case type bounds
@@ -437,6 +438,7 @@ def add_datatype(
     Args:
         a_interface: First operand interface name
         b_interface: Second operand interface name
+        range_fn: Function to compute output range (e.g., compute_add_range)
 
     Returns:
         Callable for OutputSchema datatype field
@@ -454,10 +456,18 @@ def add_datatype(
         a_min, a_max = _get_bounds(interfaces[a_interface], model)
         b_min, b_max = _get_bounds(interfaces[b_interface], model)
 
-        min_val, max_val = compute_add_range(a_min, a_max, b_min, b_max)
+        min_val, max_val = range_fn(a_min, a_max, b_min, b_max)
         return smallest_datatype_for_range(min_val, max_val)
 
     return resolver
+
+
+def add_datatype(
+    a_interface: str,
+    b_interface: str
+) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+    """Compute addition output datatype (context-aware)."""
+    return _binary_op_datatype(a_interface, b_interface, compute_add_range)
 
 
 def sub_datatype(
@@ -465,14 +475,7 @@ def sub_datatype(
     b_interface: str
 ) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
     """Compute subtraction output datatype (context-aware)."""
-    def resolver(interfaces, param_getter, model, tensor_name):
-        a_min, a_max = _get_bounds(interfaces[a_interface], model)
-        b_min, b_max = _get_bounds(interfaces[b_interface], model)
-
-        min_val, max_val = compute_sub_range(a_min, a_max, b_min, b_max)
-        return smallest_datatype_for_range(min_val, max_val)
-
-    return resolver
+    return _binary_op_datatype(a_interface, b_interface, compute_sub_range)
 
 
 def mul_datatype(
@@ -480,14 +483,7 @@ def mul_datatype(
     b_interface: str
 ) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
     """Compute multiplication output datatype (context-aware)."""
-    def resolver(interfaces, param_getter, model, tensor_name):
-        a_min, a_max = _get_bounds(interfaces[a_interface], model)
-        b_min, b_max = _get_bounds(interfaces[b_interface], model)
-
-        min_val, max_val = compute_mul_range(a_min, a_max, b_min, b_max)
-        return smallest_datatype_for_range(min_val, max_val)
-
-    return resolver
+    return _binary_op_datatype(a_interface, b_interface, compute_mul_range)
 
 
 def min_datatype(
@@ -495,14 +491,7 @@ def min_datatype(
     b_interface: str
 ) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
     """Compute min() output datatype (context-aware)."""
-    def resolver(interfaces, param_getter, model, tensor_name):
-        a_min, a_max = _get_bounds(interfaces[a_interface], model)
-        b_min, b_max = _get_bounds(interfaces[b_interface], model)
-
-        min_val, max_val = compute_min_range(a_min, a_max, b_min, b_max)
-        return smallest_datatype_for_range(min_val, max_val)
-
-    return resolver
+    return _binary_op_datatype(a_interface, b_interface, compute_min_range)
 
 
 def max_datatype(
@@ -510,11 +499,4 @@ def max_datatype(
     b_interface: str
 ) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
     """Compute max() output datatype (context-aware)."""
-    def resolver(interfaces, param_getter, model, tensor_name):
-        a_min, a_max = _get_bounds(interfaces[a_interface], model)
-        b_min, b_max = _get_bounds(interfaces[b_interface], model)
-
-        min_val, max_val = compute_max_range(a_min, a_max, b_min, b_max)
-        return smallest_datatype_for_range(min_val, max_val)
-
-    return resolver
+    return _binary_op_datatype(a_interface, b_interface, compute_max_range)

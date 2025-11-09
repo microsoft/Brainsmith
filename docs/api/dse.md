@@ -12,7 +12,7 @@ Brainsmith uses segment-based DSE to efficiently explore large design spaces by 
 
 ```python
 from brainsmith import explore_design_space
-from brainsmith.dse.types import SegmentStatus
+from brainsmith.dse import SegmentStatus
 
 # Run complete DSE pipeline
 results = explore_design_space(
@@ -119,6 +119,7 @@ results = explore_design_space(
 # Compute statistics
 stats = results.compute_stats()
 print(stats['successful'], stats['failed'], stats['total'])
+# Also available: stats['cached'], stats['skipped']
 
 # Access individual segments
 for seg_id, seg_result in results.segment_results.items():

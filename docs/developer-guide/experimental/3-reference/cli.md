@@ -1,14 +1,48 @@
-# Brainsmith CLI API Reference
+# CLI Reference
 
-This document provides a complete reference for the Brainsmith dual-command CLI structure.
+This guide covers the Brainsmith command-line interfaces: `brainsmith` and `smith`.
 
 ## Overview
 
-Brainsmith uses a dual-command structure:
-- **`brainsmith`** - Application-level configuration and setup
-- **`smith`** - Operational commands for design space exploration and kernel generation
+Brainsmith provides a dual CLI system designed to separate administrative tasks from operational workflows:
 
-## Command Structure
+- **`brainsmith`** - Application-level configuration and setup commands
+- **`smith`** - Streamlined operational commands for hardware design generation
+
+## CLI Architecture
+
+### Dual Entry Points
+
+The system uses two distinct entry points to provide different user experiences:
+
+**Administrative CLI (`brainsmith`)**:
+- Configuration management (`config`)
+- Setup utilities (`setup`)
+- Project initialization (`project`)
+- Can invoke operational commands via subcommands
+- Intended for system administrators and initial setup
+
+**Operational CLI (`smith`)**:
+- Focused on core workflows (dataflow core creation, kernel generation)
+- Simplified interface for daily use
+- Inherits configuration from brainsmith setup
+- Intended for design engineers and regular users
+
+### Configuration Hierarchy
+
+Brainsmith follows a clear precedence order for configuration:
+
+1. **Command-line arguments** (highest priority)
+2. **Environment variables** (`BSMITH_*` prefix)
+3. **Project configuration** (`brainsmith.yaml`)
+4. **User configuration** (`~/brainsmith.yaml`)
+5. **Built-in defaults** (lowest priority)
+
+See: [Configuration Guide](../../getting-started.md#configuration)
+
+---
+
+## Command Reference
 
 ### `brainsmith` - Application Configuration
 
@@ -23,21 +57,12 @@ brainsmith [OPTIONS] COMMAND [ARGS]...
 - `--version` - Show Brainsmith version
 - `--help` - Show help message
 
-### `smith` - Operational Commands
-
-```bash
-smith [COMMAND] [OPTIONS]
-```
-
-**Global Options:**
-- `--version` - Show version
-- `--help` - Show help message
+---
 
 ## Configuration Management
 
-### `brainsmith config` - Manage Configuration
+### `brainsmith config show`
 
-#### `brainsmith config show`
 Display current configuration with all active settings.
 
 ```bash
@@ -61,7 +86,8 @@ brainsmith config show --format yaml --verbose
 brainsmith config show --format env
 ```
 
-#### `brainsmith config init`
+### `brainsmith config init`
+
 Initialize a new configuration file.
 
 ```bash
@@ -86,7 +112,8 @@ brainsmith config init --user --force
 brainsmith config init --full
 ```
 
-#### `brainsmith config export`
+### `brainsmith config export`
+
 Export configuration as shell environment script.
 
 ```bash
@@ -105,11 +132,59 @@ eval $(brainsmith config export)
 eval (brainsmith config export --shell fish)
 ```
 
+---
+
+## Project Management
+
+### `brainsmith project init`
+
+Initialize a new project directory with configuration.
+
+```bash
+brainsmith project init [PATH]
+```
+
+**Arguments:**
+- `PATH` - Directory to initialize (default: current directory)
+
+**Examples:**
+```bash
+# Initialize current directory
+brainsmith project init
+
+# Create and initialize new project
+brainsmith project init ~/my-fpga-project
+```
+
+### `brainsmith project info`
+
+Display current project configuration.
+
+```bash
+brainsmith project info
+```
+
+Shows effective configuration for the current project, including:
+- Xilinx tool paths
+- Build directories
+- Active settings
+
+### `brainsmith project allow-direnv`
+
+Enable direnv integration for automatic environment activation.
+
+```bash
+brainsmith project allow-direnv
+```
+
+This configures direnv to automatically load `.brainsmith/env.sh` when you cd into the directory.
+
+---
+
 ## Setup and Dependencies
 
-### `brainsmith setup` - System Setup
+### `brainsmith setup all`
 
-#### `brainsmith setup all`
 Install all dependencies (C++ simulation, Xilinx simulation, board files).
 
 ```bash
@@ -119,7 +194,8 @@ brainsmith setup all [OPTIONS]
 **Options:**
 - `--force, -f` - Force reinstallation even if already present
 
-#### `brainsmith setup cppsim`
+### `brainsmith setup cppsim`
+
 Setup C++ simulation dependencies (cnpy, finn-hlslib).
 
 ```bash
@@ -129,7 +205,8 @@ brainsmith setup cppsim [OPTIONS]
 **Options:**
 - `--force, -f` - Force reinstallation
 
-#### `brainsmith setup xsim`
+### `brainsmith setup xsim`
+
 Setup Xilinx simulation (build finn-xsim with Vivado).
 
 ```bash
@@ -139,7 +216,8 @@ brainsmith setup xsim [OPTIONS]
 **Options:**
 - `--force, -f` - Force rebuild
 
-#### `brainsmith setup boards`
+### `brainsmith setup boards`
+
 Download FPGA board definition files.
 
 ```bash
@@ -151,7 +229,8 @@ brainsmith setup boards [OPTIONS]
 - `--repo, -r [xilinx|avnet|realdigital]` - Specific repository to download
 - `--verbose, -v` - Show detailed list of all board files
 
-#### `brainsmith setup check`
+### `brainsmith setup check`
+
 Check the status of all setup components.
 
 ```bash
@@ -172,9 +251,26 @@ Setup Status:
 ✓ Board files (47 boards)
 ```
 
+---
+
+## Operational Commands
+
+### `smith` - Streamlined Operations
+
+```bash
+smith [COMMAND] [OPTIONS]
+```
+
+**Global Options:**
+- `--version` - Show version
+- `--help` - Show help message
+
+---
+
 ## Dataflow Core Creation
 
 ### `smith dfc` (default command)
+
 Create a dataflow core accelerator for neural network acceleration.
 
 ```bash
@@ -203,11 +299,17 @@ smith dfc model.onnx blueprint.yaml --output-dir ./results
 
 # Using brainsmith context with debug mode
 brainsmith --debug smith dfc model.onnx blueprint.yaml
+
+# Run specific step range
+smith dfc model.onnx blueprint.yaml --start-step streamline --stop-step specialize_layers
 ```
+
+---
 
 ## Hardware Kernel Generation
 
 ### `smith kernel`
+
 Generate hardware kernel from RTL for FINN integration.
 
 ```bash
@@ -242,17 +344,9 @@ smith kernel my_accelerator.sv --artifacts kernelop --artifacts wrapper
 smith kernel top.sv --include-rtl helper.sv --include-rtl memory.sv
 ```
 
+---
+
 ## Configuration Settings
-
-### Settings Hierarchy
-
-Configuration is resolved in the following priority order (highest to lowest):
-
-1. **Command-line arguments** - Direct CLI options
-2. **Environment variables** - `BSMITH_*` prefixed variables
-3. **Project configuration** - `./brainsmith_config.yaml`
-4. **User configuration** - `~/brainsmith.yaml`
-5. **Built-in defaults** - Hardcoded in the application
 
 ### Available Settings
 
@@ -291,7 +385,10 @@ export BSMITH_XILINX_VERSION=2024.2
 export BSMITH_FINN__NUM_DEFAULT_WORKERS=8
 ```
 
-Note: Nested settings use double underscore (`__`) as delimiter.
+!!! note "Nested Settings"
+    Nested settings use double underscore (`__`) as delimiter.
+
+---
 
 ## Usage Patterns
 
@@ -336,7 +433,7 @@ brainsmith config show --verbose
 ### CI/CD Integration
 ```bash
 # Export configuration for CI scripts
-eval $(brainsmith env activate)
+eval $(brainsmith config export)
 
 # All tools now have correct paths
 vivado -version
@@ -346,15 +443,14 @@ vitis_hls -version
 smith model.onnx blueprint.yaml --output-dir $CI_ARTIFACTS_DIR
 ```
 
+---
+
 ## Troubleshooting
 
 ### Check Configuration
 ```bash
 # See all active settings
 brainsmith config show --verbose
-
-# Check environment variables
-brainsmith env show
 
 # Verify tool detection
 brainsmith setup check --verbose
@@ -374,37 +470,16 @@ brainsmith --debug smith model.onnx blueprint.yaml
 rm ~/brainsmith.yaml
 
 # Remove project configuration
-rm brainsmith_config.yaml
+rm brainsmith.yaml
 
 # Reinitialize
 brainsmith config init --user
 ```
 
-## Migration from Legacy CLI
+---
 
-The previous single `smith` command structure has been updated:
+## Next Steps
 
-| Old Command | New Command |
-|------------|-------------|
-| `smith config show` | `brainsmith config show` |
-| `smith config export` | `brainsmith config export` |
-| `smith setup all` | `brainsmith setup all` |
-| `smith dse model.onnx bp.yaml` | `smith dfc model.onnx bp.yaml` |
-| `smith model.onnx bp.yaml` | `smith model.onnx bp.yaml` (unchanged) |
-| `smith kernel rtl.sv` | `smith kernel rtl.sv` (unchanged) |
-
-## Future Commands
-
-These commands are planned for future releases:
-
-### `smith run`
-Run compiled model on hardware.
-```bash
-smith run COMPILED_MODEL [--device DEVICE]
-```
-
-### `smith build`
-Build complete acceleration package.
-```bash
-smith build MODEL STRATEGY [--target alveo|zynq|versal]
-```
+- [Blueprints](blueprints.md) - Learn the YAML configuration format
+- [Design Space Exploration](../2-core-systems/design-space-exploration.md) - Understand DSE concepts
+- [Configuration Guide](../../getting-started.md#configuration) - Deep dive on configuration
