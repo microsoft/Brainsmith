@@ -37,11 +37,11 @@ DEPENDENCIES = {
     'finn-hlslib': {
         'type': 'git',
         'url': 'https://github.com/Xilinx/finn-hlslib.git',
-        'ref': '5c5ad631e3602a8dd5bd3399a016477a407d6ee7',
+        'ref': 'a19482ba6886f6f26aff11b10126a82ce0dd7ab1',
         'group': 'cppsim',
         'description': 'Header-only HLS library'
     },
-    
+
     # RTL Simulation Dependencies
     'oh-my-xilinx': {
         'type': 'git',
@@ -63,7 +63,7 @@ DEPENDENCIES = {
             'vivado': 'Xilinx Vivado - set xilinx_path in config or BSMITH_XILINX_PATH env var'
         }
     },
-    
+
     # Board Files
     'avnet-boards': {
         'type': 'git',
@@ -151,7 +151,7 @@ class DependencyManager:
         if dep.get('group') == 'boards':
             return self.deps_dir / 'board-files' / name
         return self.deps_dir / name
-        
+
     def install(self, name: str, force: bool = False, quiet: bool = False) -> None:
         """Install a single dependency.
 
@@ -183,7 +183,7 @@ class DependencyManager:
 
         dest = self._get_dest_path(dep, name)
         self.installers[dep_type].install(name, dep, dest, force, quiet)
-            
+
     def install_group(self, group: str, force: bool = False, quiet: bool = False) -> dict[str, Exception | None]:
         """Install all dependencies in a group.
 
@@ -202,7 +202,7 @@ class DependencyManager:
                     logger.error("Failed to install %s: %s", dep, e)
 
         return results
-        
+
     def _check_requirements(self, dep: dict) -> list[tuple[str, str]]:
         """Returns list of (tool, message) tuples for missing requirements."""
         missing = []
@@ -243,7 +243,7 @@ class DependencyManager:
 
         dest = self._get_dest_path(dep, name)
         self.installers[dep_type].remove(name, dest, quiet)
-            
+
     def remove_group(self, group: str, quiet: bool = False) -> dict[str, Exception | None]:
         """Remove all dependencies in a group.
 
@@ -266,22 +266,22 @@ class DependencyManager:
 
 class BoardManager:
     """Manages FPGA board definition files."""
-    
+
     def __init__(self, board_dir: Path):
         self.board_dir = Path(board_dir)
 
     def list_downloaded_repositories(self) -> list[str]:
         if not self.board_dir.exists():
             return []
-            
+
         # Board repos are direct subdirectories
         repos = []
         for item in self.board_dir.iterdir():
             if item.is_dir() and not item.name.startswith('.'):
                 repos.append(item.name)
-                
+
         return sorted(repos)
-        
+
     def get_board_summary(self) -> dict[str, list[str]]:
         """Get summary of all boards organized by repository."""
         summary = {}
@@ -335,7 +335,7 @@ class BoardManager:
             if board_name := self._parse_board_name(board_file):
                 boards.append(board_name)
         return sorted(set(boards))
-        
+
     def find_board_path(self, board_name: str) -> Path | None:
         """Find path to board directory, or None if not found."""
         for board_file in self.board_dir.glob("**/board.xml"):
@@ -344,7 +344,7 @@ class BoardManager:
                 return board_file.parent
 
         return None
-        
+
     def validate_repository_names(self, names: list[str]) -> tuple[list[str], list[str]]:
         """Validate repository names against known repositories.
 

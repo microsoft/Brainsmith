@@ -1,33 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Brainsmith hardware kernels.
+"""
+Brainsmith Kernels
 
-Kernel implementations for FPGA deployment. All kernels are eagerly imported
-for simplicity and debuggability. Manifest caching provides performance.
+Plugin-based hardware kernel implementations.
 """
 
-# Kernels
-from brainsmith.kernels.layernorm.layernorm import LayerNorm
-from brainsmith.kernels.crop.crop import Crop
-from brainsmith.kernels.softmax.hwsoftmax import Softmax
-from brainsmith.kernels.shuffle.shuffle import Shuffle
-
-# Backends
-from brainsmith.kernels.layernorm.layernorm_hls import LayerNorm_hls
-from brainsmith.kernels.crop.crop_hls import Crop_hls
-from brainsmith.kernels.softmax.hwsoftmax_hls import Softmax_hls
-from brainsmith.kernels.shuffle.shuffle_hls import Shuffle_hls
-
-__all__ = [
-    # Kernels
-    'LayerNorm',
-    'Crop',
-    'Softmax',
-    'Shuffle',
-    # Backends
-    'LayerNorm_hls',
-    'Crop_hls',
-    'Softmax_hls',
-    'Shuffle_hls',
-]
+# Import all Kernels and Backends to trigger registration
+from .addstreams import *
+from .channelwise import *
+from .crop import *
+from .duplicate_streams import *
+from .elementwise_binary import *
+from .layernorm import *
+from .softmax import *
+from .thresholding import *

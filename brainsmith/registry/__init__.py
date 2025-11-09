@@ -35,7 +35,7 @@ from .constants import (
     SOURCE_BRAINSMITH,
     SOURCE_FINN,
     SOURCE_PROJECT,
-    SOURCE_USER,
+    SOURCE_CUSTOM,
     KNOWN_ENTRY_POINTS,
     PROTECTED_SOURCES,
     DEFAULT_SOURCE_PRIORITY,
@@ -43,7 +43,7 @@ from .constants import (
 )
 
 # Metadata structures and helpers
-from ._metadata import ComponentMetadata, ComponentType, ImportSpec, resolve_lazy_class
+from ._metadata import ComponentMetadata, ComponentType, ImportSpec
 
 # Registration decorators
 from ._decorators import (
@@ -55,7 +55,6 @@ from ._decorators import (
 
 # Discovery and lookup - import from specialized modules
 from ._discovery import discover_components
-from ._state import _component_index
 
 
 # ============================================================================
@@ -65,25 +64,20 @@ from ._state import _component_index
 def reset_registry() -> None:
     """Reset registry to uninitialized state.
 
-    Clears all discovered components and resets discovery flag. Useful for
-    testing and when switching configurations.
+    Clears all discovered components and resets discovery flag.
+    Primarily used for testing.
 
     Example:
         >>> from brainsmith.registry import reset_registry
-        >>> reset_registry()  # Clear state
+        >>> reset_registry()
         >>> # ... change configuration ...
         >>> from brainsmith.registry import discover_components
         >>> discover_components()  # Re-discover with new config
-
-    Note:
-        This is the recommended way to reset registry state in tests.
-        Do not directly manipulate private _component_index or
-        _components_discovered variables.
     """
     import brainsmith.registry._state as registry_state
     import brainsmith.registry._discovery as discovery_module
 
-    _component_index.clear()
+    registry_state._component_index.clear()
     registry_state._components_discovered = False
     discovery_module._components_discovered = False
 
@@ -98,7 +92,6 @@ def is_initialized() -> bool:
         >>> from brainsmith.registry import is_initialized
         >>> is_initialized()
         False
-        >>> from brainsmith.registry import discover_components
         >>> discover_components()
         >>> is_initialized()
         True
@@ -128,6 +121,9 @@ from ._lookup import (
     # Metadata Access (for CLI and inspection)
     get_component_metadata,
     get_all_component_metadata,
+
+    # Domain Resolution
+    get_domain_for_backend,
 )
 
 __all__ = [
@@ -136,13 +132,13 @@ __all__ = [
     'SOURCE_BRAINSMITH',
     'SOURCE_FINN',
     'SOURCE_PROJECT',
-    'SOURCE_USER',
+    'SOURCE_CUSTOM',
     'KNOWN_ENTRY_POINTS',
     'PROTECTED_SOURCES',
     'DEFAULT_SOURCE_PRIORITY',
     'SOURCE_MODULE_PREFIXES',
 
-    # Metadata
+    # Metadata Structures
     'ComponentMetadata',
     'ComponentType',
     'ImportSpec',
@@ -178,4 +174,7 @@ __all__ = [
     # Metadata Access
     'get_component_metadata',
     'get_all_component_metadata',
+
+    # Domain Resolution
+    'get_domain_for_backend',
 ]

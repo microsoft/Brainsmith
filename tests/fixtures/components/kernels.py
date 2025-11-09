@@ -27,9 +27,9 @@ class AnotherTestKernel:
         self.onnx_node = onnx_node
 
 
-@kernel(name='TestKernelWithInfer', infer_transform={'module': 'test.infer', 'class_name': 'TestInfer'})
+@kernel(name='TestKernelWithInfer')
 class TestKernelWithInfer:
-    """Test kernel with lazy InferTransform spec."""
+    """Test kernel without infer transform (removed broken reference to test.infer)."""
     op_type = 'TestInferOp'
     domain = 'test.custom'
 

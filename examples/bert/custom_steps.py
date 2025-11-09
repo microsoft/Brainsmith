@@ -46,10 +46,10 @@ from qonnx.transformation.general import RemoveUnusedTensors, GiveReadableTensor
 logger = logging.getLogger(__name__)
 
 
-@step(name="remove_head", source="project")
+@step(name="remove_head")
 def remove_head_step(model, cfg):
     """Remove all nodes up to the first LayerNormalization node and rewire input."""
-    
+
     assert len(model.graph.input) == 1, "Error the graph has more inputs than expected"
     tensor_to_node = {output: node for node in model.graph.node for output in node.output}
 
@@ -101,7 +101,7 @@ def _recurse_model_tail_removal(model, to_remove, node):
     return
 
 
-@step(name="remove_tail", source="project")
+@step(name="remove_tail")
 def remove_tail_step(model, cfg):
     """Remove from global_out_1 all the way back to the first LayerNorm."""
     # Direct implementation from old custom_step_remove_tail
@@ -119,11 +119,11 @@ def remove_tail_step(model, cfg):
     return model
 
 
-@step(name="generate_reference_io", source="project")
+@step(name="generate_reference_io")
 def generate_reference_io_step(model, cfg):
     """
-    This step is to generate a reference IO pair for the 
-    onnx model where the head and the tail have been 
+    This step is to generate a reference IO pair for the
+    onnx model where the head and the tail have been
     chopped off.
     """
     input_m = model.graph.input[0]
@@ -136,5 +136,5 @@ def generate_reference_io_step(model, cfg):
 
     y_ref = oxe.execute_onnx(model, input_t, True)
     np.save(cfg.output_dir+"/expected_output.npy", y_ref[out_name])
-    np.savez(cfg.output_dir+"/expected_context.npz", **y_ref) 
+    np.savez(cfg.output_dir+"/expected_context.npz", **y_ref)
     return model

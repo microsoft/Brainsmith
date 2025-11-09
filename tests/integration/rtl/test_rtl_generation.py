@@ -9,7 +9,7 @@ Phase 5: Will be implemented with:
 
 New tests - RTL validation tier
 
-Marker: @pytest.mark.rtl_sim, @pytest.mark.slow
+Marker: @pytest.mark.rtlsim, @pytest.mark.slow
 Execution time: 30min - hours (real RTL simulation)
 Timeout: 14400 seconds (4 hours)
 

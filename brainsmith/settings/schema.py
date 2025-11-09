@@ -20,7 +20,7 @@ Examples:
     YAML: build_dir: build                       → resolves to $PROJECT_DIR/build
     Env:  BSMITH_BUILD_DIR=build                → resolves to $PROJECT_DIR/build
 
-Project directory is detected by walking up from CWD to find .brainsmith/config.yaml.
+Project directory is detected by walking up from CWD to find brainsmith.yaml.
 
 Internal paths (deps_dir) always resolve to brainsmith installation, ignoring user input.
 
@@ -29,9 +29,8 @@ Configuration Priority
 Settings are loaded from multiple sources with the following priority (highest to lowest):
 1. CLI arguments (passed to SystemConfig constructor)
 2. Environment variables (BSMITH_* prefix)
-3. Project config file (.brainsmith/config.yaml)
-4. User config file (~/.brainsmith/config.yaml)
-5. Built-in defaults (Field defaults in SystemConfig)
+3. Project config file (brainsmith.yaml)
+4. Built-in defaults (Field defaults in SystemConfig)
 
 Path Resolution Flow
 --------------------
@@ -43,6 +42,8 @@ Path Resolution Flow
 
 import os
 import yaml
+import warnings
+import logging
 from pathlib import Path
 from functools import cached_property
 from typing import (
@@ -62,16 +63,14 @@ from brainsmith.registry.constants import (
     SOURCE_BRAINSMITH,
     SOURCE_FINN,
     SOURCE_PROJECT,
-    SOURCE_USER,
     DEFAULT_SOURCE_PRIORITY,
+    SOURCE_MODULE_PREFIXES,
 )
 
 
 # Private constants for config file discovery
 # These are internal implementation details - CLI tools should inline values as needed
-_USER_CONFIG_PATH = Path.home() / ".brainsmith" / "config.yaml"
-_PROJECT_CONFIG_DIR = ".brainsmith"
-_PROJECT_CONFIG_FILE = "config.yaml"
+_PROJECT_CONFIG_FILE = "brainsmith.yaml"
 
 
 def _find_project_config() -> Optional[Path]:
@@ -79,9 +78,9 @@ def _find_project_config() -> Optional[Path]:
 
     Search order:
     1. If BSMITH_PROJECT_DIR is set, check that directory only
-    2. Otherwise, walk up from CWD to find .brainsmith/config.yaml
+    2. Otherwise, walk up from CWD to find brainsmith.yaml
 
-    Project directory is always the parent of .brainsmith/
+    Project directory is where brainsmith.yaml is located.
 
     Returns:
         Path to config file, or None if not found
@@ -89,7 +88,7 @@ def _find_project_config() -> Optional[Path]:
     # Priority 1: Explicit project directory override
     if project_dir_override := os.environ.get('BSMITH_PROJECT_DIR'):
         project_dir = Path(project_dir_override).resolve()
-        candidate = project_dir / _PROJECT_CONFIG_DIR / _PROJECT_CONFIG_FILE
+        candidate = project_dir / _PROJECT_CONFIG_FILE
 
         if candidate.exists():
             return candidate
@@ -98,17 +97,12 @@ def _find_project_config() -> Optional[Path]:
         # (don't fall through to upward walk - user explicitly set the location)
         return None
 
-    # Priority 2: Walk up from CWD to find .brainsmith/config.yaml
+    # Priority 2: Walk up from CWD to find brainsmith.yaml
     current = Path.cwd().resolve()
 
     # Walk up until we hit filesystem root
     while current != current.parent:
-        candidate = current / _PROJECT_CONFIG_DIR / _PROJECT_CONFIG_FILE
-
-        # Skip if this is the user config location (not a project config)
-        if candidate.resolve() == _USER_CONFIG_PATH.resolve():
-            current = current.parent
-            continue
+        candidate = current / _PROJECT_CONFIG_FILE
 
         if candidate.exists():
             return candidate
@@ -120,29 +114,18 @@ def _find_project_config() -> Optional[Path]:
 
 
 class YamlSettingsSource(PydanticBaseSettingsSource):
-    """Custom settings source for YAML files with support for user and project configs."""
+    """Custom settings source for YAML files with support for project configs."""
 
     def __init__(
         self,
         settings_cls: Type[BaseSettings],
-        user_file: Optional[Path] = None,
         project_file: Optional[Path] = None
     ):
         super().__init__(settings_cls)
         self.yaml_files = []
         self.project_file_used = None  # Track which project file was actually loaded
 
-        # Load user file first (lower priority)
-        if user_file and user_file.exists():
-            # Explicit user file provided and exists
-            self.yaml_files.append(user_file)
-        elif not user_file:
-            # Check default user config location only if no explicit file provided
-            default_user_file = _USER_CONFIG_PATH
-            if default_user_file.exists():
-                self.yaml_files.append(default_user_file)
-
-        # Load project file second (higher priority - will override user config)
+        # Load project file
         if project_file and project_file.exists():
             # Explicit project file provided and exists
             self.yaml_files.append(project_file)
@@ -158,11 +141,7 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
         self._data = self._load_and_merge_yaml_files()
 
     def _load_and_merge_yaml_files(self) -> Dict[str, Any]:
-        """Load and merge multiple YAML files with proper priority.
-
-        Files are loaded in order with later files having higher priority.
-        Since we load user config first and project config second,
-        project config will override user config values.
+        """Load and merge YAML configuration files.
 
         Raises:
             yaml.YAMLError: If any config file has syntax errors
@@ -216,18 +195,50 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
         return data
 
 
+class LoggingConfig(BaseModel):
+    """Logging configuration with progressive disclosure.
+
+    Simple defaults for CLI use, advanced customization via config file.
+    """
+
+    # Simple (exposed in CLI)
+    level: str = Field(
+        default="normal",
+        description="Console verbosity level: quiet | normal | verbose | debug"
+    )
+
+    # Advanced (config file only)
+    finn_tools: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Per-tool log levels for FINN tools (e.g., {'vivado': 'WARNING', 'hls': 'INFO'})"
+    )
+
+    suppress_patterns: Optional[List[str]] = Field(
+        default=None,
+        description="Regex patterns to suppress from console output (file logs unaffected)"
+    )
+
+    max_log_size_mb: int = Field(
+        default=0,
+        description="Maximum log file size in MB (0 = no rotation)"
+    )
+
+    keep_backups: int = Field(
+        default=3,
+        description="Number of rotated log backups to keep"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class SystemConfig(BaseSettings):
-    """The complete truth about Brainsmith configuration.
+    """Configuration schema with hierarchical priority.
 
-    Configuration priority (following pydantic-settings convention):
-    1. CLI arguments (passed to constructor) - HIGHEST
+    Priority order (highest to lowest):
+    1. CLI arguments (passed to constructor)
     2. Environment variables (BSMITH_* prefix)
-    3. Project config (.brainsmith/config.yaml)
-    4. User config (~/.brainsmith/config.yaml)
-    5. Built-in defaults (Field defaults) - LOWEST
-
-    Note: We only read BSMITH_* env vars, and only export FINN_* vars
-    to avoid configuration feedback loops.
+    3. Project config (brainsmith.yaml)
+    4. Built-in defaults
     """
 
     # NOTE: bsmith_dir is now a cached property, not a configurable field
@@ -243,12 +254,11 @@ class SystemConfig(BaseSettings):
     # It's set in model_post_init as a regular attribute
     component_sources: Dict[str, Path | None] = Field(
         default_factory=lambda: {
-            SOURCE_PROJECT: None,  # Resolved to project_dir / "plugins"
-            SOURCE_USER: None      # Resolved to ~/.brainsmith/plugins
+            SOURCE_PROJECT: None,  # Resolved to project_dir (supports kernels/ and steps/ subdirectories)
         },
         description=(
             "Filesystem-based component source paths. Maps source name to directory path. "
-            "Standard sources 'project' and 'user' have default paths. "
+            "'project' source defaults to project_dir (supports kernels/ and steps/ subdirectories). "
             "Core namespace 'brainsmith' and entry point sources (e.g., 'finn') are "
             "loaded automatically and cannot be configured here."
         )
@@ -257,7 +267,18 @@ class SystemConfig(BaseSettings):
         default=list(DEFAULT_SOURCE_PRIORITY),
         description=(
             "Component source resolution priority. First source with matching "
-            "component wins. Custom sources are auto-appended if not explicitly listed."
+            "component wins. Custom filesystem sources from component_sources are "
+            "auto-appended if not explicitly listed. The 'custom' source (ephemeral "
+            "runtime components) is always included at the end by default but can be "
+            "repositioned by users."
+        )
+    )
+    source_module_prefixes: Dict[str, str] = Field(
+        default_factory=lambda: SOURCE_MODULE_PREFIXES.copy(),
+        description=(
+            "**DEPRECATED:** This field is no longer needed and will be removed in a future release. "
+            "Source detection now uses component_sources keys directly for hierarchical prefix matching. "
+            "Setting this field will emit a deprecation warning during configuration loading."
         )
     )
 
@@ -321,6 +342,11 @@ class SystemConfig(BaseSettings):
         )
     )
 
+    logging: LoggingConfig = Field(
+        default_factory=LoggingConfig,
+        description="Logging configuration (verbosity, filters, rotation)"
+    )
+
     finn_root: Path | None = Field(
         default=None,
         description="FINN root directory (defaults to deps_dir/finn)"
@@ -366,13 +392,12 @@ class SystemConfig(BaseSettings):
         """
         # Extract file paths from init_settings if provided
         init_dict = init_settings()
-        user_file = init_dict.get('_user_file')
         project_file = init_dict.get('_project_file')
 
         return (
             init_settings,  # CLI args (already resolved to CWD in load_config)
             env_settings,   # Env vars (stay relative, resolved in model_post_init)
-            YamlSettingsSource(settings_cls, user_file=user_file, project_file=project_file),
+            YamlSettingsSource(settings_cls, project_file=project_file),
         )
 
     def model_post_init(self, __context: Any) -> None:
@@ -388,6 +413,7 @@ class SystemConfig(BaseSettings):
         3. Force internal paths (deps_dir → bsmith_dir)
         4. Set defaults for unset paths
         5. Validate everything is sane
+        6. Check for deprecated configuration
         """
         self.project_dir = self._detect_project_root()
         self._resolve_core_paths()
@@ -395,6 +421,7 @@ class SystemConfig(BaseSettings):
         self._resolve_finn_paths()
         self._resolve_component_sources()
         self._resolve_source_priority()
+        self._check_deprecations()
 
     def _resolve_core_paths(self) -> None:
         """Resolve build_dir and force deps_dir to internal location."""
@@ -446,19 +473,16 @@ class SystemConfig(BaseSettings):
     def _resolve_component_sources(self) -> None:
         """Resolve component source paths for filesystem-based sources.
 
-        Only project, user, and custom sources are filesystem-based and configurable.
+        Only project and custom sources are filesystem-based and configurable.
         Core namespace (brainsmith) and entry points (finn) are discovered automatically.
         """
-        # Standard filesystem sources with default paths
+        # Standard filesystem source with default path (project root with optional kernels/steps subdirs)
         if self.component_sources.get(SOURCE_PROJECT) is None:
-            self.component_sources[SOURCE_PROJECT] = self.project_dir / 'plugins'
-
-        if self.component_sources.get(SOURCE_USER) is None:
-            self.component_sources[SOURCE_USER] = Path.home() / '.brainsmith' / 'plugins'
+            self.component_sources[SOURCE_PROJECT] = self.project_dir
 
         # Custom sources: resolve relative paths
-        # Standard sources (project, user) are resolved above
-        standard_sources = {SOURCE_PROJECT, SOURCE_USER}
+        # Standard source (project) is resolved above
+        standard_sources = {SOURCE_PROJECT}
         for name, path in list(self.component_sources.items()):
             if name not in standard_sources and path is not None:
                 self.component_sources[name] = self._resolve(path, self.project_dir)
@@ -468,10 +492,42 @@ class SystemConfig(BaseSettings):
 
         This ensures custom sources work automatically while allowing users to
         explicitly position them in the priority list if desired.
+
+        Also ensures 'custom' source (ephemeral runtime components) is present
+        at the end by default, but users can reorder it if needed.
         """
+        from brainsmith.registry.constants import SOURCE_CUSTOM
+
+        # Auto-append filesystem sources from component_sources
         for source_name in self.component_sources.keys():
             if source_name not in self.source_priority:
                 self.source_priority.append(source_name)
+
+        # Ensure 'custom' source is present (append at end if not explicitly configured)
+        if SOURCE_CUSTOM not in self.source_priority:
+            self.source_priority.append(SOURCE_CUSTOM)
+
+    def _check_deprecations(self) -> None:
+        """Check for deprecated configuration options and emit warnings."""
+        logger = logging.getLogger(__name__)
+
+        # Check if user has customized source_module_prefixes
+        # Suppress any Pydantic deprecation warnings when accessing the field
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            default_prefixes = SOURCE_MODULE_PREFIXES
+            if self.source_module_prefixes != default_prefixes:
+                warnings.warn(
+                    "The 'source_module_prefixes' configuration field is deprecated and will be removed in a future release. "
+                    "Source detection now uses component_sources keys directly for hierarchical prefix matching. "
+                    "Please remove this field from your configuration.",
+                    DeprecationWarning,
+                    stacklevel=3
+                )
+                logger.warning(
+                    "DEPRECATED: source_module_prefixes in configuration. "
+                    "Use component_sources keys for domain prefix matching instead."
+                )
 
     @cached_property
     def bsmith_dir(self) -> Path:
@@ -498,7 +554,7 @@ class SystemConfig(BaseSettings):
         Project root detection priority:
         1. Custom project file location (from load_config project_file param) - HIGHEST
         2. BSMITH_PROJECT_DIR env var (explicit override for runtime)
-        3. Walk up from CWD to find config file, return its parent directory
+        3. Walk up from CWD to find brainsmith.yaml, return its parent directory
 
         Priority 1 ensures that when project init explicitly creates a config file,
         that file's location determines the project root, regardless of any sourced
@@ -516,7 +572,7 @@ class SystemConfig(BaseSettings):
         # Check for explicit project file first (e.g., from project init)
         project_file_used = getattr(self, '_project_file_used', None)
         if project_file_used:
-            return Path(project_file_used).parent.parent.resolve()
+            return Path(project_file_used).parent.resolve()
 
         # Then check environment variable override
         if 'BSMITH_PROJECT_DIR' in os.environ:
@@ -525,14 +581,14 @@ class SystemConfig(BaseSettings):
         # Walk up from CWD to find config
         config_file = _find_project_config()
         if config_file:
-            return config_file.parent.parent
+            return config_file.parent
 
         # No project found - fail with helpful error
         raise ValueError(
             "No Brainsmith project detected.\n\n"
             "To fix this, either:\n"
             "  1. Run 'brainsmith project init' to create a new project\n"
-            "  2. Navigate to an existing project directory (containing .brainsmith/)\n"
+            "  2. Navigate to an existing project directory (containing brainsmith.yaml)\n"
             "  3. Source the project environment: source .brainsmith/env.sh\n"
             f"\nCurrent directory: {Path.cwd()}"
         )
@@ -599,17 +655,11 @@ class SystemConfig(BaseSettings):
     # Activation Script Generation
 
     def generate_activation_script(self, output_path: Path) -> Path:
-        """Generate idempotent bash activation script from current configuration.
+        """Generate bash activation script from current configuration.
 
-        The generated script:
-        - Is safe to source multiple times (idempotent)
+        The script can be sourced multiple times safely:
         - Cleans up old Xilinx/brainsmith paths before adding new ones
         - Sources Xilinx settings64.sh files for complete tool environment
-        - Can be re-sourced after config changes (no deactivate needed)
-
-        This is the inverse of environment variable loading:
-        - Pydantic READS env vars to build config
-        - This method WRITES env vars from config
 
         Args:
             output_path: Where to write the activation script
@@ -696,10 +746,10 @@ class SystemConfig(BaseSettings):
         """Generate .envrc file for direnv integration.
 
         Creates a direnv configuration that:
-        - Watches .brainsmith/config.yaml for changes
+        - Watches brainsmith.yaml for changes
         - Auto-regenerates environment when config changes
         - Sources .brainsmith/env.sh for all environment variables
-        - Activates virtualenv using direnv's layout python
+        - Activates virtualenv automatically
 
         User must run 'direnv allow' to trust the file.
 
@@ -721,24 +771,24 @@ class SystemConfig(BaseSettings):
 # Enable with: direnv allow
 
 # Watch config file - direnv will reload when it changes
-watch_file .brainsmith/config.yaml
+watch_file brainsmith.yaml
+
+# Activate virtualenv first (required for brainsmith command)
+if [ -d .venv ]; then
+    export VIRTUAL_ENV="$PWD/.venv"
+    PATH_add "$VIRTUAL_ENV/bin"
+fi
 
 # Auto-regenerate environment if config is newer than env.sh
-if [ .brainsmith/config.yaml -nt .brainsmith/env.sh ]; then
+if [ brainsmith.yaml -nt .brainsmith/env.sh ]; then
     echo "Config changed, regenerating environment..."
     if command -v brainsmith &> /dev/null; then
         brainsmith project init > /dev/null 2>&1 || {
             echo -e "\033[33mFailed to regenerate. Run: brainsmith project init\033[0m"
         }
     else
-        echo -e "\033[33mbrainsmith command not found. Activate venv first.\033[0m"
+        echo -e "\033[33mbrainsmith command not found. Check venv activation.\033[0m"
     fi
-fi
-
-# Activate virtualenv (use existing .venv, not create new one)
-if [ -d .venv ]; then
-    export VIRTUAL_ENV="$PWD/.venv"
-    PATH_add "$VIRTUAL_ENV/bin"
 fi
 
 # Source Brainsmith environment (sets all variables, sources Xilinx settings64.sh)

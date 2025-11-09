@@ -25,7 +25,8 @@ from qonnx.transformation.general import (
 from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
-from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
+from finn.builder.build_dataflow_steps import step_specialize_layers
+from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +54,17 @@ def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
 
 @step(name='specialize_layers')
 def specialize_layers_step(model: Any, cfg: Any) -> Any:
-    """Custom specialize layers step that ensures opset imports are handled correctly."""
+    """Specialize hardware layers using registry-based backend discovery."""
 
     if cfg.specialize_layers_config_file is not None:
         model = model.transform(GiveUniqueNodeNames())
         model = model.transform(ApplyConfig(cfg.specialize_layers_config_file))
 
-    model = model.transform(SpecializeLayers(cfg._resolve_fpga_part()))
+    # Run Brainsmith registry-based specialization first
+    model = model.transform(SpecializeKernels(cfg))
+
+    # Run FINN's step_specialize_layers as catch-all for any remaining ops
+    # model = step_specialize_layers(model, cfg)
 
     for transform in [
         GiveUniqueNodeNames(),

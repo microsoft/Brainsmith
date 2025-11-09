@@ -12,7 +12,12 @@ design_space:
   steps:
     - "cleanup"  # custom_step_cleanup
     - "qonnx_to_finn"
-    - "infer_kernels" # Brainsmith dynamic kernel inference
+    # REQUIRED: Layout normalization must run before kernel inference
+    # All Brainsmith kernels assume NHWC (channel-last) layout for dataflow.
+    # This step converts any NCHW tensors to NHWC globally, eliminating the
+    # need for per-kernel layout checking and ensuring uniform dataflow behavior.
+    - "normalize_dataflow_layouts"
+    - "build_dataflow_graph" # Build complete dataflow graph (infrastructure + computational kernels)
     - "create_dataflow_partition"
     - "specialize_layers"
     - "target_fps_parallelization"
@@ -24,3 +29,4 @@ design_space:
     - "set_fifo_depths"
     - "create_stitched_ip"
     - "measure_rtlsim_performance"
+

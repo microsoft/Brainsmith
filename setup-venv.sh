@@ -222,19 +222,20 @@ else
     exit 1
 fi
 
-# Step 5: Initialize config if needed
-if [ ! -f ".brainsmith/config.yaml" ]; then
+# Step 4.5: Initialize default project config if needed
+if [ ! -f "brainsmith.yaml" ]; then
     echo ""
-    echo "No config found at .brainsmith/config.yaml, generating default"
+    echo "No config found at brainsmith.yaml, generating default"
     poetry run brainsmith project init
     if [ $? -eq 0 ]; then
-        echo -e "\033[32m✓\033[0m Config initialized successfully"
+        echo -e "\033[32m✓\033[0m Default config created in .brainsmith/"
+        echo "   Edit brainsmith.yaml to set your Xilinx paths"
     else
-        echo "✗ Config initialization failed"
-        exit 1
+        echo "⚠️  Could not create default config (non-fatal)"
     fi
 else
-    echo -e "\033[32m.brainsmith/config.yaml\033[0m"
+    echo ""
+    echo -e "\033[32m✓\033[0m Using existing brainsmith.yaml"
 fi
 
 # Step 5.5: Activate environment and optionally configure direnv
@@ -294,11 +295,19 @@ if [ $? -eq 0 ]; then
     fi
 
     echo ""
-    echo "To activate the virtual environment, run:"
-    echo "  source .venv/bin/activate"
+    echo -e "\033[1;32mSetup complete!\033[0m"
     echo ""
-    echo "Or prefix commands with poetry:"
-    echo "  poetry run smith --help"
+    if command -v direnv &> /dev/null; then
+        echo "To activate the environment (direnv users):"
+        echo "  cd .  # Reload directory to activate"
+    else
+        echo "To activate the environment:"
+        echo "  source .venv/bin/activate && source .brainsmith/env.sh"
+    fi
+    echo ""
+    echo "Then verify setup:"
+    echo "  brainsmith project info"
+
 else
     echo ""
     echo "⚠️ Setup completed with warnings. Check the output above."

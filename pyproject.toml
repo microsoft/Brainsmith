@@ -57,15 +57,60 @@ ignore = [
 ]
 
 [tool.ruff.per-file-ignores]
-"tests/*" = ["F401", "F841"]  # Allow unused imports and variables in tests
+"tests/**/*.py" = ["E402", "UP009"]
 
 [tool.ruff.isort]
 known-first-party = ["brainsmith"]
+
+[tool.ruff.lint]
+# Make all Python 3.10+ typing upgrades auto-fixable without --unsafe-fixes
+extend-safe-fixes = [
+    "UP006",  # Use PEP 585 annotation (list instead of typing.List)
+    "UP007",  # Use X | Y for type annotations (PEP 604)
+    "UP008",  # Use super() instead of super(__class__, self)
+    "UP009",  # UTF-8 encoding declaration is unnecessary
+    "UP010",  # Unnecessary __future__ import for Python 3.10+
+    "UP032",  # Use f-string instead of format call
+    "UP034",  # Avoid extraneous parentheses
+    "UP035",  # Import replacements (typing.Dict -> dict, etc.)
+    "UP037",  # Remove quotes from type annotations
+    "UP038",  # Use X | Y in isinstance instead of (X, Y)
+]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = ["-ra"]  # Show all test outcomes
 testpaths = ["tests"]
+markers = [
+    # Test Framework Type
+    "single_kernel: marks tests using SingleKernelTest framework",
+    "kernel_parity: marks tests using KernelParityTest framework (v6.0)",
+    "integration: marks tests as integration tests",
+
+    # Test Purpose
+    "pipeline: marks tests validating pipeline transformations",
+    "golden: marks tests comparing against golden reference outputs",
+    "parity: marks tests comparing manual vs auto HWCustomOp implementations",
+
+    # Test Selection (Coverage)
+    "basic_validation: marks representative test cases for quick validation",
+
+    # Execution Mode
+    "python_only: marks tests that only validate Python execution (no backend)",
+    "cppsim: marks tests requiring C++ simulation with Vivado/Vitis HLS",
+    "rtlsim: marks tests requiring RTL simulation",
+    "hardware: marks tests that require actual hardware",
+
+    # Speed/Resources
+    "fast: marks tests that run quickly",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+
+    # Build Requirements
+    "hls: marks tests requiring HLS code generation",
+    "rtl: marks tests requiring RTL synthesis",
+    "finn_build: marks tests that perform FINN builds",
+    "bitfile: marks tests that generate bitfiles",
+]
 
 # Coverage configuration - optional for alpha (pre-release) stage
 [tool.coverage.run]
@@ -73,7 +118,7 @@ source = ["brainsmith"]
 omit = ["*/tests/*"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 # Relaxed settings for alpha (pre-release) stage
 ignore_missing_imports = true
 allow_untyped_defs = true
@@ -95,7 +140,7 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.poetry.dependencies]
-python = ">=3.10"
+python = ">=3.11"
 
 # Core dependencies - critical for basic functionality
 click = "~=8.1.7"
@@ -107,18 +152,20 @@ packaging = "~=25.0"
 typing-extensions = "~=4.10"
 
 # Scientific computing
-numpy = "~=1.24.1"
+numpy = "~=2.3.0"
 scipy = "~=1.15.0"
 
-# Deep learning frameworks
+# Deep learning frameworks & utilities
+ml-dtypes = "~=0.5.3"
 torch = "~=2.7.0"
 torchvision = "~=0.22.0"  # Required by finn/brevitas
-transformers = "~=4.46.3"
+transformers = "~=4.48.3"
 
 # ONNX ecosystem
 onnx = "~=1.17.0"
 onnxoptimizer = "~=0.3.13"
-onnxruntime = "~=1.18.1"
+onnxruntime = "~=1.23.2"
+onnxscript = "~=0.5.4"
 onnxsim = "~=0.4.36"
 
 # Visualization and debugging
@@ -163,10 +210,9 @@ dependencies = "~=2.0.1"  # Required by brevitas
 # PRE-RELEASE NOTE: Git dependencies (finn, qonnx, brevitas, etc.) are managed by docker/fetch-repos.sh
 # The repositories are cloned to ./deps/ and installed as editable local packages
 # For open source release, these will be converted to proper git dependencies in pyproject.toml
-brevitas = {path = "deps/brevitas", develop = true}
+brevitas = {path = "deps/brevitas", develop = true, python = ">=3.11,<3.13"}
 qonnx = {path = "deps/qonnx", develop = true}
 finn = {path = "deps/finn", develop = true}
-onnxscript = {path = "deps/onnxscript", develop = true}
 finn-experimental = {path = "deps/finn-experimental", develop = true}
 # dataset-loading = {path = "deps/dataset-loading", develop = true}  # Temporarily commented - missing
 
@@ -189,6 +235,7 @@ pytest-timeout = "~=2.2"     # Prevent hanging builds
 # Regression testing
 syrupy = "~=4.0"             # Snapshot testing for tree structures
 pytest-regressions = "~=2.5" # Golden file testing for artifacts
+pytest-cases = ">=3.8.1,<3.9.0"     # Parameterization with case functions
 
 # Essential linting only
 ruff = "~=0.1.0"

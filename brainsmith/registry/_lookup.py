@@ -117,11 +117,11 @@ def _get_component(name: str, component_type: str):
             available = _list_components(component_type)
             raise KeyError(_format_not_found_error(component_type, full_name, available))
 
-        # Load component
-        _load_component(meta)
-
-        # Return loaded object from component index
-        return meta.loaded_obj
+        # Load component and return it directly
+        # Note: Must return _load_component() result, not meta.loaded_obj, because
+        # the decorator may replace ComponentMetadata in _component_index during import,
+        # making our 'meta' reference stale (loaded_obj=None even after successful load).
+        return _load_component(meta)
 
 
 def _has_component(name: str, component_type: str) -> bool:
@@ -227,7 +227,7 @@ def list_steps(source: Optional[str] = None) -> List[str]:
     Returns:
         Sorted list of step names (with source prefixes)
 
-    Example:
+    Examples:
         >>> steps = list_steps()  # All steps
         >>> user_steps = list_steps(source='user')  # Only user steps
     """
@@ -248,6 +248,9 @@ def get_kernel(name: str) -> Type:
     Returns:
         Kernel class
 
+    Raises:
+        KeyError: If kernel not found in any source
+
     Examples:
         >>> LayerNorm = get_kernel('LayerNorm')  # Short name, uses source priority
         >>> kernel = LayerNorm(onnx_node)
@@ -257,18 +260,16 @@ def get_kernel(name: str) -> Type:
 
 
 def get_kernel_infer(name: str) -> Type:
-    """Get kernel's InferTransform class.
-
-    Accepts both short names (uses default_source) and fully-qualified names (source:name).
+    """Get kernel's inference transform class.
 
     Args:
-        name: Kernel name (e.g., 'LayerNorm' or 'user:LayerNorm')
+        name: Kernel name (short or qualified)
 
     Returns:
-        InferTransform class
+        InferTransform class for ONNX → kernel conversion
 
     Raises:
-        KeyError: If kernel has no InferTransform
+        KeyError: If kernel not found or has no InferTransform
 
     Examples:
         >>> InferLayerNorm = get_kernel_infer('LayerNorm')
@@ -326,7 +327,7 @@ def list_kernels(source: Optional[str] = None) -> List[str]:
     Returns:
         Sorted list of kernel names (with source prefixes)
 
-    Example:
+    Examples:
         >>> kernels = list_kernels()  # All kernels
         >>> user_kernels = list_kernels(source='user')  # Only user kernels
     """
@@ -336,7 +337,7 @@ def list_kernels(source: Optional[str] = None) -> List[str]:
 # === Backends ===
 
 def get_backend(name: str) -> Type:
-    """Get independent backend by name.
+    """Get backend class by name.
 
     Accepts both short names ('LayerNorm_HLS') and qualified names ('user:LayerNorm_HLS_Fast').
     Short names are resolved using source priority from settings.
@@ -346,6 +347,9 @@ def get_backend(name: str) -> Type:
 
     Returns:
         Backend class
+
+    Raises:
+        KeyError: If backend not found in any source
 
     Examples:
         >>> backend = get_backend('LayerNorm_HLS')  # Short name, uses source priority
@@ -462,7 +466,7 @@ def list_backends(source: Optional[str] = None) -> List[str]:
     Returns:
         Sorted list of backend names (with source prefixes)
 
-    Example:
+    Examples:
         >>> backends = list_backends()  # All backends
         >>> user_backends = list_backends(source='user')  # Only user backends
     """
@@ -474,17 +478,14 @@ def list_backends(source: Optional[str] = None) -> List[str]:
 # ============================================================================
 
 def get_component_metadata(name: str, component_type: str):
-    """Get metadata for a component without loading it.
-
-    Useful for inspection and CLI commands that need component information
-    without triggering imports.
+    """Get component metadata without loading.
 
     Args:
-        name: Component name (with or without source prefix)
-        component_type: Type of component ('step', 'kernel', 'backend')
+        name: Component name (short or qualified)
+        component_type: Component type ('step', 'kernel', 'backend')
 
     Returns:
-        ComponentMetadata object
+        ComponentMetadata with source, import spec, and type-specific fields
 
     Raises:
         KeyError: If component not found
@@ -492,7 +493,7 @@ def get_component_metadata(name: str, component_type: str):
     Examples:
         >>> meta = get_component_metadata('LayerNorm', 'kernel')
         >>> print(meta.source, meta.import_spec.module)
-        brainsmith brainsmith.kernels.layernorm.layernorm
+        brainsmith brainsmith.kernels.layernorm
     """
     if not _components_discovered:
         discover_components()
@@ -507,9 +508,7 @@ def get_component_metadata(name: str, component_type: str):
 
 
 def get_all_component_metadata() -> Dict[str, Any]:
-    """Get all component metadata (for CLI/inspection).
-
-    Returns a copy of the component index for safe iteration and inspection.
+    """Get all component metadata.
 
     Returns:
         Dict mapping full_name (source:name) to ComponentMetadata
@@ -523,3 +522,40 @@ def get_all_component_metadata() -> Dict[str, Any]:
         discover_components()
 
     return dict(_component_index)
+
+
+# ============================================================================
+# Domain Resolution
+# ============================================================================
+
+def get_domain_for_backend(backend_name: str) -> str:
+    """Get ONNX domain for backend by deriving from module path.
+
+    Derives domain directly from the backend class's __module__ attribute,
+    eliminating the need for reverse lookup through source_module_prefixes.
+
+    Args:
+        backend_name: Backend name (short or qualified)
+
+    Returns:
+        ONNX domain string
+
+    Examples:
+        >>> get_domain_for_backend('brainsmith:LayerNorm_hls')
+        'brainsmith.kernels'
+        >>> get_domain_for_backend('finn:MVAU_hls')
+        'finn.custom_op.fpgadataflow.hls'
+    """
+    from brainsmith.registry._domain_utils import derive_domain_from_module
+
+    # Get backend metadata and load the class
+    meta = get_component_metadata(backend_name, 'backend')
+
+    # Load the backend class to access its __module__ attribute
+    backend_class = _load_component(meta)
+
+    # Derive domain directly from the backend class's module path
+    domain = derive_domain_from_module(backend_class.__module__)
+
+    logger.debug(f"Derived domain '{domain}' for backend '{backend_name}' from module '{backend_class.__module__}'")
+    return domain

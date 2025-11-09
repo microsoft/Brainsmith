@@ -6,12 +6,12 @@
 import importlib.util
 import logging
 import os
+import pprint
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
-
 
 class FINNAdapter:
     """Adapter for FINN build system.
@@ -88,7 +88,7 @@ class FINNAdapter:
         abs_input = input_model.absolute()
         abs_output = output_dir.absolute()
 
-        logger.info("FINN build: input=%s, output=%s", abs_input, abs_output)
+        logger.debug("FINN build: input=%s, output=%s", abs_input, abs_output)
 
         # FINN requires os.chdir() for relative paths in build outputs
         # This is NOT THREAD-SAFE and affects the entire process.
@@ -104,14 +104,18 @@ class FINNAdapter:
             finn_config = config_dict.copy()
             finn_config.pop("output_products", None)
 
-            # WORKAROUND: FINN doesn't return output path, so we discover it from
-            # intermediate_models/ directory (requires save_intermediate_models=True)
+            # REQUIRED: Always save intermediate models for output discovery.
+            # FINN's API doesn't return the output model path, so we must discover
+            # it from the intermediate_models/ directory (see _discover_output_model).
+            # This is not user-configurable - it's a required workaround.
             finn_config["save_intermediate_models"] = True
 
-            # CRITICAL: Set True to prevent FINN from redirecting stdout/stderr
-            # which conflicts with Rich console logging, causing hangs
-            finn_config["no_stdout_redirect"] = True
-            finn_config["verbose"] = True
+            # Use Brainsmith's logging orchestration
+            # This prevents FINN from adding its own handlers, allowing us to control
+            # all logging through the Brainsmith logging system
+            from brainsmith._internal.logging import get_finn_config
+            logging_config = get_finn_config()
+            finn_config.update(logging_config)
 
             # Disable pdb debugger for automated builds (pytest captures stdin/stdout)
             finn_config["enable_build_pdb_debug"] = False
@@ -119,13 +123,14 @@ class FINNAdapter:
             # Convert dict to DataflowBuildConfig
             logger.debug("Creating DataflowBuildConfig with: %s", finn_config)
             config = DataflowBuildConfig(**finn_config)
+            logger.debug("DataflowBuildConfig created:\n%s", pprint.pformat(vars(config), width=80))
 
             # FINN output goes directly to console (controlled by no_stdout_redirect flag)
             steps_count = len(config.steps) if config.steps else 0
-            logger.info("Executing FINN build with %d steps", steps_count)
+            logger.debug("Executing FINN build with %d steps", steps_count)
             exit_code = build_dataflow_cfg(str(abs_input), config)
 
-            logger.info("FINN exit code: %d", exit_code)
+            logger.debug("FINN exit code: %d", exit_code)
 
             if exit_code != 0:
                 raise RuntimeError(f"FINN build failed with exit code {exit_code}")
@@ -134,7 +139,7 @@ class FINNAdapter:
             output_model = self._discover_output_model(abs_output)
             self._verify_output_model(output_model)
 
-            logger.info("Found output: %s", output_model)
+            logger.debug("Found output: %s", output_model)
             return output_model
 
         finally:

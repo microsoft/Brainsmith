@@ -7,23 +7,77 @@
 
 """Basic types for kernel modeling"""
 
-from typing import Tuple, Union, List, Optional, Dict
-from dataclasses import dataclass
+from typing import Tuple, Union, List, Dict, Any, Callable, Optional, TYPE_CHECKING
 from enum import Enum
-import math
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 import functools
-import re
 
 
 # Type aliases
 Shape = Tuple[int, ...]
-RaggedShape = Union[Shape, List[Shape]]
+"""Immutable tensor shape (e.g., (1, 784))"""
 
-# New unified shape expression types for kernel integrator integration
-ShapeExpr = Union[int, str]  # Single dimension: 784 or "N"
-ShapeSpec = List[ShapeExpr]  # Complete shape: [1, 784] or ["N", 768]
+ShapeExpr = Union[int, str]
+"""Single dimension expression: 784 or 'N'"""
+
+ShapeSpec = List[ShapeExpr]
+"""Complete shape specification: [1, 784] or ['N', 768]"""
+
+# Sentinel for "copy full dimension" in tiling specs
+class _FullDimType:
+    """Singleton sentinel for FULL_DIM constant.
+
+    Used in tiling specs to indicate 'copy full dimension from reference'.
+    Analogous to ":" in NumPy slicing - takes the dimension as-is.
+
+    Example:
+        block_tiling=[FULL_DIM, FULL_DIM]  # Use complete tensor dimensions
+    """
+    __slots__ = ()  # No instance dict, true singleton
+
+    def __repr__(self):
+        return "FULL_DIM"
+
+FULL_DIM = _FullDimType()
+
+
+# Sentinel for "copy full shape" in tiling specs
+class _FullShapeType:
+    """Singleton sentinel for FULL_SHAPE constant.
+
+    Used in tiling specs to indicate 'expand to full rank with FULL_DIM'.
+    Unlike FULL_DIM (which copies a single dimension), FULL_SHAPE expands
+    to match the complete shape hierarchy.
+
+    Usage: block_tiling=FULL_SHAPE (not [FULL_SHAPE])
+
+    Examples:
+        block_tiling=FULL_SHAPE  # For 4D tensor → [FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM]
+        stream_tiling=FULL_SHAPE  # Copies resolved block_shape
+    """
+    __slots__ = ()  # No instance dict, true singleton
+
+    def __repr__(self):
+        return "FULL_SHAPE"
+
+FULL_SHAPE = _FullShapeType()
+
 
 # === Enums ===
+
+class ShapeHierarchy(Enum):
+    """Shape hierarchy level for constraints and relationships.
+
+    Attributes:
+        STREAM: Stream shape (parallelism, elements per cycle)
+        BLOCK: Block shape (tiling dimensions)
+        TENSOR: Tensor shape (full logical dimensions)
+    """
+    STREAM = "stream"
+    BLOCK = "block"
+    TENSOR = "tensor"
+
 
 class ProtocolType(Enum):
     """Supported hardware protocols for kernel interfaces."""
@@ -37,6 +91,58 @@ class Direction(Enum):
     INPUT = "input"
     OUTPUT = "output"
     INOUT = "inout"
+
+
+# === Dimension and Datatype Specifications ===
+
+# Simplified dimension specification (union type replaces ABC hierarchy)
+# Supported formats:
+#   int:                  Literal dimension (1 only allowed)
+#   str:                  Parameter name ("SIMD", "PE")
+#   tuple[str, int]:      Shorthand for deriving from interface, uses context hierarchy
+#                         ("input", -1) → derive from input's BLOCK/STREAM based on context
+#   tuple[str, int, ShapeHierarchy]: Shorthand with explicit hierarchy override
+#                         ("input", -1, STREAM) → always derive from input's STREAM hierarchy
+#   Callable:             Custom computation function
+#   FULL_DIM:             Copy full dimension from reference shape
+# Note: For rank-agnostic specs, use FULL_SHAPE (not a DimSpec, but a TilingSpec alternative)
+#       block_tiling=FULL_SHAPE expands to [FULL_DIM, FULL_DIM, ...] matching tensor rank
+# Example: block_tiling=[1, 1, ("input", -1)] means dims [1, 1, <last BLOCK dim of input>]
+DimSpec = Union[
+    int,                                               # Literal (1 only)
+    str,                                               # Parameter name
+    Tuple[str, int],                                   # Derive from interface (context hierarchy)
+    Tuple[str, int, 'ShapeHierarchy'],                # Derive with explicit hierarchy
+    Callable[[Dict[str, Any], Callable, Any, Optional[str]], int],  # Custom computation (unified signature)
+    type(FULL_DIM),                                    # Copy full dimension
+]
+
+# NEW: Datatype specification (union type replaces ABC hierarchy)
+# Supported formats:
+#   DataType:             Fixed datatype (e.g., DataType["INT8"])
+#   str:                  Derive from interface name (shorthand: "input" means copy from input)
+#   VALUE_OPTIMIZED:      Optimize from actual tensor values (static inputs only)
+#   Callable:             Custom datatype computation function
+# Example: "input" means copy datatype from input interface
+if TYPE_CHECKING:
+    from qonnx.core.datatype import BaseDataType
+
+    DatatypeSpec = Union[
+        BaseDataType,                                               # Fixed datatype
+        str,                                                        # Interface name (derive from)
+        Callable[[Dict, Callable, Any, str], BaseDataType],        # Custom computation
+        type(lambda: None),                                         # Sentinel type (VALUE_OPTIMIZED)
+    ]
+
+
+# Sentinel for value-optimized datatype derivation
+class _ValueOptimizedType:
+    """Sentinel type for VALUE_OPTIMIZED constant."""
+    def __repr__(self):
+        return "VALUE_OPTIMIZED"
+    __str__ = __repr__
+
+VALUE_OPTIMIZED = _ValueOptimizedType()
 
 
 class InterfaceType(Enum):
@@ -80,94 +186,3 @@ def prod(shape: Shape) -> int:
     """Compute product of shape dimensions"""
     return functools.reduce(lambda a, b: a * b, shape, 1)
 
-
-def shape_to_string(shape: Shape) -> str:
-    """Convert shape to string representation"""
-    return f"({','.join(map(str, shape))})"
-
-
-def parse_shape(shape_str: str) -> Shape:
-    """Parse shape from string
-    
-    Examples:
-        "(32,64)" -> (32, 64)
-        "32,64" -> (32, 64)
-        "(32)" -> (32,)
-    """
-    # Remove parentheses and whitespace
-    shape_str = shape_str.strip().strip("()")
-    
-    if not shape_str:
-        return tuple()
-    
-    # Split by comma and convert to integers
-    parts = [int(x.strip()) for x in shape_str.split(",")]
-    return tuple(parts)
-
-
-def shapes_compatible(shape1: Shape, shape2: Shape) -> bool:
-    """Check if two shapes are compatible for operations"""
-    if len(shape1) != len(shape2):
-        return False
-    
-    for d1, d2 in zip(shape1, shape2):
-        if d1 != d2 and d1 != 1 and d2 != 1:  # Allow broadcasting
-            return False
-    
-    return True
-
-
-def broadcast_shapes(shape1: Shape, shape2: Shape) -> Shape:
-    """Compute broadcast shape of two shapes"""
-    if not shapes_compatible(shape1, shape2):
-        raise ValueError(f"Shapes {shape1} and {shape2} are not compatible for broadcasting")
-    
-    return tuple(max(d1, d2) for d1, d2 in zip(shape1, shape2))
-
-
-def flatten_shape(shape: Shape) -> int:
-    """Get total number of elements in shape"""
-    return prod(shape)
-
-
-def reshape_compatible(old_shape: Shape, new_shape: Shape) -> bool:
-    """Check if reshape is valid"""
-    return prod(old_shape) == prod(new_shape)
-
-
-def tile_shape(tensor_shape: Shape, block_shape: Shape) -> Shape:
-    """Compute number of blocks needed to tile tensor
-    
-    Returns shape where each dimension is ceil(tensor_dim / block_dim)
-    """
-    if len(tensor_shape) != len(block_shape):
-        raise ValueError(f"Shape dimensions must match: {len(tensor_shape)} != {len(block_shape)}")
-    
-    return tuple(
-        math.ceil(t / b) for t, b in zip(tensor_shape, block_shape)
-    )
-
-
-def is_valid_tiling(tensor_shape: Shape, block_shape: Shape) -> bool:
-    """Check if block shape evenly tiles tensor shape"""
-    if len(tensor_shape) != len(block_shape):
-        return False
-    
-    for t, b in zip(tensor_shape, block_shape):
-        if b > t or b <= 0:
-            return False
-    
-    return True
-
-
-# Common data types are now imported from qonnx_types module
-
-
-@dataclass
-class SDIMParameterInfo:
-    """Information about SDIM parameters for an interface"""
-    interface_name: str
-    total_dimensions: int
-    free_dimensions: List[int]
-    constrained_dimensions: Dict[int, str]  # dim -> constraint type
-    block_dims: Shape

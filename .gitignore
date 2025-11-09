@@ -2,18 +2,18 @@
 # Licensed under the MIT License.
 
 # Brainsmith specific
-plugins/
+.brainsmith
+.envrc
+.python-version
+/brainsmith.yaml
+*.onnx
+
+# Brainsmith examples
 examples/*/output/
 examples/*/results/
 examples/*/checkpoints/
 examples/*/logs/
 examples/*/configs/
-*.onnx
-
-# Brainsmith project management
-.brainsmith
-.envrc
-.python-version
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -61,6 +61,7 @@ htmlcov/
 .coverage.*
 .cache
 nosetests.xml
+coverage.json
 coverage.xml
 *.cover
 *.py,cover
@@ -495,3 +496,4 @@ test_reports/
 
 # AI coding configuration
 CLAUDE.md
+.ignore

@@ -40,7 +40,7 @@
 
 
 // @brainsmith INCLUDE_RTL thresholding.sv
-// @brainsmith INCLUDE_RTL /home/tafk/dev/brainsmith-1/deps/finn/finn-rtllib/axi/hdl/axilite.sv
+// @brainsmith INCLUDE_RTL $BSMITH_DIR$/deps/finn/finn-rtllib/axi/hdl/axilite.sv
 // @brainsmith DATATYPE_CONSTRAINT input * 1 32
 // @brainsmith DATATYPE_CONSTRAINT output * 1 32
 // @brainsmith DATATYPE threshold width T_WIDTH

@@ -77,10 +77,21 @@ fi
 
 # Define our Git dependencies - URLs and revisions
 declare -A GIT_DEPS=(
+<<<<<<< HEAD
     ["brevitas"]="https://github.com/Xilinx/brevitas.git@95edaa0bdc8e639e39b1164466278c59df4877be"
     ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git@custom/brainsmith"
     ["finn"]="https://github.com/tafk7/finn.git@custom/transformer"
     ["onnxscript"]="https://github.com/jsmonson/onnxscript.git@62c7110aba46554432ce8e82ba2d8a086bd6227c"
+||||||| c35477d
+    ["brevitas"]="https://github.com/Xilinx/brevitas.git@95edaa0bdc8e639e39b1164466278c59df4877be"
+    ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git@f2c4ccd3e71795c9f116ee5a0c87a7dfd590c6d0"
+    ["finn"]="https://github.com/tafk7/finn.git@custom/transformer"
+    ["onnxscript"]="https://github.com/jsmonson/onnxscript.git@62c7110aba46554432ce8e82ba2d8a086bd6227c"
+=======
+    ["brevitas"]="https://github.com/Xilinx/brevitas.git@c10ef8764967e9cacc60347ce185be14e4ad97c4"
+    ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git@f2c4ccd3e71795c9f116ee5a0c87a7dfd590c6d0"
+    ["finn"]="https://github.com/tafk7/finn.git@feature/logging-integration-transformer"
+>>>>>>> develop
     ["finn-experimental"]="https://github.com/Xilinx/finn-experimental.git@0724be21111a21f0d81a072fccc1c446e053f851"
     ["dataset-loading"]="https://github.com/fbcotter/dataset_loading.git@0.0.4"
 )
@@ -126,6 +137,9 @@ resolve_ref_to_commit() {
     local ref="$2"
 
     cd "$name"
+
+    # Fetch latest from remote to ensure we have up-to-date refs
+    git fetch origin --quiet 2>/dev/null || true
 
     # First try to resolve as-is (works for local branches, tags, and hashes)
     local resolved_commit=$(git rev-parse "$ref" 2>/dev/null || echo "")

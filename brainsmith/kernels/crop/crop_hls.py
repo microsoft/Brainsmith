@@ -3,6 +3,7 @@
 # Licensed under the MIT License.
 #
 # @author       Josh Monson <joshmonson@microsoft.com>
+# @author       Thomas Keller <thomaskeller@microsoft.com> (AutoCrop adaptation)
 ############################################################################
 
 import numpy as np
@@ -15,14 +16,46 @@ from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
 from brainsmith.registry import backend
 
-
-@backend(name='Crop_hls', target_kernel='brainsmith:Crop', language='hls')
+@backend(
+    target_kernel="brainsmith:Crop",
+    language="hls",
+    author="Josh Monson"
+)
 class Crop_hls(Crop, HLSBackend):
+    """HLS backend for Crop kernel (KernelOp-based).
+
+    This backend adapts the schema-driven Crop implementation
+    to work with FINN's HLS code generation system.
+
+    Key features:
+    - Uses uppercase "SIMD" (KernelOp convention)
+    - Extracts shapes from design_point (not nodeattrs)
+    - Follows Arete principle: no shape storage
+    """
+
     def __init__(self, onnx_node, **kwargs):
         super().__init__(onnx_node, **kwargs)
 
     def get_nodeattr_types(self):
-        return Crop.get_nodeattr_types(self) | HLSBackend.get_nodeattr_types(self)
+        """Define nodeattrs for Crop_hls backend.
+
+        Combines:
+        - Crop's schema-derived nodeattrs (interface datatypes, kernel params)
+        - HLSBackend's execution nodeattrs
+        - Manual overrides for HLS-specific parameters
+
+        We override SIMD here to ensure it's uppercase (KernelOp convention).
+        """
+        # Get Crop's schema-derived nodeattrs (includes dynamic interface datatypes)
+        my_attrs = Crop.get_nodeattr_types(self)
+
+        # Add HLSBackend nodeattrs
+        my_attrs.update(HLSBackend.get_nodeattr_types(self))
+
+        # Override SIMD to ensure uppercase (KernelOp convention vs legacy lowercase)
+        my_attrs["SIMD"] = ("i", False, 1)
+
+        return my_attrs
 
     def global_includes(self):
         self.code_gen_dict["$GLOBALS$"] = [
@@ -35,14 +68,29 @@ class Crop_hls(Crop, HLSBackend):
         ]
 
     def defines(self, var):
-        simd = self.get_nodeattr("simd")
+        """Generate HLS constant definitions.
+
+        Extracts values from design_point instead of nodeattrs (Arete principle).
+        Uses uppercase "SIMD" for KernelOp convention.
+        """
+        # Get parallelization parameter (uppercase for KernelOp)
+        simd = self.get_nodeattr("SIMD")
         dtype = self.get_input_datatype()
+
+        # Extract shapes from cached kernel instance (Arete principle)
+        # design_point property returns the cached KernelDesignPoint
+        ki = self.design_point
+        inp_cfg = ki.inputs["input"]
+        height = inp_cfg.tensor_shape[1]
+        width = inp_cfg.tensor_shape[2]
+        channel_fold = inp_cfg.tensor_shape[-1] // inp_cfg.stream_shape[-1]
+
         self.code_gen_dict["$DEFINES$"] = [
             f"""
             constexpr unsigned  SIMD   = {simd};
-            constexpr unsigned  H      = {self.get_nodeattr("height")};
-            constexpr unsigned  W      = {self.get_nodeattr("width")/simd};
-            constexpr unsigned  CF     = {self.get_nodeattr("channel_fold")};
+            constexpr unsigned  H      = {height};
+            constexpr unsigned  W      = {width};
+            constexpr unsigned  CF     = {channel_fold};
             constexpr unsigned  CROP_N = {self.get_nodeattr("crop_north")};
             constexpr unsigned  CROP_E = {self.get_nodeattr("crop_east")};
             constexpr unsigned  CROP_S = {self.get_nodeattr("crop_south")};
@@ -90,6 +138,9 @@ class Crop_hls(Crop, HLSBackend):
         ]
 
     def execute_node(self, context, graph):
+        # Ensure design space initialized (QONNX creates fresh instances)
+        self._ensure_initialized_for_execution(graph)
+        # Delegate to HLSBackend for both cppsim and rtlsim execution
         HLSBackend.execute_node(self, context, graph)
 
     def compile_singlenode_code(self):
@@ -114,12 +165,17 @@ class Crop_hls(Crop, HLSBackend):
         builder.append_sources(code_gen_dir + "/*.cpp")
         builder.append_sources("$BSMITH_DIR/deps/cnpy/cnpy.cpp")
         builder.append_includes("-lz")
-        builder.append_includes(
-            '-fno-builtin -fno-inline -Wl,-rpath,"$VITIS_PATH/lnx64/lib/csim" -L$VITIS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'
-        )
-        builder.append_includes( #TODO: [STF]I have a feeling this should/could be removed for shuffle as it's all FP related?
-            "-L$VITIS_PATH/lnx64/tools/fpo_v7_1 -lgmp -lmpfr -lIp_floating_point_v7_1_bitacc_cmodel"
-        )
+        # Split HLS simulation library flags (must be separate arguments)
+        builder.append_includes("-fno-builtin")
+        builder.append_includes("-fno-inline")
+        builder.append_includes('-Wl,-rpath,"$VITIS_PATH/lnx64/lib/csim"')
+        builder.append_includes("-L$VITIS_PATH/lnx64/lib/csim")
+        builder.append_includes("-lhlsmc++-GCC46")
+        # Split floating point library flags
+        builder.append_includes("-L$VITIS_PATH/lnx64/tools/fpo_v7_1")
+        builder.append_includes("-lgmp")
+        builder.append_includes("-lmpfr")
+        builder.append_includes("-lIp_floating_point_v7_1_bitacc_cmodel")
         builder.set_executable_path(code_gen_dir + "/node_model")
         builder.build(code_gen_dir)
         self.set_nodeattr("executable_path", builder.executable_path)
@@ -139,7 +195,8 @@ class Crop_hls(Crop, HLSBackend):
         oshape = self.get_folded_output_shape()
         oshape_str = str(oshape).replace("(", "{").replace(")", "}")
 
-        simd = self.get_nodeattr("simd")
+        # Use uppercase SIMD for KernelOp
+        simd = self.get_nodeattr("SIMD")
 
 
         self.code_gen_dict["$DOCOMPUTE$"] = [
@@ -171,8 +228,7 @@ class Crop_hls(Crop, HLSBackend):
                 code_gen_line = "\n".join(self.code_gen_dict[key])
                 template = template.replace(key, code_gen_line)
             f.write(template)
-        #raise NotImplementedError("This function is not yet immplemented.")
-    
+
     def ipgen_extra_includes(self):
         """Add kernel-specific include paths."""
         import os

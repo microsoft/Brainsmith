@@ -12,36 +12,27 @@ design_space:
   kernels:
     - LayerNorm
     - DuplicateStreams
-    - ElementwiseBinaryOperation
+    - ElementwiseBinaryOp
     - Shuffle
-<<<<<<< HEAD:brainsmith/blueprints/bert.yaml
     - Crop
     - Lookup
-    - HWSoftmax
-||||||| 8ee87b9:brainsmith/blueprints/bert.yaml
-    - HWSoftmax
-=======
     - Softmax
->>>>>>> develop:examples/blueprints/bert.yaml
-    - Thresholding
-    - MVAU
-<<<<<<< HEAD:brainsmith/blueprints/bert.yaml
-||||||| 8ee87b9:brainsmith/blueprints/bert.yaml
-    
-=======
+    - finn:Thresholding
+    - finn:MVAU
 
 >>>>>>> develop:examples/blueprints/bert.yaml
   steps:
-    - "qonnx_to_finn"  # custom_step_qonnx2finn
+    - "qonnx_to_finn"
     # Topology optimization
     - "bert_streamlining"
-    # Core FINN steps
-    - "infer_kernels" # Brainsmith dynamic kernel inference
-    - "create_dataflow_partition"
-    - "specialize_layers"
+    - "normalize_dataflow_layouts" # Normalize tensors to NHWC layout
+    # Core Brainsmith steps
+    - "build_dataflow_graph"  # ONNX --> Kernels
+    - "build_hw_graph"        # Kernels --> HW Backends
     - "loop_rolling"
-    - "target_fps_parallelization"
-    - "apply_folding_config"
+    - "transpose_decomposition"
+    - "brainsmith:target_fps_parallelization"
+    - "apply_parallelization_config"
     - "minimize_bit_width"
     - "generate_estimate_reports"
     - "hw_codegen"

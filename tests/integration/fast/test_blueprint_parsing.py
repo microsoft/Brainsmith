@@ -12,7 +12,7 @@ from pathlib import Path
 
 from brainsmith.dse import parse_blueprint, GlobalDesignSpace, DSEConfig
 from brainsmith.dse.types import OutputType
-from tests.fixtures.blueprints import (
+from tests.fixtures.dse.blueprints import (
     create_minimal_blueprint,
     create_full_blueprint,
     create_extends_blueprint,
@@ -60,7 +60,6 @@ class TestBasicParsing:
             clock_ns=3.5,
             output="bitfile",
             board="Pynq-Z1",
-            save_intermediate_models=True,
             steps=["custom:test_step"]
         )
 
@@ -72,7 +71,6 @@ class TestBasicParsing:
         assert blueprint_config.clock_ns == 3.5
         assert blueprint_config.output == OutputType.BITFILE
         assert blueprint_config.board == "Pynq-Z1"
-        assert blueprint_config.save_intermediate_models is True
 
     @pytest.mark.fast
     def test_blueprint_config_defaults(self, tmp_path, simple_onnx_model):
@@ -90,7 +88,6 @@ class TestBasicParsing:
 
         # Verify defaults
         assert blueprint_config.output == OutputType.ESTIMATES
-        assert blueprint_config.save_intermediate_models is False
         assert blueprint_config.board is None
 
 
