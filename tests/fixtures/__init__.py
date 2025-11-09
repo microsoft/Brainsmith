@@ -57,8 +57,13 @@ from .test_data import (
     generate_onnx_test_data,
 )
 
-# ONNX model fixtures
-from .models import *  # noqa: F401, F403
+# ONNX model fixtures (from models.py)
+from .models import (
+    create_simple_model,
+    simple_onnx_model,
+    quantized_onnx_model,
+    brevitas_fc_model,
+)
 
 # DSE fixtures are in dse/ subdirectory
 # Import via: from tests.fixtures.dse import create_finn_blueprint, etc.
@@ -87,4 +92,9 @@ __all__ = [
     # Test data
     "generate_test_data",
     "generate_onnx_test_data",
+    # ONNX models
+    "create_simple_model",
+    "simple_onnx_model",
+    "quantized_onnx_model",
+    "brevitas_fc_model",
 ]

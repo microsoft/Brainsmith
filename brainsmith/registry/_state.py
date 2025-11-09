@@ -11,13 +11,20 @@ Design Note:
     maintaining a single source of truth for component metadata.
 """
 
-from typing import Dict
+from typing import Dict, Set
 from ._metadata import ComponentMetadata
 
 # Global component index - single source of truth for component metadata
 # Maps "source:name" -> ComponentMetadata
 # Unified index for all components from all sources (core, project, custom)
 _component_index: Dict[str, ComponentMetadata] = {}
+
+# Discovered sources - tracks all active component sources
+# Populated during discovery from:
+# - Entrypoint names (e.g., 'finn' from brainsmith.plugins entrypoints)
+# - component_sources keys (e.g., 'brainsmith', 'project', custom sources)
+# Used for source detection in _decorators.py and domain matching in _domain_utils.py
+_discovered_sources: Set[str] = set()
 
 # Discovery state flag - tracks whether component discovery has completed
 _components_discovered = False

@@ -82,6 +82,26 @@ Or send one-off commands to the container
 
 ---
 
+## Command-Line Interface
+
+Brainsmith provides two CLIs:
+
+**`smith`** - Streamlined CLI for creating dataflow accelerators:
+```bash
+smith model.onnx blueprint.yaml    # Create dataflow accelerator
+```
+
+**`brainsmith`** - Full toolkit with administrative commands:
+```bash
+brainsmith project init                # Initialize project
+brainsmith registry                    # List registered components
+brainsmith setup cppsim                # Setup C++ simulation
+```
+
+All commands support `--help` for details. See [CLI Reference](api/cli.md) for complete documentation.
+
+---
+
 ## Project Management
 
 Brainsmith operates from a single poetry `venv` from the repository root, but

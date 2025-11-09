@@ -309,4 +309,4 @@ Both paths share the `tidy_up` segment.
 
 - **[Hardware Kernels](hardware-kernels.md)** - Kernel architecture and implementation
 - **[Component Registry](registry.md)** - Registering kernels, backends, and steps
-- **[CLI Architecture](cli-architecture.md)** - Command-line interface and configuration precedence
+- **[CLI Reference](../api/cli.md)** - Command-line interface and options

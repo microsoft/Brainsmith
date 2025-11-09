@@ -5,7 +5,7 @@
 **Hardware kernels are the fundamental building blocks of dataflow accelerators.** Each kernel implements one or more neural network operations (LayerNorm, MatMul, Attention) as a self-contained streaming circuit. Brainsmith constructs dataflow accelerators from ONNX graphs by iteratively applying graph transformations to lower ONNX nodes to matching Kernels, connected via streaming interfaces. During this process, **kernels are modeled by the relationship between their input and output streams** with the internal architecture largely abstracted away.
 
 <div align="center" markdown>
-![Kernel Interfaces](../../images/dataflow_kernel.png){ width="400" }
+![Kernel Interfaces](../images/dataflow_kernel.png){ width="400" }
 </div>
 
 This separation allows for hand-crafted kernel implementations to exploit hardware expertise (fused kernels, systolic arrays), while automated design space exploration optimizes both kernel parameterization (parallelism, memory depth, bit-widths) and dataflow infrastructure for the target graph.
@@ -28,7 +28,7 @@ The stream relationships that define Kernels in the compiler require systematic 
 Brainsmith bridges this semantic gap through a three-tier hierarchy, each level refining the data representation for hardware realization:
 
 <div align="center" markdown>
-![Input Chunking](../../images/input_chunking.png){ width="600" }
+![Input Chunking](../images/input_chunking.png){ width="600" }
 </div>
 
 ### Tensor / Block / Stream
@@ -47,7 +47,7 @@ Brainsmith bridges this semantic gap through a three-tier hierarchy, each level 
 - Determines throughput and resource usage
 - Constrained by BLOCK shape (cannot exceed block dimensions)
 
-#### Kernel-Specific Block Semantics
+### Kernel-Specific Block Semantics
 
 The BLOCK shape adapts to kernel computation characteristics:
 
@@ -90,7 +90,7 @@ total_cycles = prod(tensor_blocks) × prod(stream_cycles)
 ### Inter-Kernel Dataflow
 
 <div align="center" markdown>
-![Dataflow Chunking with FIFO](../../images/dataflow_chunking_fifo.png){ width="700" }
+![Dataflow Chunking with FIFO](../images/dataflow_chunking_fifo.png){ width="700" }
 </div>
 
 Kernels communicate via **streaming interfaces**, producing and consuming data cycle-by-cycle. Elastic FIFOs between kernels accumulate these streams as **data blocks** for buffering, then stream them out to downstream consumers. This infrastructure automatically adapts to different kernel semantics through shape-driven buffering.

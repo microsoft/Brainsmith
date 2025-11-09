@@ -59,6 +59,8 @@ from qonnx.core.datatype import ArbPrecFloatType, DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.custom_op.general.floatquant import compute_max_val
 
+from .constants import ANNOTATION_WARNING_STACKLEVEL, QUANT_FULL_RANGE, QUANT_ROUNDING_MODE
+
 
 # ============================================================================
 # Direct Annotation (v2.3 Standard)
@@ -175,7 +177,7 @@ def _check_datatype_support(dtype: DataType) -> None:
             f"Supported types: arbitrary integers 1-32 bits (INT/UINT), BIPOLAR, TERNARY, FLOAT32. "
             f"Tests may fail during backend code generation (cppsim/rtlsim).",
             UserWarning,
-            stacklevel=3,
+            stacklevel=ANNOTATION_WARNING_STACKLEVEL,
         )
 
 
@@ -270,8 +272,8 @@ def _insert_int_quant(
         outputs=[input_name],
         domain="qonnx.custom_op.general",
         signed=signed,
-        narrow=0,  # Full range [-2^(n-1), 2^(n-1)-1]
-        rounding_mode="ROUND",
+        narrow=QUANT_FULL_RANGE,
+        rounding_mode=QUANT_ROUNDING_MODE,
         name=f"IntQuant_{input_name}",
     )
 
@@ -308,12 +310,12 @@ def _insert_float_quant(
     scale_name = model.make_new_valueinfo_name()
     model.set_initializer(scale_name, np.array(1.0, dtype=np.float32))
 
-    exp_bw_name = model.make_new_valueinfo_name()
-    model.set_initializer(exp_bw_name, np.array(float(exp_bitwidth), dtype=np.float32))
+    exp_bitwidth_name = model.make_new_valueinfo_name()
+    model.set_initializer(exp_bitwidth_name, np.array(float(exp_bitwidth), dtype=np.float32))
 
-    mant_bw_name = model.make_new_valueinfo_name()
+    mant_bitwidth_name = model.make_new_valueinfo_name()
     model.set_initializer(
-        mant_bw_name, np.array(float(mant_bitwidth), dtype=np.float32)
+        mant_bitwidth_name, np.array(float(mant_bitwidth), dtype=np.float32)
     )
 
     bias_name = model.make_new_valueinfo_name()
@@ -332,14 +334,14 @@ def _insert_float_quant(
         inputs=[
             raw_input_name,
             scale_name,
-            exp_bw_name,
-            mant_bw_name,
+            exp_bitwidth_name,
+            mant_bitwidth_name,
             bias_name,
             max_val_name,
         ],
         outputs=[input_name],
         domain="qonnx.custom_op.general",
-        rounding_mode="ROUND",
+        rounding_mode=QUANT_ROUNDING_MODE,
         has_inf=0,
         has_nan=0,
         has_subnormal=0,

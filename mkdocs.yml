@@ -112,13 +112,13 @@ nav:
     - Hardware Kernels: developer-guide/hardware-kernels.md
     - Blueprint Schema: developer-guide/blueprint-schema.md
     - Component Registry: developer-guide/registry-user-guide.md
-    - CLI Architecture: developer-guide/cli-architecture.md
   - API Reference:
     - Overview: api/index.md
     - Design Space Exploration: api/dse.md
     - Component Registry: api/registry.md
     - Dataflow Modeling: api/dataflow.md
     - Settings: api/settings.md
+    - CLI: api/cli.md
 
 extra_css:
   - stylesheets/extra.css

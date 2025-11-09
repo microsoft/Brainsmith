@@ -160,8 +160,8 @@ def _generate_arbprec_float(datatype: ArbPrecFloatType, shape: tuple) -> np.ndar
 def generate_onnx_test_data(
     tensor_type: int,
     shape: Tuple[int, ...],
-    seed: int = None,
-    value_range: Tuple[float, float] = None,
+    seed: Optional[int] = None,
+    value_range: Optional[Tuple[float, float]] = None,
 ) -> np.ndarray:
     """Generate test data for ONNX TensorProto types.
 

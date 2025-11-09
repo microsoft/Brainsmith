@@ -29,7 +29,7 @@ class ModelCache:
         self._stage1_models: Dict[str, ModelWrapper] = {}
         self._stage2_models: Dict[str, Tuple] = {}
         self._stage3_models: Dict[Tuple[str, str], Tuple] = {}
-        self._golden_refs: Dict[str, Dict[str, np.ndarray]] = {}
+        self._golden_outputs: Dict[str, Dict[str, np.ndarray]] = {}
         self._test_inputs: Dict[str, Dict[str, np.ndarray]] = {}
 
         # Statistics (for debugging)
@@ -108,7 +108,7 @@ class ModelCache:
         self._stage3_models[cache_key] = (op, model)
         return op, model
 
-    def get_golden_reference(
+    def get_golden_outputs(
         self, test_id: str, builder: Callable[[], Dict[str, np.ndarray]]
     ) -> Dict[str, np.ndarray]:
         """Get or compute golden reference outputs.
@@ -120,13 +120,13 @@ class ModelCache:
         Returns:
             Dict mapping output names to numpy arrays
         """
-        if test_id in self._golden_refs:
+        if test_id in self._golden_outputs:
             self.stats["golden_hits"] += 1
-            return self._golden_refs[test_id]
+            return self._golden_outputs[test_id]
 
         self.stats["golden_misses"] += 1
         golden = builder()
-        self._golden_refs[test_id] = golden
+        self._golden_outputs[test_id] = golden
         return golden
 
     def get_test_inputs(

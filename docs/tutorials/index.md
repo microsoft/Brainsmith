@@ -10,7 +10,6 @@ This section will include step-by-step tutorials covering:
 - **Design Space Exploration** - Finding optimal configurations
 - **Kernel Development** - Building and integrating custom hardware kernels
 - **Performance Optimization** - Maximizing throughput and efficiency
-- **Model Deployment** - Integration and deployment strategies
 
 ## Available Resources
 

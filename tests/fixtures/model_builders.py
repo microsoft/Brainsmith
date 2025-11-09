@@ -69,6 +69,10 @@ from qonnx.transformation.infer_datatypes import InferDataTypes
 class OnnxModelBuilder:
     """Fluent builder for ONNX test models with sane defaults.
 
+    NOTE: OnnxModelBuilder is primarily for rapid prototyping and exploration.
+    Production tests typically use kernel-specific helpers located in
+    brainsmith/kernels/*/tests/ directories.
+
     Eliminates boilerplate for common kernel testing patterns:
     - Binary ops (Add, Mul) with two dynamic inputs
     - Unary ops (Softmax, LayerNorm) with one dynamic input
@@ -114,7 +118,6 @@ class OnnxModelBuilder:
         self._input_shapes: dict = {}  # Override per-input shapes
         self._domain: str = ""  # Standard ONNX domain
         self._node_name: str = None
-        self._use_actual_tensorproto_types: bool = True  # Stage 1 mode (BREAKING: default True)
 
     def op_type(self, op_type: str) -> 'OnnxModelBuilder':
         """Set operation type (e.g., 'Add', 'Softmax').
@@ -258,41 +261,6 @@ class OnnxModelBuilder:
         self._node_name = name
         return self
 
-    def use_finn_convention(self) -> 'OnnxModelBuilder':
-        """Use FINN convention (FLOAT containers for all types) instead of Stage 1.
-
-        By default, OnnxModelBuilder creates Stage 1 models with actual TensorProto
-        types (INT8, INT16, etc.) for correct ONNX Runtime semantics. Call this
-        method to use FINN convention (FLOAT containers) instead.
-
-        Stage 1 (default):      INT8 → TensorProto.INT8 (correct integer division)
-        Stage 2 (FINN):         INT8 → TensorProto.FLOAT (float semantics)
-
-        Returns:
-            Self for method chaining
-
-        Example:
-            # Stage 1 (default): actual TensorProto types
-            model, node = (OnnxModelBuilder()
-                .op_type("Add")
-                .datatype(DataType["INT8"])
-                .build())  # Creates INT8 TensorProto
-
-            # Stage 2 (FINN): FLOAT containers
-            model, node = (OnnxModelBuilder()
-                .op_type("Add")
-                .datatype(DataType["INT8"])
-                .use_finn_convention()  # Creates FLOAT TensorProto
-                .build())
-
-        Note:
-            - Stage 1 required for golden reference (correct semantics)
-            - Stage 2 used by FINN/Brainsmith (FLOAT containers + QONNX annotations)
-            - Most tests should use Stage 1 (default)
-        """
-        self._use_actual_tensorproto_types = False
-        return self
-
     def build(self) -> Tuple[ModelWrapper, NodeProto]:
         """Build the ONNX model and return (model, node).
 
@@ -302,15 +270,9 @@ class OnnxModelBuilder:
         Raises:
             ValueError: If configuration is invalid
         """
-        # Determine TensorProto type based on mode
-        if self._use_actual_tensorproto_types:
-            # Stage 1: Use actual TensorProto types for correct semantics
-            from tests.fixtures.model_annotation import datatype_to_actual_tensorproto
-            tensorproto_type = datatype_to_actual_tensorproto(self._datatype)
-        else:
-            # Stage 2: Use FINN convention (FLOAT containers)
-            from tests.fixtures.model_annotation import tensorproto_for_datatype
-            tensorproto_type = tensorproto_for_datatype(self._datatype)
+        # Use QONNX convention (FLOAT containers with DataType annotations)
+        from tests.fixtures.model_annotation import tensorproto_for_datatype
+        tensorproto_type = tensorproto_for_datatype(self._datatype)
 
         # Create input value infos (non-static only)
         dynamic_inputs = []
@@ -362,16 +324,16 @@ class OnnxModelBuilder:
         )
 
         # Create model
-        model = qonnx_make_model(graph)
-        model_w = ModelWrapper(model)
+        model_proto = qonnx_make_model(graph)
+        model = ModelWrapper(model_proto)
 
         # Set datatypes for all tensors
         for inp_name in self._inputs:
-            model_w.set_tensor_datatype(inp_name, self._datatype)
+            model.set_tensor_datatype(inp_name, self._datatype)
         for out in self._outputs:
-            model_w.set_tensor_datatype(out, self._datatype)
+            model.set_tensor_datatype(out, self._datatype)
 
-        return model_w, node
+        return model, node
 
 
 # =============================================================================

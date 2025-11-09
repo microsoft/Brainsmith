@@ -16,9 +16,8 @@ import logging
 from contextvars import ContextVar
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
-from ._state import _component_index
+from ._state import _component_index, _discovered_sources
 from ._metadata import ComponentMetadata, ComponentType, ImportSpec
-from .constants import SOURCE_MODULE_PREFIXES
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +31,17 @@ _current_source: ContextVar[Optional[str]] = ContextVar('current_source', defaul
 # ============================================================================
 
 def _detect_source(obj: Any) -> str:
-    """Detect component source with priority: context > module prefix > custom.
+    """Detect component source with priority: context > discovered sources > custom.
 
     Priority order:
     1. Active source_context (import location - highest priority)
        - Used during discovery to classify components by where they're imported
        - Example: importing third-party kernel into brainsmith/kernels/__init__.py
 
-    2. Module prefix matching (definition location - fallback)
-       - Used for direct imports before/after discovery
-       - Matches obj.__module__ against configured prefixes from settings
-       - Example: 'brainsmith.kernels.mvau.mvau' → 'brainsmith'
-       - Always uses fresh config (single source of truth)
+    2. Discovered sources matching (definition location - fallback)
+       - Checks all sources registered during discovery (entrypoints + component_sources)
+       - Supports both standard (source.category) and unique (source__category) patterns
+       - Unified handling for all sources (brainsmith, finn, custom, etc.)
 
     3. 'custom' (unknown/unregistered - lowest priority)
        - Components not matching any registered source
@@ -60,9 +58,16 @@ def _detect_source(obj: Any) -> str:
         >>> with source_context('brainsmith'):
         ...     _detect_source(SomeKernel)  # Returns 'brainsmith'
 
-        >>> # Direct import (uses module prefix from config)
+        >>> # Discovered sources (brainsmith, finn, custom)
         >>> from brainsmith.kernels.mvau import MVAU
-        >>> _detect_source(MVAU)  # Returns 'brainsmith' (via config.source_module_prefixes)
+        >>> _detect_source(MVAU)  # Returns 'brainsmith'
+
+        >>> from finn.custom_op.fpgadataflow.mvau import MVAU
+        >>> _detect_source(MVAU)  # Returns 'finn'
+
+        >>> # Custom source (via component_sources or entrypoint)
+        >>> from acme.kernels.custom_op import CustomOp
+        >>> _detect_source(CustomOp)  # Returns 'acme' (if discovered)
 
         >>> # Unknown module
         >>> _detect_source(UnknownKernel)  # Returns 'custom'
@@ -71,19 +76,14 @@ def _detect_source(obj: Any) -> str:
     if ctx_source := _current_source.get():
         return ctx_source
 
-    # 2. Module prefix detection (from settings - single source of truth)
+    # 2. Module prefix matching against discovered sources
     module_name = obj.__module__
-    try:
-        from brainsmith.settings import get_config
-        prefixes = get_config().source_module_prefixes
-    except Exception:
-        # Fallback if settings not available (shouldn't happen in normal use)
-        prefixes = SOURCE_MODULE_PREFIXES
-        logger.debug(f"Using default source prefixes (settings unavailable)")
 
-    for prefix, source in prefixes.items():
-        if module_name.startswith(prefix):
-            logger.debug(f"Detected source '{source}' for {obj.__name__} via module prefix '{prefix}'")
+    # Check all discovered sources (from entrypoints and component_sources)
+    for source in _discovered_sources:
+        # Match both standard (source.category) and unique (source__category) patterns
+        if module_name.startswith(f'{source}.') or module_name.startswith(f'{source}__'):
+            logger.debug(f"Detected source '{source}' for {obj.__name__} via discovered sources")
             return source
 
     # 3. Unknown/custom (ephemeral)

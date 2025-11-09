@@ -529,7 +529,10 @@ def get_all_component_metadata() -> Dict[str, Any]:
 # ============================================================================
 
 def get_domain_for_backend(backend_name: str) -> str:
-    """Get ONNX domain for backend based on source.
+    """Get ONNX domain for backend by deriving from module path.
+
+    Derives domain directly from the backend class's __module__ attribute,
+    eliminating the need for reverse lookup through source_module_prefixes.
 
     Args:
         backend_name: Backend name (short or qualified)
@@ -543,31 +546,16 @@ def get_domain_for_backend(backend_name: str) -> str:
         >>> get_domain_for_backend('finn:MVAU_hls')
         'finn.custom_op.fpgadataflow.hls'
     """
-    from brainsmith.settings import get_config
+    from brainsmith.registry._domain_utils import derive_domain_from_module
 
-    # Get backend metadata
+    # Get backend metadata and load the class
     meta = get_component_metadata(backend_name, 'backend')
-    source = meta.source
-    language = meta.backend_language
 
-    # FINN special case: domain mutation with language suffix
-    if source == 'finn':
-        return f"finn.custom_op.fpgadataflow.{language}"
+    # Load the backend class to access its __module__ attribute
+    backend_class = _load_component(meta)
 
-    # General case: find module prefix for source
-    config = get_config()
+    # Derive domain directly from the backend class's module path
+    domain = derive_domain_from_module(backend_class.__module__)
 
-    # Reverse lookup: find module for this source
-    # source_module_prefixes maps 'brainsmith.' → 'brainsmith'
-    # We want the reverse: 'brainsmith' → 'brainsmith.'
-    module = None
-    for module_prefix, mapped_source in config.source_module_prefixes.items():
-        if mapped_source == source:
-            module = module_prefix.rstrip('.')  # Remove trailing dot
-            break
-
-    # Fallback: if no module prefix configured, use source name as module
-    if module is None:
-        module = source
-
-    return f"{module}.kernels"
+    logger.debug(f"Derived domain '{domain}' for backend '{backend_name}' from module '{backend_class.__module__}'")
+    return domain

@@ -29,7 +29,7 @@ from pathlib import Path
 from importlib.metadata import entry_points
 from typing import Dict, List, Any
 
-from ._state import _component_index, _components_discovered
+from ._state import _component_index, _components_discovered, _discovered_sources
 from ._decorators import _register_kernel, _register_backend, _register_step, source_context, _convert_lazy_import_spec
 from ._metadata import ComponentMetadata, ComponentType, ImportSpec, resolve_lazy_class
 from .constants import (
@@ -403,6 +403,7 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         logger.info("Force refresh requested - resetting discovery state")
         _components_discovered = False
         _component_index.clear()
+        _discovered_sources.clear()
 
     # Skip if already discovered (and not forcing refresh)
     if _components_discovered:
@@ -451,6 +452,7 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
 
         # 1. Core brainsmith components (eager imports with source_context)
         # Decorators fire during import and auto-populate registry + index
+        _discovered_sources.add(SOURCE_BRAINSMITH)
         with source_context(SOURCE_BRAINSMITH):
             import brainsmith.kernels  # noqa: E402
             import brainsmith.steps    # noqa: E402
@@ -517,6 +519,9 @@ def _load_project_components(config):
         logger.debug(f"Project component source does not exist: {source_path}")
         return
 
+    # Register project source as discovered
+    _discovered_sources.add(SOURCE_PROJECT)
+
     # Load structured layout (project_dir/kernels/, project_dir/steps/)
     for component_type in ['kernels', 'steps']:
         type_dir = source_path / component_type
@@ -551,6 +556,8 @@ def _load_other_component_sources(config):
             logger.debug(f"Component source '{source_name}' does not exist: {source_path}")
             continue
 
+        # Register custom source as discovered
+        _discovered_sources.add(source_name)
         _load_component_package(source_name, source_path)
 
 
@@ -653,6 +660,8 @@ def _load_entry_point_components():
                     logger.error(f"Entry point '{ep.name}' returned {type(components)}, expected dict")
                     continue
 
+                # Register this source as discovered
+                _discovered_sources.add(source_name)
                 logger.info(f"Loading component source: {source_name}")
 
                 # Register all components under this source

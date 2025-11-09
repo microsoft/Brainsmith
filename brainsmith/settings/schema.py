@@ -42,6 +42,8 @@ Path Resolution Flow
 
 import os
 import yaml
+import warnings
+import logging
 from pathlib import Path
 from functools import cached_property
 from typing import (
@@ -274,11 +276,9 @@ class SystemConfig(BaseSettings):
     source_module_prefixes: Dict[str, str] = Field(
         default_factory=lambda: SOURCE_MODULE_PREFIXES.copy(),
         description=(
-            "Module prefix → source name mapping for component classification. "
-            "Components are classified by their module path during registration. "
-            "Any component not matching a registered prefix will be classified as "
-            "'custom' (ephemeral, not cached). Users can extend this for custom "
-            "namespaces."
+            "**DEPRECATED:** This field is no longer needed and will be removed in a future release. "
+            "Source detection now uses component_sources keys directly for hierarchical prefix matching. "
+            "Setting this field will emit a deprecation warning during configuration loading."
         )
     )
 
@@ -413,6 +413,7 @@ class SystemConfig(BaseSettings):
         3. Force internal paths (deps_dir → bsmith_dir)
         4. Set defaults for unset paths
         5. Validate everything is sane
+        6. Check for deprecated configuration
         """
         self.project_dir = self._detect_project_root()
         self._resolve_core_paths()
@@ -420,6 +421,7 @@ class SystemConfig(BaseSettings):
         self._resolve_finn_paths()
         self._resolve_component_sources()
         self._resolve_source_priority()
+        self._check_deprecations()
 
     def _resolve_core_paths(self) -> None:
         """Resolve build_dir and force deps_dir to internal location."""
@@ -504,6 +506,28 @@ class SystemConfig(BaseSettings):
         # Ensure 'custom' source is present (append at end if not explicitly configured)
         if SOURCE_CUSTOM not in self.source_priority:
             self.source_priority.append(SOURCE_CUSTOM)
+
+    def _check_deprecations(self) -> None:
+        """Check for deprecated configuration options and emit warnings."""
+        logger = logging.getLogger(__name__)
+
+        # Check if user has customized source_module_prefixes
+        # Suppress any Pydantic deprecation warnings when accessing the field
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            default_prefixes = SOURCE_MODULE_PREFIXES
+            if self.source_module_prefixes != default_prefixes:
+                warnings.warn(
+                    "The 'source_module_prefixes' configuration field is deprecated and will be removed in a future release. "
+                    "Source detection now uses component_sources keys directly for hierarchical prefix matching. "
+                    "Please remove this field from your configuration.",
+                    DeprecationWarning,
+                    stacklevel=3
+                )
+                logger.warning(
+                    "DEPRECATED: source_module_prefixes in configuration. "
+                    "Use component_sources keys for domain prefix matching instead."
+                )
 
     @cached_property
     def bsmith_dir(self) -> Path:

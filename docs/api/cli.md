@@ -2,18 +2,9 @@
 
 Command-line interface for Brainsmith project configuration and hardware design generation.
 
-Brainsmith provides two complementary CLIs:
-
-- **`brainsmith`** - Administrative CLI for project setup, configuration, and component registry management
-- **`smith`** - Streamlined operational CLI for hardware design workflows (subset of brainsmith commands)
-
-Both CLIs share the same global options and configuration system.
-
 ---
 
 ## Global Options
-
-Options available on both `brainsmith` and `smith` commands:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -24,21 +15,9 @@ Options available on both `brainsmith` and `smith` commands:
 | `--version` | Flag | - | Show version and exit |
 | `-h, --help` | Flag | - | Show help message and exit |
 
-**Example:**
-
-```bash
-# Override build directory and enable debug logging
-brainsmith --build-dir /tmp/test --log-level debug project info
-
-# Use custom config file
-smith --config custom.yaml dfc model.onnx blueprint.yaml
-```
-
 ---
 
 ## Operational Commands
-
-Command available in both `brainsmith` and `smith` CLIs for creating hardware designs.
 
 ### dfc
 
@@ -48,7 +27,6 @@ Create a dataflow core accelerator for neural network acceleration.
 
 ```bash
 smith dfc MODEL BLUEPRINT [OPTIONS]
-brainsmith dfc MODEL BLUEPRINT [OPTIONS]
 ```
 
 **Arguments:**
@@ -79,16 +57,13 @@ smith dfc model.onnx blueprint.yaml --output-dir ./results
 smith dfc model.onnx blueprint.yaml \
   --start-step streamline \
   --stop-step specialize_layers
-
-# With debug logging
-smith --log-level debug dfc model.onnx blueprint.yaml
 ```
+
+See also: [Blueprint Schema](../developer-guide/blueprint-schema.md), [Design Space Exploration](dse.md)
 
 ---
 
 ## Administrative Commands
-
-Commands available only in the `brainsmith` CLI for project management and setup.
 
 ### project
 
@@ -131,6 +106,7 @@ brainsmith project init [PATH] [OPTIONS]
 | `-f, --force` | Flag | Overwrite existing `brainsmith.yaml` if present |
 
 **Behavior:**
+
 - Creates `brainsmith.yaml` configuration file
 - Creates `.brainsmith/` directory for project metadata
 - Generates `env.sh` activation script
@@ -166,6 +142,7 @@ brainsmith project info [OPTIONS]
 | `--finn` | Flag | Include FINN-specific configuration settings |
 
 **Output:**
+
 - Configuration metadata (project directory, environment status)
 - Core paths (build directory, dependencies directory)
 - Component registry settings
@@ -194,6 +171,7 @@ brainsmith project allow-direnv
 ```
 
 **Behavior:**
+
 - Verifies direnv is installed
 - Generates `.envrc` file if needed
 - Executes `direnv allow` to trust the configuration
@@ -225,6 +203,7 @@ brainsmith registry [OPTIONS]
 | `-r, --rebuild` | Flag | Rebuild component cache and validate all entries (slower but thorough) |
 
 **Output:**
+
 - Component sources table (source, type, path, status)
 - Component summary by source (steps, kernels, backends counts)
 - With `--verbose`: Detailed listings organized by component type
@@ -246,6 +225,8 @@ brainsmith registry --rebuild
 brainsmith registry -v -r
 ```
 
+See also: [Component Registry](registry.md) - Programmatic access to registered components
+
 ---
 
 ### setup
@@ -263,9 +244,9 @@ brainsmith setup <SUBCOMMAND> [OPTIONS]
 | Subcommand | Description |
 |------------|-------------|
 | `all` | Install all dependencies (cppsim, xsim, boards) |
-| `cppsim` | Setup C++ simulation (cnpy, finn-hlslib) |
-| `xsim` | Setup Xilinx simulation (finn-xsim) |
-| `boards` | Download FPGA board definition files |
+| `cppsim` | Setup C++ simulation for fast functional testing |
+| `xsim` | Setup Xilinx RTL simulation for cycle-accurate validation (requires Vivado) |
+| `boards` | Download FPGA board definition files for deployment |
 | `check` | Check installation status of all setup components |
 
 #### setup all
@@ -346,6 +327,7 @@ brainsmith setup xsim [OPTIONS]
 | `-y, --yes` | Flag | Skip confirmation prompts |
 
 **Requirements:**
+
 - Vivado must be configured in `brainsmith.yaml` or via environment variables
 
 **Example:**
@@ -382,6 +364,7 @@ brainsmith setup boards [OPTIONS]
 | `-y, --yes` | Flag | Skip confirmation prompts |
 
 **Available Repositories:**
+
 - `xilinx` - Official Xilinx board files
 - `avnet` - Avnet board files
 - `rfsoc4x2` - RFSoC 4x2 board files
