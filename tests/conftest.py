@@ -320,6 +320,8 @@ def pytest_collection_modifyitems(config, items):
     """Auto-mark tests and handle parameterization sweeps.
 
     1. Auto-marks tests based on location:
+       - tests/unit/ -> @pytest.mark.unit
+       - tests/integration/ -> @pytest.mark.integration
        - integration/fast/ -> @pytest.mark.fast
        - integration/finn/ -> @pytest.mark.finn_build
        - integration/rtl/ -> @pytest.mark.rtlsim, @pytest.mark.slow
@@ -331,6 +333,13 @@ def pytest_collection_modifyitems(config, items):
     """
     # First pass: Auto-mark based on directory
     for item in items:
+        # Mark unit tests
+        if "/tests/unit/" in str(item.fspath) or str(item.fspath).endswith("/tests/unit"):
+            item.add_marker(pytest.mark.unit)
+        # Mark all integration tests
+        if "/tests/integration/" in str(item.fspath):
+            item.add_marker(pytest.mark.integration)
+        # Mark specific integration subdirectories
         if "integration/fast" in str(item.fspath):
             item.add_marker(pytest.mark.fast)
         elif "integration/finn" in str(item.fspath):
