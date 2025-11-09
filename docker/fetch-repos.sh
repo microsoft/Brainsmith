@@ -77,8 +77,8 @@ fi
 
 # Define our Git dependencies - URLs and revisions
 declare -A GIT_DEPS=(
-    ["brevitas"]="https://github.com/Xilinx/brevitas.git@deps/rm_numpy"
-    ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git@custom/brainsmith"
+    ["brevitas"]="https://github.com/Xilinx/brevitas.git@c10ef8764967e9cacc60347ce185be14e4ad97c4"
+    ["qonnx"]="https://github.com/fastmachinelearning/qonnx.git@f2c4ccd3e71795c9f116ee5a0c87a7dfd590c6d0"
     ["finn"]="https://github.com/tafk7/finn.git@feature/logging-integration-transformer"
     ["finn-experimental"]="https://github.com/Xilinx/finn-experimental.git@0724be21111a21f0d81a072fccc1c446e053f851"
     ["dataset-loading"]="https://github.com/fbcotter/dataset_loading.git@0.0.4"
