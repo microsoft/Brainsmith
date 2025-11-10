@@ -195,11 +195,12 @@ design_space:
         intermediate_dir = segment_dir / "intermediate_models"
 
         # Should have models from streamline and tidy_up
-        assert (intermediate_dir / "step_streamline.onnx").exists()
-        assert (intermediate_dir / "step_tidy_up.onnx").exists()
+        # Note: FINN saves with format "<step_num>_<step_name>.onnx" (1-indexed)
+        assert (intermediate_dir / "1_step_streamline.onnx").exists()
+        assert (intermediate_dir / "2_step_tidy_up.onnx").exists()
 
         # Should NOT have model from convert_to_hw (it was after stop_step)
-        assert not (intermediate_dir / "step_convert_to_hw.onnx").exists()
+        assert not (intermediate_dir / "3_step_convert_to_hw.onnx").exists()
 
     @pytest.mark.finn_build
     @pytest.mark.timeout(600)
