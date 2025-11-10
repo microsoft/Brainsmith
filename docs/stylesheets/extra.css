@@ -47,7 +47,13 @@
         width: 15rem;  /* Slightly narrower navigation sidebar */
     }
 
-    .md-content {
+    /* Only add extra right padding when TOC sidebar is hidden (index pages) */
+    .md-sidebar--secondary[hidden] {
+        display: none;
+    }
+
+    /* Extra padding only for pages without TOC */
+    .md-container:has(.md-sidebar--secondary[hidden]) .md-content {
         padding-right: 5rem;
     }
 }

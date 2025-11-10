@@ -74,11 +74,11 @@ Brainsmith is an end-to-end compiler to transform ONNX models into dataflow acce
 
     Resource estimation, cycle-accurate simulation support, and throughput analysis. Evaluate design tradeoffs before synthesis.
 
--   :material-layers:{ .lg .middle } **Blueprint Inheritance**
+-   :material-layers:{ .lg .middle } **Multi-Layer Offload**
 
     ---
 
-    Reuse and customize configurations through YAML inheritance. Design space exploration with branch points and step operations.
+    Scale to large models with constant FPGA resources. Stream weights from external memory to process arbitrarily deep networks without increasing hardware footprint.
 
 </div>
 
@@ -94,107 +94,6 @@ smith model.onnx blueprint.yaml
 
 # Output: RTL + performance estimates + resource reports
 ```
-
-Or use the Python API for programmatic control:
-
-```python
-from brainsmith import explore_design_space
-
-# Explore design space
-results = explore_design_space(
-    model_path="bert_model.onnx",
-    blueprint_path="config.yaml"
-)
-
-# Analyze results
-stats = results.compute_stats()
-print(f"Explored {stats['total']} configurations")
-print(f"Successful: {stats['successful']}")
-```
-
----
-
-## Get Started
-
-<div class="grid cards" markdown>
-
--   :material-rocket-launch:{ .lg .middle } **Quickstart Guide**
-
-    ---
-
-    Install Brainsmith and run your first accelerator build in 30 minutes with the BERT example.
-
-    [:octicons-arrow-right-24: Getting Started](getting-started.md)
-
--   :material-hammer-wrench:{ .lg .middle } **Kernel Development**
-
-    ---
-
-    Learn the schema-driven architecture and build custom hardware operators for your models.
-
-    [:octicons-arrow-right-24: Hardware Kernels](developer-guide/hardware-kernels.md)
-
--   :material-file-document-outline:{ .lg .middle } **Blueprint Configuration**
-
-    ---
-
-    Master the YAML configuration format for design space definition and pipeline customization.
-
-    [:octicons-arrow-right-24: Blueprint Schema](developer-guide/blueprint-schema.md)
-
--   :material-book-open-variant:{ .lg .middle } **API Reference**
-
-    ---
-
-    Explore complete API documentation for DSE, dataflow modeling, and component registry.
-
-    [:octicons-arrow-right-24: API Documentation](api/index.md)
-
-</div>
-
----
-
-## Built For
-
-<div class="grid" markdown style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin: 1rem 0;">
-
-<div markdown>
-
-**AI Researchers**
-
-Explore FPGA deployment for edge devices with strict latency requirements. Evaluate FPGA acceleration as an alternative to CPU/GPU inference.
-
-</div>
-
-<div markdown>
-
-**Hardware Engineers**
-
-Build neural network accelerators using schema-driven kernel definitions. Design space exploration handles configuration space navigation.
-
-</div>
-
-<div markdown>
-
-**MLOps Teams**
-
-Explore FPGA deployment as an alternative to GPU inference. Design space exploration automates configuration search.
-
-</div>
-
-</div>
-
----
-
-## Example Results
-
-The BERT example demonstrates the design space exploration workflow:
-
-- Design space exploration identifies resource/performance tradeoffs
-- Example targets V80 platform using Vivado 2024.2
-- Compatible with Xilinx Zynq/Ultrascale+ platforms
-
-*Results from examples/bert - your mileage may vary based on model and target platform*
 
 ---
 
@@ -229,6 +128,10 @@ Results include:
 - Performance estimates in `results/report/estimate_reports.json`
 - Detailed build logs for debugging
 
+The example targets V80 platform using Vivado 2024.2 and is compatible with Xilinx Zynq/Ultrascale+ platforms.
+
+*See examples/bert for full implementation*
+
 ---
 
 ## Open Source & Collaborative
@@ -249,6 +152,7 @@ Developed through collaboration between **Microsoft** and **AMD**.
 
 ## Community & Support
 
+- [Feature Roadmap](https://github.com/orgs/microsoft/projects/2017) - See what's planned and in progress
 - [GitHub Issues](https://github.com/microsoft/brainsmith/issues) - Report bugs or request features
 - [GitHub Discussions](https://github.com/microsoft/brainsmith/discussions) - Ask questions and share experiences
 - [Contributing Guide](https://github.com/microsoft/brainsmith/blob/main/CONTRIBUTING.md) - Learn how to contribute

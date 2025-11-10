@@ -1,6 +1,6 @@
 # CLI Reference
 
-Command-line interface for Brainsmith project configuration and hardware design generation.
+Dual command-line interface: `brainsmith` for project management (setup, configuration), and `smith` for hardware design generation (DFC creation).
 
 ---
 

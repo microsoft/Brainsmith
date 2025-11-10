@@ -6,17 +6,17 @@ Blueprints are YAML files defining the design space for FPGA accelerator generat
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | No | Blueprint name |
-| `description` | string | No | Blueprint description |
-| `extends` | path | No | Parent blueprint for inheritance |
+| `board` | string | **Yes** | Target FPGA board |
 | `clock_ns` | float | **Yes** | Target clock period (nanoseconds) |
-| `output` | string | No | Output type: `estimates` \| `rtl` \| `bitfile` (default: `estimates`) |
-| `board` | string | Conditional | Target FPGA board (required for `rtl`/`bitfile`) |
-| `start_step` | string | No | Pipeline start step (inclusive) |
-| `stop_step` | string | No | Pipeline stop step (inclusive) |
-| `finn_config` | dict | No | FINN parameter overrides |
 | `design_space.kernels` | list | **Yes** | Hardware kernels to use |
 | `design_space.steps` | list | **Yes** | Transformation pipeline |
+| `description` | string | No | Blueprint description |
+| `extends` | path | No | Parent blueprint for inheritance |
+| `finn_config` | dict | No | FINN parameter overrides |
+| `name` | string | No | Blueprint name |
+| `output` | string | No | Output type: `estimates` \| `rtl` \| `bitfile` (default: `estimates`) |
+| `start_step` | string | No | Pipeline start step (inclusive) |
+| `stop_step` | string | No | Pipeline stop step (inclusive) |
 
 ---
 
