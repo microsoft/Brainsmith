@@ -2,7 +2,195 @@
 
 *[Hardware Kernels](index.md) > Schema Reference*
 
-Complete API reference for kernel schema components: inputs, outputs, parameters, datatypes, and constraints.
+Complete API reference for kernel schema components: inputs, outputs, parameters, datatypes, and constraints. Also covers the implementation lifecycle (two-phase construction, lazy initialization, caching).
+
+
+## Understanding Schemas
+
+**Schemas separate kernel structure from execution context.**
+
+A schema defines the kernel's **invariant properties**—how it processes data, what parallelization it supports, what constraints it enforces. These properties remain constant whether the kernel processes a `(1, 224, 224, 64)` tensor or a `(1, 56, 56, 128)` tensor.
+
+```python
+InputSchema(
+    name="input",
+    block_tiling=[FULL_DIM],           # Relationship: "process entire dimension"
+    stream_tiling=["SIMD"],            # Capability: "parallelize by SIMD"
+    datatype="input",                  # Constraint: "match input datatype"
+    required_layout="NHWC",            # Requirement: "needs NHWC layout"
+)
+```
+
+**This separation enables:**
+
+**Reusability** - Same LayerNorm kernel works on any tensor shape
+: Schema defines processing rules, not specific dimensions
+
+**Single Source of Truth** - ModelWrapper owns graph state
+: Tensor shapes and datatypes queried from ONNX graph, never duplicated
+
+**Two-Phase Construction** - Build structure once, explore configurations many times
+: Schema defines what varies (SIMD parameter), builder computes valid ranges (divisors)
+
+**Clear Ownership** - Each component has distinct responsibility
+: Schema: structure and constraints | ModelWrapper: current graph state | Builder: runtime models
+
+**Example: A LayerNorm kernel processes `(1, 224, 224, 64)` and `(1, 56, 56, 128)` with the same schema, but different runtime models built from different graph contexts.**
+
+
+## Two-Phase Construction: Build vs Configure
+
+The dataflow modeling system separates **structure** (what doesn't change) from **configuration** (what varies during DSE).
+
+### Phase 1: Build Design Space (Once per structure)
+
+**When:** After kernel initialization, before DSE
+**Input:** KernelSchema + ModelWrapper (ONNX graph context)
+**Output:** KernelDesignSpace with valid parameter ranges
+
+**What's Resolved:**
+- Tensor shapes from ONNX graph
+- Block shapes from schema templates
+- Interface datatypes (inputs, outputs, internals)
+- Valid parallelization ranges (divisor sets)
+- Structural constraints validated
+
+**What's Deferred:**
+- Stream shapes (depend on SIMD/PE values)
+- Configuration-specific constraints
+- Performance metrics
+
+**Trigger:** First call to method requiring design space
+```python
+op._ensure_ready(model_w)  # Internal - builds design_space
+design_space = op.design_space  # Cached after first build
+```
+
+### Phase 2: Configure Design Point (Many times for DSE)
+
+**When:** During DSE exploration
+**Input:** KernelDesignSpace + parameter configuration
+**Output:** KernelDesignPoint with resolved stream shapes
+
+**What's Resolved:**
+- Stream shapes for specific SIMD/PE values
+- Configuration-specific constraints
+- Performance metrics (cycles, bandwidth)
+
+**Trigger:** Explicit configuration
+```python
+point = design_space.configure({"SIMD": 16, "PE": 4})
+```
+
+### Lifecycle Example
+
+```python
+# Phase 1: Build (expensive, once)
+op = LayerNorm(onnx_node)
+op._ensure_ready(model_w)
+design_space = op.design_space  # Built from schema + graph
+
+# Phase 2: Configure (cheap, thousands of times)
+for simd in [1, 2, 4, 8, 16, 32, 64]:
+    point = design_space.configure({"SIMD": simd})
+    cycles = point.initiation_interval  # Computed from stream shapes
+    area = estimate_area(point)
+    pareto.add(cycles, area)
+
+# Apply winner
+op.apply_design_point(best_point)
+```
+
+### Memory Efficiency: Flyweight Pattern
+
+Design points use the **flyweight pattern** for memory efficiency:
+
+- **DesignSpace:** Heavy - stores tensor shapes, block shapes, datatypes, parameter ranges
+- **DesignPoint:** Light - stores only `config` dict, references parent DesignSpace
+
+```python
+# DesignSpace: ~10KB (shapes, datatypes, ranges)
+design_space = op.design_space
+
+# Each DesignPoint: ~100 bytes (just config dict + reference)
+point1 = design_space.configure({"SIMD": 16})
+point2 = design_space.configure({"SIMD": 32})
+# point1 and point2 share same DesignSpace in memory
+```
+
+This enables exploring millions of configurations without memory exhaustion.
+
+
+## Lazy Initialization and Caching
+
+### Initialization Strategy
+
+KernelOp uses **lazy initialization** for performance:
+
+- `kernel_schema`: Built in `__init__()` from node structure
+- `design_space`: Built on first access (cached, invalidated on structural changes)
+- `design_point`: Regenerated on each access (guarantees consistency with nodeattrs)
+
+### When Design Space Rebuilds
+
+**Structural Changes** (invalidate cache):
+- Datatype changes: `set_nodeattr("input0Datatype", "INT16")`
+- Parameters in block_tiling (rare): Changes to block shape computation
+
+**Configuration Changes** (no rebuild):
+- Parallelization parameters: `set_nodeattr("SIMD", 32)`
+- DSE parameters: `set_nodeattr("ram_style", "block")`
+
+Design points regenerate from current nodeattrs on every access - no cache to invalidate.
+
+### QONNX Execution Compatibility
+
+QONNX's `execute_onnx()` creates fresh KernelOp instances per node, losing cached state. Use this pattern in `execute_node()`:
+
+```python
+def execute_node(self, context, graph):
+    # Ensure design_space initialized (QONNX executor creates fresh instances)
+    self._ensure_initialized_for_execution(graph)
+
+    # Now safe to access design_point (regenerates from design_space)
+    dtype = self.design_point.inputs["input"].datatype
+    # ... rest of execution logic
+```
+
+This reconstructs ModelWrapper from the GraphProto to initialize design_space on demand (~1ms overhead, only when needed).
+
+### Performance: Caching Design Point
+
+Multiple accesses to `self.design_point` trigger regeneration:
+
+```python
+# AVOID: Multiple accesses (regenerates 3 times)
+simd = self.design_point.inputs["input"].stream_shape[-1]
+width = self.design_point.inputs["input"].tensor_shape[-1]
+dtype = self.design_point.inputs["input"].datatype
+
+# BETTER: Cache locally (regenerates once)
+point = self.design_point
+simd = point.inputs["input"].stream_shape[-1]
+width = point.inputs["input"].tensor_shape[-1]
+dtype = point.inputs["input"].datatype
+```
+
+### Quick Reference: DesignSpace vs DesignPoint
+
+| Aspect | KernelDesignSpace | KernelDesignPoint |
+|--------|------------------|-------------------|
+| **Lifecycle** | Built once per structure | Configured many times |
+| **Mutability** | Immutable (frozen dataclass) | Immutable (frozen dataclass) |
+| **Caching** | Cached in KernelOp | Regenerated on each access |
+| **Contains** | Tensor shapes, block shapes, datatypes, parameter ranges | Stream shapes, config dict, parent reference |
+| **Memory** | ~10KB (heavy) | ~100 bytes (flyweight) |
+| **Navigation** | `configure(config)` | `with_dimension()`, `sweep_dimension()` |
+| **Performance Metrics** | No | Yes (`initiation_interval`, `stream_width_bits`) |
+| **Access Pattern** | `op.design_space` | `op.design_point` or `design_space.configure(...)` |
+| **Invalidation** | On structural changes | Never (always fresh) |
+
+**Key Principle:** DesignSpace is the **factory**, DesignPoint is the **product**.
 
 
 ## Schema Components Overview
@@ -121,7 +309,7 @@ inputs=[
 ]
 ```
 
-👉 See [Kernel Architecture: Data Hierarchy](kernel-architecture.md#data-hierarchy-deep-dive) for complete theory.
+👉 See [Dataflow Modeling: Data Hierarchy](dataflow-modeling.md#data-hierarchy-tensorblockstream) for complete theory.
 
 
 ## Parameters and Constraints
@@ -412,6 +600,6 @@ This copies the last stream dimension from the input, ensuring compatible parall
 
 ## See Also
 
-- **[Kernel Architecture](kernel-architecture.md)** - Understanding how schemas enable two-phase construction
-- **[Kernel Tutorial](kernel-tutorial.md)** - Examples demonstrating schema usage
+- **[Dataflow Modeling](dataflow-modeling.md)** - Theoretical foundations for TENSOR/BLOCK/STREAM hierarchy and inter-kernel composition
+- **[Hardware Kernels](hardware-kernels.md)** - High-level overview and complete kernel examples
 - **[Dataflow API Reference](../api/dataflow.md)** - Complete programmatic API documentation

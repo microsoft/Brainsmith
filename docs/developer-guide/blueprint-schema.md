@@ -46,6 +46,30 @@ design_space:
 - `examples/blueprints/base.yaml` - Baseline FINN pipeline (estimates only)
 - `examples/blueprints/bert.yaml` - Complete BERT blueprint (bitfile generation)
 
+## Execution Semantics
+
+Brainsmith builds an execution tree where:
+
+- Nodes = execution segments (sequential steps)
+- Branches = variation points (lists)
+- Leaves = complete execution paths
+
+**Segment-based execution:** Steps between branch points form single segments. Each segment executes as one FINN build. Artifacts are shared at branch points to avoid redundant computation.
+
+**Example tree:**
+```yaml
+steps:
+  - "tidy_up"
+  - ["streamline", "streamline_aggressive"]
+  - "convert_to_hw"
+```
+
+Creates 2 paths:
+
+1. `tidy_up → streamline → convert_to_hw`
+2. `tidy_up → streamline_aggressive → convert_to_hw`
+
+Both paths share the `tidy_up` segment.
 
 ## Core Configuration
 
@@ -124,6 +148,7 @@ kernels:
 ```
 
 **Backend resolution:**
+
 - String format → all registered backends, sorted by priority
 - Dict format → only specified backends, in given order
 - Supports short names (`MVAU_hls`) and qualified names (`brainsmith:MVAU_hls`)
@@ -152,11 +177,17 @@ steps:
 
 The second example creates 4 execution paths (2 × 2 combinations).
 
+  1. tidy_up → streamline → convert_to_hw → minimize_bit_width
+  2. tidy_up → streamline → convert_to_hw (skip minimize_bit_width)
+  3. tidy_up → streamline_aggressive → convert_to_hw → minimize_bit_width
+  4. tidy_up → streamline_aggressive → convert_to_hw (skip minimize_bit_width)
+
+
 **Skip indicators:** `~`, `null`, `""` (all equivalent)
 
 **Constraints:**
+
 - Maximum 1 skip per branch point
-- Minimum 1 non-skip per branch point
 - No nested lists in branch points (use double brackets `[[...]]` for operations)
 
 
@@ -195,6 +226,7 @@ design_space:
 ```
 
 **Inheritance rules:**
+
 1. Simple fields (name, clock_ns, etc.) → Child overrides parent
 2. `finn_config` → Deep merge (child fields override parent fields)
 3. `kernels` → Child replaces parent entirely (or inherits if not specified)
@@ -251,11 +283,13 @@ board: "${TARGET_BOARD}"
 ```
 
 **Available variables:**
+
 - `${BLUEPRINT_DIR}` - Directory containing current blueprint
 - `${BSMITH_DIR}` - Brainsmith installation directory
 - Any shell environment variable
 
 **Notes:**
+
 - Context variables override environment variables
 - Undefined variables remain unexpanded (safe substitution)
 - Thread-safe (no `os.environ` mutation)
@@ -266,6 +300,7 @@ board: "${TARGET_BOARD}"
 Design space size = product of all branch point sizes.
 
 **Limits:**
+
 - Default: 100,000 combinations
 - Environment override: `export BRAINSMITH_MAX_COMBINATIONS=500000`
 - Validation: Exceeding limit raises `ValueError` before execution
@@ -278,35 +313,3 @@ steps:
   - ["opt6", ~]                # 2 options (with skip)
 # Total: 2 × 3 × 2 = 12 combinations
 ```
-
-
-## Execution Semantics
-
-Brainsmith builds an execution tree where:
-
-- Nodes = execution segments (sequential steps)
-- Branches = variation points (lists)
-- Leaves = complete execution paths
-
-**Segment-based execution:** Steps between branch points form single segments. Each segment executes as one FINN build. Artifacts are shared at branch points to avoid redundant computation.
-
-**Example tree:**
-```yaml
-steps:
-  - "tidy_up"
-  - ["streamline", "streamline_aggressive"]
-  - "convert_to_hw"
-```
-
-Creates 2 paths:
-1. `tidy_up → streamline → convert_to_hw`
-2. `tidy_up → streamline_aggressive → convert_to_hw`
-
-Both paths share the `tidy_up` segment.
-
-
-## See Also
-
-- **[Hardware Kernels](hardware-kernels.md)** - Kernel architecture and implementation
-- **[Component Registry](registry.md)** - Registering kernels, backends, and steps
-- **[CLI Reference](../api/cli.md)** - Command-line interface and options

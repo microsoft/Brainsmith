@@ -20,10 +20,12 @@ design_space:
 | `brainsmith` | Core framework | Automatic (direct import) | Yes |
 | `finn` (or custom) | Entry point plugins | `setup.cfg`: `brainsmith.plugins = pkg.module:func` | Yes |
 | `project` | Filesystem | Automatic (`kernels/`, `steps/` subdirs) | Yes |
-| Custom (e.g., `team`) | Filesystem | `component_sources.team = "/path"` in config | Yes |
+| e.g. `team` | Filesystem | `component_sources.team = "/path"` in config | Yes |
 | `custom` | Runtime registration | Programmatic (no namespace/domain) | No |
 
 **Source priority** (configurable): `['project', 'brainsmith', 'finn', 'custom']` - first match wins for short names
+
+Check registered components with `brainsmith registry`
 
 ## Registering Components
 

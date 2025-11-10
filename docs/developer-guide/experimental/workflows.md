@@ -1,7 +1,5 @@
 # Kernel Workflows
 
-*[Hardware Kernels](../hardware-kernels/index.md) > Workflows*
-
 End-to-end workflows for deploying kernels, design space exploration, troubleshooting, and debugging.
 
 
@@ -483,7 +481,7 @@ vivado -mode gui build/rtlsim/MyKernel/sim.wdb
 
 ## See Also
 
-- **[Kernel Tutorial](../hardware-kernels/kernel-tutorial.md)** - Learn by example with progressively complex kernels
-- **[Kernel Architecture](../hardware-kernels/kernel-architecture.md)** - Understanding the system design
+- **[Hardware Kernels](hardware-kernels.md)** - High-level overview and complete kernel examples
+- **[Dataflow Modeling](dataflow-modeling.md)** - Theoretical foundations for dataflow composition
 - **[Design Space Exploration API](../api/dse.md)** - Programmatic DSE control
 - **[CLI Reference](../api/cli.md)** - Command-line options and flags
