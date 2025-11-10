@@ -23,7 +23,6 @@ Brainsmith's execution tree exploits the insight that **most design configuratio
 
 This reduces exploration time from O(n) to approximately O(log n) for branching configurations.
 
----
 
 ## Tiered Design Space Exploration
 
@@ -42,7 +41,6 @@ Brainsmith distinguishes between two levels of design space:
 
 **Brainsmith operates at the global level**, letting you explore different kernel choices, optimization strategies, and high-level architecture decisions. Each path through Brainsmith's execution tree produces a dataflow architecture that can then be further optimized by FINN's local search (folding parameters, FIFO depths, etc.).
 
----
 
 ## Execution Tree Architecture
 
@@ -99,7 +97,6 @@ kernels:
 
 The skip indicator `~` allows creating paths that bypass certain optimizations, useful for comparing performance with and without specific transformations.
 
----
 
 ## Execution Flow
 
@@ -216,7 +213,6 @@ def share_artifacts_at_branch(
 
 This ensures each child segment starts with the parent's output model and intermediate artifacts, enabling incremental builds.
 
----
 
 ## Blueprint Integration
 
@@ -264,7 +260,6 @@ design_space:
 
 **Result**: 2 paths (with/without tidy_up)
 
----
 
 ## Performance Impact
 
@@ -289,7 +284,6 @@ Segment outputs are cached to disk. If you modify only one branch's configuratio
 
 This enables iterative design space refinement without full rebuilds.
 
----
 
 ## Design Patterns
 
@@ -335,7 +329,6 @@ design_space:
 
 **Result**: 2 paths enabling A/B comparison
 
----
 
 ## Limitations and Future Work
 
@@ -352,7 +345,6 @@ design_space:
 - **Auto-tuning**: Bayesian optimization over folding parameters
 - **Multi-objective optimization**: Pareto frontier exploration (latency vs resources vs power)
 
----
 
 ## Summary
 

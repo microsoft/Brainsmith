@@ -21,7 +21,6 @@ Decomposing layers into individual primitive operations (add, multiply, shift) w
 
 Hardware engineers can design kernels hand-optimized at the layer scale without requiring deep knowledge of the full AI model. This allows for hand-optimized performance that fully generated designs lack, while maintaining flexibility by composing the final accelerator through Brainsmith's automated dataflow construction.
 
----
 
 ## Kernel Architecture
 
@@ -205,7 +204,6 @@ Backends:
 - **HLSBackend**: Generates C++ with pragmas → Vitis HLS → RTL + IP
 - **RTLBackend**: Uses pre-written Verilog → Vivado IP Packager → IP
 
----
 
 ## Parallelization Parameters
 
@@ -273,7 +271,6 @@ Folding = 128 / 16 = 8  # Reuse each PE 8 times
 3. Increase PE to meet throughput targets
 4. Use divisors of channel counts for efficiency
 
----
 
 ## Performance Modeling
 
@@ -344,7 +341,6 @@ def calculate_throughput(model, clock_mhz):
     return fps
 ```
 
----
 
 ## HLS vs RTL Backends
 
@@ -409,7 +405,6 @@ design_space:
 
 **Decision**: Use HLS for initial design, switch to RTL if resources are constrained.
 
----
 
 ## Design Point API
 
@@ -440,7 +435,6 @@ This API provides:
 - **Type safety**: Invalid configurations rejected at API level
 - **DSE integration**: Design points compose naturally with design space exploration
 
----
 
 ## Kernel Examples
 
@@ -483,7 +477,6 @@ Y[i] = max(j : X[i] >= thresholds[j])
 
 **Backends**: Thresholding_hls, Thresholding_rtl
 
----
 
 ## Creating Custom Kernels
 
@@ -568,7 +561,6 @@ from .my_kernel import MyKernel, MyKernel_HLS
 
 The component registry will automatically discover and register your kernel.
 
----
 
 ## Summary
 
@@ -589,7 +581,6 @@ Understanding kernels is essential for extending Brainsmith with new operations 
 - [Design Space Exploration](../2-core-systems/design-space-exploration.md) - Understand how DSE explores kernel configurations
 - [Component Registry](../2-core-systems/component-registry.md) - Learn how to register custom kernels
 
----
 
 ## See Also
 

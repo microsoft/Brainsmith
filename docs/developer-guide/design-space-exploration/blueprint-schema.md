@@ -18,13 +18,15 @@ Blueprints are YAML files defining the design space for FPGA accelerator generat
 | `start_step` | string | No | Pipeline start step (inclusive) |
 | `stop_step` | string | No | Pipeline stop step (inclusive) |
 
----
 
 ## Minimal Blueprint
 
 ```yaml
 name: "My Accelerator"
+description: "Minimal blueprint for resource estimates"
+board: "Pynq-Z1"
 clock_ns: 5.0
+output: "estimates"  # Default: generates estimates only
 
 design_space:
   kernels:
@@ -33,11 +35,17 @@ design_space:
 
   steps:
     - "qonnx_to_finn"
-    - "infer_kernels"
-    - "specialize_layers"
+    - "build_dataflow_graph"    # Infers and builds kernel graph
+    - "build_hw_graph"           # Partitions and specializes backends
+    - "generate_estimate_reports"
 ```
 
----
+**Note:** This minimal blueprint generates resource estimates only. For RTL or bitfile generation, change `output` to `"rtl"` or `"bitfile"` (see [Core Configuration](#core-configuration)).
+
+**See Also:**
+- `examples/blueprints/base.yaml` - Baseline FINN pipeline (estimates only)
+- `examples/blueprints/bert.yaml` - Complete BERT blueprint (bitfile generation)
+
 
 ## Core Configuration
 
@@ -95,7 +103,6 @@ finn_config:
   rtlsim_batch_size: 100
 ```
 
----
 
 ## Kernels
 
@@ -121,7 +128,6 @@ kernels:
 - Dict format → only specified backends, in given order
 - Supports short names (`MVAU_hls`) and qualified names (`brainsmith:MVAU_hls`)
 
----
 
 ## Steps
 
@@ -131,8 +137,8 @@ Transformation pipeline with support for variations and optional steps.
 ```yaml
 steps:
   - "qonnx_to_finn"
-  - "streamline"
-  - "infer_kernels"
+  - "build_dataflow_graph"
+  - "build_hw_graph"
 ```
 
 **Branch points (design space exploration):**
@@ -153,7 +159,6 @@ The second example creates 4 execution paths (2 × 2 combinations).
 - Minimum 1 non-skip per branch point
 - No nested lists in branch points (use double brackets `[[...]]` for operations)
 
----
 
 ## Inheritance
 
@@ -196,7 +201,6 @@ design_space:
 4. `steps` → Child replaces parent entirely (or inherits if not specified)
 5. Step operations (`after`, `before`, etc.) → Applied after determining base steps
 
----
 
 ## Step Operations
 
@@ -208,7 +212,7 @@ steps:
   - after: "streamline"
     insert: "custom_optimization"
 
-  - before: "specialize_layers"
+  - before: "build_hw_graph"
     insert:
       - "validation_step"
       - ["option1", "option2"]    # Insert branch point
@@ -236,7 +240,6 @@ steps:
       insert: ["package_ip", "validate"]
 ```
 
----
 
 ## Environment Variables
 
@@ -257,7 +260,6 @@ board: "${TARGET_BOARD}"
 - Undefined variables remain unexpanded (safe substitution)
 - Thread-safe (no `os.environ` mutation)
 
----
 
 ## Design Space Size
 
@@ -277,7 +279,6 @@ steps:
 # Total: 2 × 3 × 2 = 12 combinations
 ```
 
----
 
 ## Execution Semantics
 
@@ -303,7 +304,6 @@ Creates 2 paths:
 
 Both paths share the `tidy_up` segment.
 
----
 
 ## See Also
 

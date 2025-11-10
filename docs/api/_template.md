@@ -35,7 +35,6 @@ print(result)
 # Another focused example
 ```
 
----
 
 ## See Also
 
@@ -90,7 +89,6 @@ print(f"Success: {stats['successful']}")
 **Bad:**
 
 ```markdown
----
 
 ## High-Level API
 

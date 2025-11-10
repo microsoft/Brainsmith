@@ -38,7 +38,6 @@ Brainsmith is an end-to-end compiler to transform ONNX models into dataflow acce
 [Get Started](getting-started.md){ .md-button .md-button--primary }
 [View on GitHub](https://github.com/microsoft/brainsmith){ .md-button }
 
----
 
 ## Key Features
 
@@ -82,7 +81,6 @@ Brainsmith is an end-to-end compiler to transform ONNX models into dataflow acce
 
 </div>
 
----
 
 ## Basic Usage
 
@@ -95,7 +93,6 @@ smith model.onnx blueprint.yaml
 # Output: RTL + performance estimates + resource reports
 ```
 
----
 
 ## Example: BERT Accelerator
 
@@ -132,7 +129,6 @@ The example targets V80 platform using Vivado 2024.2 and is compatible with Xili
 
 *See examples/bert for full implementation*
 
----
 
 ## Open Source & Collaborative
 
@@ -148,7 +144,6 @@ Developed through collaboration between **Microsoft** and **AMD**.
 
 **License**: MIT - see [LICENSE](https://github.com/microsoft/brainsmith/blob/main/LICENSE)
 
----
 
 ## Community & Support
 

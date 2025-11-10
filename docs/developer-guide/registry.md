@@ -65,7 +65,6 @@ brainsmith.plugins =
 
 **Configuration** (`brainsmith.yaml`): `cache_components` (default: true), `components_strict` (default: true), `source_priority`, `component_sources`
 
----
 
 ## API Patterns
 
@@ -78,7 +77,6 @@ All components follow `get_*/has_*/list_*` pattern:
 
 **Special**: `get_kernel_infer()` for ONNX transforms, `list_backends_for_kernel(name, language='hls')` for backend discovery, `get_component_metadata()` for inspection.
 
----
 
 ## Advanced Patterns
 

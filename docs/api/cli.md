@@ -2,7 +2,6 @@
 
 Dual command-line interface: `brainsmith` for project management (setup, configuration), and `smith` for hardware design generation (DFC creation).
 
----
 
 ## Global Options
 
@@ -15,7 +14,6 @@ Dual command-line interface: `brainsmith` for project management (setup, configu
 | `--version` | Flag | - | Show version and exit |
 | `-h, --help` | Flag | - | Show help message and exit |
 
----
 
 ## Operational Commands
 
@@ -61,7 +59,6 @@ smith model.onnx blueprint.yaml \
 
 See also: [Blueprint Schema](../developer-guide/blueprint-schema.md), [Design Space Exploration](dse.md)
 
----
 
 ## Administrative Commands
 
@@ -183,7 +180,6 @@ brainsmith project allow-direnv
 brainsmith project allow-direnv
 ```
 
----
 
 ### registry
 
@@ -227,7 +223,6 @@ brainsmith registry -v -r
 
 See also: [Component Registry](registry.md) - Programmatic access to registered components
 
----
 
 ### setup
 
@@ -416,7 +411,6 @@ Displays installation status table showing:
 brainsmith setup check
 ```
 
----
 
 ## See Also
 

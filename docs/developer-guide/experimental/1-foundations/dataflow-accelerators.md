@@ -63,7 +63,6 @@ graph LR
 - FIFOs buffer between stages
 - Output emerges after pipeline fills
 
----
 
 ## Why Dataflow for Neural Networks?
 
@@ -166,7 +165,6 @@ DSP48 blocks (18×18 multiplier):
 - 2-bit × 2-bit: Use LUTs instead of DSPs
 ```
 
----
 
 ## AXI-Stream Protocol
 
@@ -226,7 +224,6 @@ graph LR
 
 Brainsmith's `step_set_fifo_depths` automatically calculates optimal depths based on kernel latencies.
 
----
 
 ## Memory Hierarchy
 
@@ -267,7 +264,6 @@ BRAMs needed = 64 KB / 36 Kbit per BRAM ≈ 15 BRAMs
 
 **Goal**: Minimize external memory accesses. Ideal accelerator reads input once, writes output once.
 
----
 
 ## Dataflow Graph Construction
 
@@ -338,7 +334,6 @@ module dataflow_accelerator (
 endmodule
 ```
 
----
 
 ## Performance Characteristics
 
@@ -407,7 +402,6 @@ Kernel Resources ∝ PE × SIMD × Bit-Width
 - **FPGA Dataflow**: 1-10 TOPS/W (2-8 bit)
 - **ASIC**: 10-100 TOPS/W (fixed function)
 
----
 
 ## Limitations and Challenges
 
@@ -439,7 +433,6 @@ Kernel Resources ∝ PE × SIMD × Bit-Width
 - **Brainsmith**: Automate kernel selection and configuration
 - **Reusable IP**: Build library of proven kernels
 
----
 
 ## Design Patterns
 
@@ -477,7 +470,6 @@ BRAM_B: Loading weights for Layer N+1
 Swap on layer boundary
 ```
 
----
 
 ## Summary
 
