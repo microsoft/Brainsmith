@@ -1,6 +1,6 @@
 # Dataflow Modeling
 
-Core abstractions for modeling hardware kernels using schema-based design spaces.
+Schema-driven kernel modeling for ONNX-to-hardware transformation with efficient design space exploration.
 
 Two-phase construction separates expensive setup from fast configuration: Design Space is built once and defines valid parameter ranges, while Design Point is configured many times to represent specific hardware instances. This enables efficient exploration by avoiding redundant computation.
 
