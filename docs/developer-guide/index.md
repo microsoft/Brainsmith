@@ -14,5 +14,3 @@ Technical documentation for extending Brainsmith and understanding its architect
 **[Hardware Kernels](hardware-kernels.md)** - Layer-level operations on FPGA: interfaces, architecture, and implementation patterns.
 
 **[Blueprint Schema Reference](blueprint-schema.md)** - Complete YAML schema for design space configuration files.
-
-**[Multi-Layer Offload](multi-layer-offload.md)** - Graph partitioning and heterogeneous execution strategies.
