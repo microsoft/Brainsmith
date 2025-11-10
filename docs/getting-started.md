@@ -263,7 +263,7 @@ PyTorch → ONNX → Hardware Kernels → HLS/RTL → IP Cores → Bitfile
 - **IP packaging**: Creating Vivado IP cores
 - **Simulation**: Verifying correctness with RTL simulation
 
-Check `build/quicktest/briansmith.log` for detailed progress and diagnostics.
+Check `build/quicktest/brainsmith.log` for detailed progress and diagnostics.
 
 ---
 
@@ -302,10 +302,6 @@ Check `final_output/report/estimate_reports.json`:
   }
 }
 ```
-
-##### RTL Output
-
-The generated RTL is in `final_output/stitched_ip/`:
 
 ##### RTL Output
 

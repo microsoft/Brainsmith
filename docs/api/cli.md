@@ -1,6 +1,6 @@
 # CLI Reference
 
-Command-line interface for Brainsmith project configuration and hardware design generation.
+Dual command-line interface: `brainsmith` for project management (setup, configuration), and `smith` for hardware design generation (DFC creation).
 
 ---
 
@@ -26,7 +26,7 @@ Create a dataflow core accelerator for neural network acceleration.
 **Syntax:**
 
 ```bash
-smith dfc MODEL BLUEPRINT [OPTIONS]
+smith MODEL BLUEPRINT [OPTIONS]
 ```
 
 **Arguments:**
@@ -48,13 +48,13 @@ smith dfc MODEL BLUEPRINT [OPTIONS]
 
 ```bash
 # Basic usage
-smith dfc model.onnx blueprint.yaml
+smith model.onnx blueprint.yaml
 
 # Custom output directory
-smith dfc model.onnx blueprint.yaml --output-dir ./results
+smith model.onnx blueprint.yaml --output-dir ./results
 
 # Run specific step range
-smith dfc model.onnx blueprint.yaml \
+smith model.onnx blueprint.yaml \
   --start-step streamline \
   --stop-step specialize_layers
 ```

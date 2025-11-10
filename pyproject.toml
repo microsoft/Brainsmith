@@ -263,5 +263,6 @@ mkdocstrings = {extras = ["python"], version = "~=0.26.0"}
 mkdocs-autorefs = "~=1.2.0"
 mkdocs-git-revision-date-localized-plugin = "~=1.2.0"
 mkdocs-minify-plugin = "~=0.8.0"
+mkdocs-glightbox = "~=0.5.2"
 mike = "~=2.1.0"
 pymdown-extensions = "~=10.8.0"

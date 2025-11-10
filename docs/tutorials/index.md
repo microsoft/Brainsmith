@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Tutorials (Coming Soon)
 
 Hands-on guides for building, optimizing, and deploying neural network accelerators with Brainsmith.

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-**Hardware kernels are the fundamental building blocks of dataflow accelerators.** Each kernel implements one or more neural network operations (LayerNorm, MatMul, Attention) as a self-contained streaming circuit. Brainsmith constructs dataflow accelerators from ONNX graphs by iteratively applying graph transformations to lower ONNX nodes to matching Kernels, connected via streaming interfaces. During this process, **kernels are modeled by the relationship between their input and output streams** with the internal architecture largely abstracted away.
+**Hardware kernels are the fundamental building blocks of dataflow accelerators.** Each kernel implements one or more neural network operations (LayerNorm, MatMul, Attention) as a self-contained streaming circuit. Brainsmith constructs dataflow accelerators by iteratively applying graph transformations to lower ONNX nodes to matching Kernels, connected via streaming interfaces. During this process, **kernels are modeled by the relationship between their input and output streams** with the internal architecture largely abstracted away.
 
 <div align="center" markdown>
 ![Kernel Interfaces](../images/dataflow_kernel.png){ width="400" }
@@ -479,21 +479,8 @@ See [Dataflow API Reference](../api/dataflow.md) for complete design space API.
 
 ---
 
-## Interfaces
-
-Kernel modules use standardized interfaces for composability:
-
-- **Control** - Clock and reset (optional second clock for double-pumped designs)
-- **Input/Output** - AXI-Stream for data (minimum 1 input, 1 output)
-- **Config** - Optional single AXI-Lite interface for runtime parameters
-
-Interface signal definitions and naming rules: `brainsmith/tools/kernel_integrator/rtl_parser/protocol_validator.py` (source tree).
-
----
-
 ## See Also
 
 - **[Dataflow API Reference](../api/dataflow.md)** - KernelSchema, KernelOp, DesignSpace details
 - **[Component Registry](registry.md)** - @kernel and @backend decorator usage
 - **[Blueprint Schema](blueprint-schema.md)** - Design space configuration in YAML
-- **Test Framework** - See `tests/README.md` in the source tree for KernelTest and KernelParityTest base classes
