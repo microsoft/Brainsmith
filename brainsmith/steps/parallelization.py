@@ -17,6 +17,8 @@ from brainsmith.primitives.transforms.parallelization import (
     ApplyParallelizationConfig,
     SetParallelization,
 )
+from qonnx.transformation.general import GiveUniqueNodeNames
+from finn.util.basic import getHWCustomOp
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,8 @@ def apply_parallelization_config_step(model: Any, cfg: Any) -> Any:
                 "PE": [1, ["all"]]
             },
             "MVAU_0": {"PE": 8, "SIMD": 4},
-            "LayerNorm_0": {"PE": 16}
+            "LayerNorm_0": {"PE": 16},
+            "FINNLoop_0_MVAU_rtl_0": {"PE": 4, "SIMD": 2}  # Loop body node
         }
     """
     config_file = getattr(cfg, 'folding_config_file', None)
@@ -54,8 +57,25 @@ def apply_parallelization_config_step(model: Any, cfg: Any) -> Any:
         )
         return model
 
+    # Handle FINNLoop node naming before applying config
+    model = model.transform(GiveUniqueNodeNames())
+
+    loop_nodes = model.get_nodes_by_op_type("FINNLoop")
+    for node in loop_nodes:
+        node_inst = getHWCustomOp(node, model)
+        loop_body = node_inst.get_nodeattr("body")
+        loop_body = loop_body.transform(
+            GiveUniqueNodeNames(prefix=node.name + "_")
+        )
+        node_inst.set_nodeattr("body", loop_body.graph)
+
     logger.debug(f"Applying parallelization config from: {config_file}")
-    model = model.transform(ApplyParallelizationConfig(config_file))
+
+    # Apply to both top-level and FINNLoop subgraphs
+    model = model.transform(
+        ApplyParallelizationConfig(config_file),
+        apply_to_subgraphs=True
+    )
 
     return model
 
@@ -109,12 +129,24 @@ def target_fps_parallelization_step(model: Any, cfg: Any) -> Any:
     # Get optional two-pass relaxation flag (default True)
     two_pass_relaxation = getattr(cfg, 'two_pass_relaxation', True)
 
+    # Apply to both top-level and FINNLoop subgraphs
     model = model.transform(
         SetParallelization(
             target_cycles_per_frame=target_cycles,
             mvau_wwidth_max=mvau_wwidth_max,
             two_pass_relaxation=two_pass_relaxation,
-        )
+        ),
+        apply_to_subgraphs=True,
+        use_preorder_traversal=False,
     )
+
+    # Post-process FINNLoop bodies to ensure unique names and persist changes
+    model = model.transform(GiveUniqueNodeNames())
+    loop_nodes = model.get_nodes_by_op_type("FINNLoop")
+    for node in loop_nodes:
+        node_inst = getHWCustomOp(node, model)
+        loop_body = node_inst.get_nodeattr("body")
+        loop_body = loop_body.transform(GiveUniqueNodeNames(prefix=node.name + "_"))
+        node_inst.set_nodeattr("body", loop_body.graph)
 
     return model

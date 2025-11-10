@@ -2,7 +2,7 @@
 name: "BERT Demo"
 description: "Hugging face BERT model"
 
-extends: "${BSMITH_DIR}/brainsmith/blueprints/bert.yaml"
+extends: "${BSMITH_DIR}/examples/blueprints/bert.yaml"
 
 # Configuration overrides
 clock_ns: 5.0                       # Target clock period in nanoseconds

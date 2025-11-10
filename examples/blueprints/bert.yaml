@@ -24,18 +24,11 @@ design_space:
 
   steps:
     - "qonnx_to_finn"
-    # Topology optimization
     - "bert_streamlining"
-    # Core FINN steps
-    - "infer_kernels" # Brainsmith dynamic kernel inference
-    - "create_dataflow_partition"
-    - "specialize_layers"
-    - "target_fps_parallelization"
-    - "apply_folding_config"
-    - "normalize_dataflow_layouts" # Normalize tensors to NHWC layout
-    # Core Brainsmith steps
-    - "build_dataflow_graph"  # ONNX --> Kernels
-    - "build_hw_graph"        # Kernels --> HW Backends
+    - "normalize_dataflow_layouts"         # Normalize tensors to NHWC layout
+    - "infer_computational_kernels"        # Infer pattern-based kernels (MVAU, LayerNorm, etc.)
+    - "insert_infrastructure_kernels"      # Insert topology-based kernels (DuplicateStreams, etc.)
+    - "specialize_kernel_backends"         # Select HLS/RTL backends + create dataflow partition
     - "loop_rolling"
     - "brainsmith:target_fps_parallelization"
     - "apply_parallelization_config"

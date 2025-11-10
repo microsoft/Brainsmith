@@ -334,4 +334,8 @@ class SpecializeKernels(Transformation):
             helper.make_attribute("backend", language)
         )
 
+        # Copy metadata_props (PyTorch hierarchy metadata for MLO loop rolling)
+        for prop in node.metadata_props:
+            new_node.metadata_props.append(prop)
+
         return new_node

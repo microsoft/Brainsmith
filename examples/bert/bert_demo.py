@@ -32,7 +32,7 @@ from brevitas.graph.calibrate import calibration_mode
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.quant import Int8ActPerTensorFloat, Int8WeightPerTensorFloat, Uint8ActPerTensorFloat
 from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_with_quantizable_layers
-from onnx import StringStringEntryProto
+from onnx.onnx_pb import StringStringEntryProto
 from onnxsim import simplify
 from qonnx.core.datatype import DataType
 from qonnx.util.basic import gen_finn_dt_tensor
@@ -219,8 +219,12 @@ def run_brainsmith_dse(model, args):
         in_file=os.path.join(model_dir, "simp.onnx"),
         out_file=os.path.join(args.output_dir, "df_input.onnx")
     )
+
+    # Clean up temporary artifacts (simp.onnx is already saved to debug_models)
+    os.remove(os.path.join(model_dir, "simp.onnx"))
+    shutil.rmtree(model_dir)
+
     # Save a copy of the cleaned model for visualization
-    import shutil
     debug_dir = os.path.join(args.output_dir, "debug_models")
     os.makedirs(debug_dir, exist_ok=True)
     shutil.copy(

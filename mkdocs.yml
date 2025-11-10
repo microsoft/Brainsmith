@@ -120,6 +120,7 @@ nav:
     - Hardware Kernels: developer-guide/hardware-kernels.md
     - Blueprint Schema: developer-guide/blueprint-schema.md
     - Component Registry: developer-guide/registry-user-guide.md
+    - Multi-Layer Offload: developer-guide/multi-layer-offload.md
   - API Reference:
     - Overview: api/index.md
     - Design Space Exploration: api/dse.md

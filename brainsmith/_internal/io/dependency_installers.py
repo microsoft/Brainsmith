@@ -106,7 +106,7 @@ class GitDependencyInstaller:
         cmd.extend([dep['url'], str(dest)])
 
         if not quiet:
-            logger.info("Cloning %s from %s", name, dep['url'])
+            logger.debug("Cloning %s from %s", name, dep['url'])
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
@@ -182,7 +182,7 @@ class ZipDependencyInstaller:
 
         try:
             if not quiet:
-                logger.info("Downloading %s from %s", name, dep['url'])
+                logger.debug("Downloading %s from %s", name, dep['url'])
 
             urlretrieve(dep['url'], zip_path)
 
@@ -271,7 +271,7 @@ class BuildDependencyInstaller:
 
         # Build with finn-xsim
         if not quiet:
-            logger.info("Building finn-xsim...")
+            logger.debug("Building finn-xsim...")
 
         # Construct build command
         build_cmd = ['python3', '-m', 'finn.xsi.setup']
@@ -282,7 +282,7 @@ class BuildDependencyInstaller:
         python_cmd = ' '.join(build_cmd)
         bash_cmd = f"source {settings_script} && {python_cmd}"
 
-        logger.info("Running: %s", bash_cmd)
+        logger.debug("Running: %s", bash_cmd)
 
         # Execute build
         result = subprocess.run(
@@ -291,11 +291,11 @@ class BuildDependencyInstaller:
             text=True
         )
 
-        # Log output at INFO level (visible with --logs info)
+        # Log output at DEBUG level (visible with --logs debug)
         if result.stdout:
             for line in result.stdout.splitlines():
                 if line.strip():
-                    logger.info(line)
+                    logger.debug(line)
 
         if result.stderr:
             for line in result.stderr.splitlines():
@@ -346,7 +346,7 @@ class BuildDependencyInstaller:
             raise BuildError(error_msg)
 
         if not quiet:
-            logger.info("Building %s in %s", name, source_dir)
+            logger.debug("Building %s in %s", name, source_dir)
 
         # Run build command
         env = os.environ.copy()
@@ -362,7 +362,7 @@ class BuildDependencyInstaller:
         if result.stdout:
             for line in result.stdout.splitlines():
                 if line.strip():
-                    logger.info(line)
+                    logger.debug(line)
 
         if result.stderr:
             for line in result.stderr.splitlines():
