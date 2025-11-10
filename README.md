@@ -1,62 +1,66 @@
 ## Brainsmith
 
-Brainsmith automates design space exploration (DSE) and implementation of neural networks on FPGA, from PyTorch to RTL.
+Brainsmith compiles ONNX models to optimized dataflow accelerator designs for FPGAs, intelligently exploring hardware configurations to find designs that maximize performance within your resource constraints.
 
 ## Pre-Release
-
-**This repository is in a pre-release state and under active co-development by Microsoft and AMD.**
-
-### Pre-release features:
-- **Plugin system** - Extensible architecture for registering custom kernels, transforms, and build steps
-- **Blueprint interface** - YAML-based declarative configuration with inheritance support for defining design spaces
-- **Segment-based execution** - Efficient DSE through intelligent computation reuse between exploration branches
-- **BERT demo** - Example end-to-end acceleration (PyTorch to stitched-IP RTL accelerator)
-
-### Planned major features:
-- **Multi-Layer Offload** - Implement a repeating slice of a model (e.g. 1 transformer encoder) and cycle weights through DRAM/HBM, enabling drastically larger model support.
-- **Automated Design Space Exploration (DSE)** - Iteratively run builds across a design space, evaluating performance to converge on the optimal design for given search objectives and constraints
-- **Parallelized tree execution** - Execute multiple builds in parallel, intelligently re-using build artifacts
-- **Automated Kernel Integrator** - Easy integration of new hardware kernels, generate full compiler integration python code from RTL or HLS code alone
-- **FINN Kernel backend rework** - Flexible backends for FINN kernels, currently you can only select between HLS or RTL backend, in the future releases multiple RTL or HLS backends will be supported to allow for more optimization
-- **Accelerated FIFO sizing** - The FIFO sizing phase of Brainsmith builds currently represents >90% of runtime (not including Vivado Synthesis + Implementation). This will be significantly accelerated in future releases.
 
 ## Quick Start
 
 ### Dependencies
 1. Ubuntu 22.04+
-2. Vivado Design Suite 2024.2 (migration to 2025.1 in process)
-3. Docker with [non-root permissions](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+2. Python 3.11+ and [Poetry](https://python-poetry.org/docs/#installation)
+3. [Optional] Vivado Design Suite 2024.2 for synthesis and simluation
+4. [Optional] [direnv](https://direnv.net/) for automatic environment activation
 
-
-### 1. Set key environment variables
+### Installation Steps
 
 ```bash
-# Brainsmith env vars with example paths
-export BSMITH_ROOT=/home/user/brainsmith/
-export BSMITH_BUILD_DIR=/home/user/builds/brainsmith
-export BSMITH_XILINX_PATH="/tools/Xilinx"
-export BSMITH_XILINX_VERSION="2024.2"
-export BSMITH_DOCKER_EXTRA=" -v /opt/Xilinx/licenses:/opt/Xilinx/licenses -e XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"
+# Run automated setup (creates .venv, initializes project, configures direnv if installed)
+./setup-venv.sh
+
+# Edit configuration for your Xilinx installation
+vim brainsmith.yaml  # Set xilinx_path, xilinx_version
+
+# Activate environment
+# Option 1: For direnv users
+cd .
+# Option 2: Manual (must be run from brainsmith root)
+source .venv/bin/activate && source .brainsmith/env.sh
+
+# Verify setup
+brainsmith project info
 ```
 
-### 2. Run end-to-end test to validate environment 
+See Getting Started documentation for detailed install instruction.
+
+### 3. Validate installation with simple example
 
 ```bash
-# Start persistent development container
-./smithy start
-
-# Attach shell to container 
-./smithy shell
-# Run example
 ./examples/bert/quicktest.sh
-
-# OR execute one-off command 
-./smithy ./examples/bert/quicktest.sh
 ```
+
+### 4. Create your own Dataflow Core accelerator
+
+```bash
+# Create dataflow core with default command
+smith model.onnx blueprint.yaml
+
+# Or specify output directory
+smith model.onnx blueprint.yaml --output-dir ./results
+```
+
+## CLI Overview
+
+Brainsmith provides two complementary CLI commands:
+
+- **`brainsmith`** - Application configuration, setup, and environment management
+- **`smith`** - Operational commands for dataflow core creation and kernel generation
+
+For detailed command reference, see the [CLI API documentation](docs/cli_api_reference.md).
 
 ## Documentation
 
-For detailed documentation and guides, see the [documentation overview](docs/README.md).
+For detailed documentation and guides, see the `prerelease-docs` directory.
 
 ## License
 

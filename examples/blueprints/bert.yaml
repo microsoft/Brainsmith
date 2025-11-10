@@ -1,0 +1,49 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+name: "BERT"
+description: "BERT Transformer encoder model (no initial embedding)"
+
+clock_ns: 5.0                       # Target clock period in nanoseconds
+output: "bitfile"                   # estimates | rtl | bitfile
+board: "V80"                        # Target FPGA board
+
+design_space:
+  kernels:
+    # Computational Kernels
+    - LayerNorm
+    - ElementwiseBinaryOp
+    - Shuffle
+    - Crop
+    - Lookup
+    - Softmax
+    - finn:Thresholding
+    - finn:MVAU
+    # Infrastructure Kernels
+    - DuplicateStreams
+
+  steps:
+    - "qonnx_to_finn"
+    # Topology optimization
+    - "bert_streamlining"
+    # Core FINN steps
+    - "infer_kernels" # Brainsmith dynamic kernel inference
+    - "create_dataflow_partition"
+    - "specialize_layers"
+    - "target_fps_parallelization"
+    - "apply_folding_config"
+    - "normalize_dataflow_layouts" # Normalize tensors to NHWC layout
+    # Core Brainsmith steps
+    - "build_dataflow_graph"  # ONNX --> Kernels
+    - "build_hw_graph"        # Kernels --> HW Backends
+    - "loop_rolling"
+    - "brainsmith:target_fps_parallelization"
+    - "apply_parallelization_config"
+    - "transpose_decomposition"
+    - "minimize_bit_width"
+    - "generate_estimate_reports"
+    - "hw_codegen"
+    - "hw_ipgen"
+    - "set_fifo_depths"
+    - "create_stitched_ip"
+    - "measure_rtlsim_performance"

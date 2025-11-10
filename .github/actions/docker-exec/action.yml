@@ -1,0 +1,68 @@
+name: 'Docker Execute'
+description: 'Execute commands in ctl-docker.sh container with lifecycle management'
+inputs:
+  command:
+    description: 'Command to execute in the container'
+    type: string
+    required: true
+  timeout-minutes:
+    description: 'Command timeout in minutes'
+    type: number
+    default: 60
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Execute command with ctl-docker.sh
+      shell: bash
+      run: |
+        echo "=== Executing: ${{ inputs.command }} ==="
+        echo "Timeout: ${{ inputs.timeout-minutes }} minutes"
+        
+        # Make ctl-docker.sh executable
+        chmod +x ctl-docker.sh
+
+        # Start container using ctl-docker.sh (quiet mode: suppresses spinners, keeps build output)
+        echo "Starting container..."
+        ./ctl-docker.sh start --quiet
+        
+        # Wait for container to be ready
+        echo "Waiting for container to be ready..."
+        sleep 5
+        
+        # Execute command with timeout
+        TIMEOUT_SECONDS=$(( ${{ inputs.timeout-minutes }} * 60 ))
+        
+        if timeout ${TIMEOUT_SECONDS}s ./ctl-docker.sh "${{ inputs.command }}"; then
+            echo "✓ Command executed successfully"
+            EXIT_CODE=0
+        else
+            echo "✗ Command failed or timed out"
+            echo "=== Container logs (last 50 lines) ==="
+            ./ctl-docker.sh logs --tail 50 || echo "No logs available"
+            EXIT_CODE=1
+        fi
+
+        # Optional: Extract diagnostics if COLLECT_DIAGNOSTICS=1 was set
+        # This section only runs if the test script created /tmp/brainsmith_diagnostics
+        CONTAINER_ID=$(docker ps -a --filter "name=brainsmith" --format "{{.ID}}" | head -1)
+
+        if [ -n "$CONTAINER_ID" ]; then
+          echo "=== Extracting diagnostics from container ${CONTAINER_ID} ==="
+
+          # Check if diagnostics directory exists in container
+          if docker exec ${CONTAINER_ID} test -d /tmp/brainsmith_diagnostics 2>/dev/null; then
+            mkdir -p diagnostics-from-container
+            docker cp ${CONTAINER_ID}:/tmp/brainsmith_diagnostics/. diagnostics-from-container/ 2>&1 || true
+            echo "✓ Diagnostics extracted"
+            ls -la diagnostics-from-container/ || true
+          else
+            echo "No diagnostics directory in container (expected if COLLECT_DIAGNOSTICS not set)"
+          fi
+        fi
+
+        # Always stop container
+        echo "Stopping container..."
+        ./ctl-docker.sh stop || true
+
+        exit $EXIT_CODE

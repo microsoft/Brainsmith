@@ -1,40 +1,72 @@
+# EditorConfig: https://EditorConfig.org
+# Consistent coding styles for the Brainsmith FPGA accelerator compiler
 
-# Copyright (c) 2022 Advanced Micro Devices, Inc. All rights reserved.
-
-# see https://EditorConfig.org
-
-# top-most EditorConfig file
 root = true
 
+# Default settings for all files
 [*]
-end_of_line = lf
 charset = utf-8
-trim_trailing_whitespace = true
+end_of_line = lf
 insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Python source files
+# Note: Ruff handles formatting and linting; this ensures editor consistency
+[*.py]
 indent_style = space
 indent_size = 4
-max_line_length = 80
+max_line_length = 100
 
-[*.{yaml,yml}]
+# C/C++ source files (HLS kernels for FPGA)
+[*.{c,h,cpp,hpp,cc,hh}]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# Hardware description languages (Verilog/SystemVerilog)
+[*.{v,sv,vh,svh}]
+indent_style = space
 indent_size = 2
 
-[*.md]
-indent_size = unset
+# YAML configuration files
+[*.{yaml,yml}]
+indent_style = space
+indent_size = 2
 
-[*.{bat,cmd,ps1,psd1,psm1}]
-end_of_line = crlf
-charset = utf-8-bom
+# JSON configuration files
+[*.json]
+indent_style = space
+indent_size = 2
 
-[Makefile]
-# Tab indentation (no size specified)
+# TOML configuration files (pyproject.toml, etc.)
+[*.toml]
+indent_style = space
+indent_size = 4
+
+# Shell scripts
+[*.sh]
+indent_style = space
+indent_size = 4
+
+# TCL scripts (Xilinx/Vivado toolchain)
+[*.tcl]
+indent_style = space
+indent_size = 4
+
+# Makefiles require tab indentation
+[{Makefile,*.mk}]
 indent_style = tab
-indent_size = unset
 
+# Markdown documentation
+[*.md]
+indent_style = space
+indent_size = 2
+max_line_length = 100
+
+# Patch and diff files - preserve exact formatting
 [*.{patch,diff}]
 end_of_line = unset
-charset = unset
-trim_trailing_whitespace = false
 insert_final_newline = false
+trim_trailing_whitespace = false
 indent_style = unset
 indent_size = unset
-max_line_length = unset

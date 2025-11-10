@@ -22,6 +22,12 @@ from pathlib import Path
 import numpy as np
 import onnx
 import torch
+
+# Import brainsmith early to set up paths
+import brainsmith
+from brainsmith.settings import get_config
+# Note: Config export to environment (FINN_ROOT, etc.) happens automatically
+
 from brevitas.graph.calibrate import calibration_mode
 from brevitas.graph.quantize import layerwise_quantize
 from brevitas.quant import Int8ActPerTensorFloat, Int8WeightPerTensorFloat, Uint8ActPerTensorFloat
@@ -37,12 +43,15 @@ from transformers.utils.fx import symbolic_trace
 import brevitas.nn as qnn
 import brevitas.onnx as bo
 
-import custom_steps  # Import custom steps to trigger registration
+# Import local custom steps to register them for use in blueprint YAML.
+# These steps are referenced in bert_demo.yaml: remove_head, remove_tail, generate_reference_io
+import custom_steps
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from brainsmith import forge
+from brainsmith import explore_design_space
+from brainsmith.dse.types import SegmentStatus
 
 warnings.simplefilter("ignore")
 
@@ -52,7 +61,6 @@ def generate_bert_model(args):
 
     This matches the functionality from old end2end_bert.py::gen_initial_bert_model()
     """
-    print(f"Generating BERT model with {args.num_hidden_layers} layers...")
 
     # Global consts used by Brevitas build step
     dtype = torch.float32
@@ -83,9 +91,7 @@ def generate_bert_model(args):
     model = symbolic_trace(model, input_names)
 
     # Replace SDPA with quantizable layers
-    print("Replacing SDPA with quantizable variants...")
     model = replace_sdpa_with_quantizable_layers(model)
-    print("Replacement done.")
 
     # Configure quantization
     unsigned_hidden_act = config.hidden_act == 'relu'
@@ -166,46 +172,10 @@ def generate_bert_model(args):
     debug_path = os.path.join(args.output_dir, "debug_models")
     os.makedirs(debug_path, exist_ok=True)
     onnx.save(model, os.path.join(debug_path, "00_initial_brevitas.onnx"))
-    print(f"Saved initial Brevitas model to debug_models/00_initial_brevitas.onnx")
-    print(f"  - Model inputs: {[i.name for i in model.graph.input]}")
-    print(f"  - Model outputs: {[o.name for o in model.graph.output]}")
+    print(f"  - Model inputs: {len(model.graph.input)} tensors")
+    print(f"  - Model outputs: {len(model.graph.output)} tensors")
     print(f"  - Number of nodes: {len(model.graph.node)}")
     return model
-
-
-def generate_reference_io(model, output_dir):
-    """Generate reference input/output for verification.
-    This matches custom_step_generate_reference_io from old bert.py
-    """
-    import finn.core.onnx_exec as oxe
-    from qonnx.core.modelwrapper import ModelWrapper
-    from qonnx.transformation.infer_shapes import InferShapes
-
-    # Wrap model
-    model_wrapper = ModelWrapper(model)
-
-    # Infer shapes first
-    model_wrapper = model_wrapper.transform(InferShapes())
-
-    # Generate input
-    input_m = model_wrapper.graph.input[0]
-    in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
-    in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
-
-    # Save input
-    np.save(os.path.join(output_dir, "input.npy"), in_tensor)
-
-    # Execute model to get expected output
-    input_t = {input_m.name: in_tensor}
-    out_name = model_wrapper.graph.output[0].name
-
-    y_ref = oxe.execute_onnx(model_wrapper, input_t, True)
-
-    # Save outputs
-    np.save(os.path.join(output_dir, "expected_output.npy"), y_ref[out_name])
-    np.savez(os.path.join(output_dir, "expected_context.npz"), **y_ref)
-
-    return in_tensor, y_ref[out_name]
 
 
 def run_brainsmith_dse(model, args):
@@ -243,7 +213,7 @@ def run_brainsmith_dse(model, args):
     # Also save to debug directory for comparison
     debug_dir = os.path.join(args.output_dir, "debug_models")
     onnx.save(model, os.path.join(debug_dir, "01_after_simplify.onnx"))
-    print(f"Saved simplified model to debug_models/01_after_simplify.onnx")
+
     # Run cleanup
     cleanup(
         in_file=os.path.join(model_dir, "simp.onnx"),
@@ -261,16 +231,16 @@ def run_brainsmith_dse(model, args):
     # Get blueprint path from args
     blueprint_path = Path(__file__).parent / args.blueprint
 
-    # Forge the FPGA accelerator
-    print("Forging FPGA accelerator...")
-    results = forge(
+    # Create the FPGA accelerator
+    results = explore_design_space(
         model_path=os.path.join(args.output_dir, "df_input.onnx"),
         blueprint_path=str(blueprint_path),
         output_dir=args.output_dir
     )
-    # Results are automatically logged by forge()
+
+    # Results are automatically logged by explore_design_space()
     # Just check if we succeeded
-    stats = results.stats
+    stats = results.compute_stats()
     if stats['successful'] == 0:
         raise RuntimeError(f"No successful builds")
 
@@ -279,7 +249,7 @@ def run_brainsmith_dse(model, args):
 
     # Find the output from the successful execution
     for segment_id, result in results.segment_results.items():
-        if result.success and result.output_model:
+        if result.status == SegmentStatus.COMPLETED and result.output_model:
             shutil.copy2(result.output_model, final_model_dst)
             break
     # Handle shell metadata (matches old hw_compiler.py)
@@ -295,7 +265,7 @@ def run_brainsmith_dse(model, args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Modern BERT FINN demo - Exact parity with old system using Brainsmith DSE'
+        description='Modern BERT FINN demo - Exact parity with old system using Brainsmith DFC'
     )
 
     # Model configuration
@@ -317,32 +287,37 @@ def main():
     parser.add_argument('--blueprint', type=str, default='bert_demo.yaml',
                        help='Blueprint YAML file to use (default: bert_demo.yaml)')
 
+    # Force flag
+    parser.add_argument('--force', action='store_true',
+                       help='Remove existing output directory before building')
+
     args = parser.parse_args()
 
     # Determine output directory
-    build_dir = os.environ.get("BSMITH_BUILD_DIR", "./build")
-    print(build_dir)
-    args.output_dir = os.path.join(build_dir, args.output)
-    print("=" * 70)
-    print("BERT Demo Using Brainsmith DSE")
-    print("=" * 70)
-    print(f"Configuration:")
-    print(f"  Hidden layers: {args.num_hidden_layers}")
-    print(f"  Hidden size: {args.hidden_size}")
-    print(f"  Attention heads: {args.num_attention_heads}")
-    print(f"  Intermediate size: {args.intermediate_size}")
-    print(f"  Bitwidth: {args.bitwidth}")
-    print(f"  Sequence length: {args.seqlen}")
-    print(f"  Blueprint: {args.blueprint}")
-    print(f"  Output directory: {args.output_dir}")
-    print("=" * 70)
+    build_dir = get_config().build_dir
+    args.output_dir = os.path.join(str(build_dir), args.output)
+
+    # Clean up existing directory if --force flag is set
+    if args.force and os.path.exists(args.output_dir):
+        print(f"Removing existing output directory: {args.output_dir}")
+        shutil.rmtree(args.output_dir)
+
+    print("=" * 60)
+    print("BERT Demo - Brainsmith Dataflow Core")
+    print("=" * 60)
+    print(f"Model: {args.num_hidden_layers} layers, hidden={args.hidden_size}, heads={args.num_attention_heads}, intermediate={args.intermediate_size}")
+    print(f"Quantization: {args.bitwidth}-bit, sequence length={args.seqlen}")
+    print(f"Blueprint: {args.blueprint}")
+    print(f"Output: {args.output_dir}")
+    print("=" * 60)
+
     try:
         # Step 1: Generate BERT model
         print("\nStep 1: Generating quantized BERT model...")
         model = generate_bert_model(args)
 
-        # Step 2: Run Brainsmith DSE
-        print("\nStep 2: Running Brainsmith DSE pipeline...")
+        # Step 2: Create dataflow core accelerator
+        print("\nStep 2: Creating dataflow core accelerator...")
         result = run_brainsmith_dse(model, args)
 
         print("\n" + "=" * 70)
