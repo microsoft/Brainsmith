@@ -7,19 +7,21 @@
 
 """Shared utilities for the dataflow system."""
 
-from typing import Any, Dict, Iterator, Optional, Callable, TYPE_CHECKING
+from collections.abc import Callable, Iterator
 from itertools import product
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from qonnx.core.modelwrapper import ModelWrapper
+
     from .kernel_op import KernelOp
 
 
 def iter_valid_configurations(
     kernel_op: 'KernelOp',
     model_w: 'ModelWrapper',
-    param_filters: Optional[Dict[str, Callable[[int], bool]]] = None,
-) -> Iterator[Dict[str, int]]:
+    param_filters: dict[str, Callable[[int], bool]] | None = None,
+) -> Iterator[dict[str, int]]:
     """Iterate over all valid parallelization configurations.
 
     Generates Cartesian product of valid parameter ranges from kernel's

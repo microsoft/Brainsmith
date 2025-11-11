@@ -10,17 +10,15 @@ into FPGA accelerators through blueprint-driven design space exploration.
 
 from __future__ import annotations
 
-import os
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
-from brainsmith.dse._parser import parse_blueprint
-from brainsmith.dse._builder import DSETreeBuilder
-from brainsmith.dse.tree import DSETree
-from brainsmith.dse.runner import SegmentRunner
 from brainsmith._internal.finn.adapter import FINNAdapter
+from brainsmith.dse._builder import DSETreeBuilder
+from brainsmith.dse._parser import parse_blueprint
+from brainsmith.dse.runner import SegmentRunner
+from brainsmith.dse.tree import DSETree
 from brainsmith.dse.types import TreeExecutionResult
 
 logger = logging.getLogger(__name__)
@@ -29,9 +27,9 @@ logger = logging.getLogger(__name__)
 def explore_design_space(
     model_path: str,
     blueprint_path: str,
-    output_dir: Optional[str] = None,
-    start_step_override: Optional[str] = None,
-    stop_step_override: Optional[str] = None,
+    output_dir: str | None = None,
+    start_step_override: str | None = None,
+    stop_step_override: str | None = None,
     verbosity: str = "normal"
 ) -> TreeExecutionResult:
     """
@@ -79,7 +77,7 @@ def explore_design_space(
     config = get_config()
     setup_logging(level=verbosity, output_dir=output_path, config=config.logging)
 
-    logger.info(f"Exploring design space for dataflow accelerator:")
+    logger.info("Exploring design space for dataflow accelerator:")
     logger.info(f"    Model: {model_path}")
     logger.info(f"    Blueprint: {blueprint_path}")
     logger.info(f"    Output: {output_dir}")
@@ -101,7 +99,7 @@ def explore_design_space(
 
     # Log tree statistics
     stats = tree.get_statistics()
-    logger.debug(f"DSE tree:")
+    logger.debug("DSE tree:")
     logger.debug(f"  - Total paths: {stats['total_paths']:,}")
     logger.debug(f"  - Total segments: {stats['total_segments']:,}")
     logger.debug(f"  - Segment efficiency: {stats['segment_efficiency']}%")
@@ -160,7 +158,7 @@ def execute_tree(
     model_path: str,
     config: DSEConfig,
     output_dir: str,
-    runner: Optional[SegmentRunner] = None
+    runner: SegmentRunner | None = None
 ) -> TreeExecutionResult:
     """Execute a pre-built DSE tree.
 

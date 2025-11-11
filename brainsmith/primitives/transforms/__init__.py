@@ -12,26 +12,26 @@ normalization expansion, hardware-specific optimizations, and metadata extractio
 
 # Explicit imports for public API
 from .expand_norms import ExpandNorms
-from .set_pumped_compute import SetPumpedCompute
-from .temp_shuffle_fixer import TempShuffleFixer
 from .extract_shell_integration_metadata import ExtractShellIntegrationMetadata
 from .infer_kernel import InferKernel
 from .infer_kernels import InferKernels
+from .set_pumped_compute import SetPumpedCompute
+from .temp_shuffle_fixer import TempShuffleFixer
 
 # Backward compatibility alias
 InferKernelList = InferKernels
-from .specialize_kernels import SpecializeKernels
-from .normalize_dataflow_layouts import NormalizeDataflowLayouts
 from .insert_duplicate_streams import InsertDuplicateStreams
 from .insert_infrastructure_kernels import InsertInfrastructureKernels
-from .refresh_design_points import RefreshKernelDesignPoints
+from .normalize_dataflow_layouts import NormalizeDataflowLayouts
 from .parallelization import (
     ApplyParallelizationConfig,
     SetParallelization,
     get_node_interface,
-    set_parallelization,
     get_parallelization,
+    set_parallelization,
 )
+from .refresh_design_points import RefreshKernelDesignPoints
+from .specialize_kernels import SpecializeKernels
 
 __all__ = [
     "ExpandNorms",

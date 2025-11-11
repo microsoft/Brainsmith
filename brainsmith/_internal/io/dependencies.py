@@ -12,8 +12,6 @@ from .dependency_installers import (
     BuildDependencyInstaller,
     DependencyError,
     GitDependencyInstaller,
-    InstallationError,
-    RemovalError,
     RequirementError,
     UnknownDependencyError,
     ZipDependencyInstaller,

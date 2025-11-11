@@ -18,41 +18,35 @@ Uses isolated_env and empty_env fixtures from conftest.py.
 
 import json
 import logging
-import os
-import pytest
 import threading
-import time
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Type
 
+import pytest
+
+import brainsmith.registry._discovery as discovery_module
+import brainsmith.registry._state as registry_state
 from brainsmith.registry import (
-    step,
-    kernel,
-    backend,
-    source_context,
-    discover_components,
-    get_step,
-    get_kernel,
-    get_backend,
-    has_step,
-    has_kernel,
-    list_steps,
-    list_kernels,
-    list_backends,
-    list_backends_for_kernel,
-    get_component_metadata,
     ComponentMetadata,
     ComponentType,
     ImportSpec,
+    backend,
+    discover_components,
+    get_kernel,
+    get_step,
+    has_kernel,
+    kernel,
+    list_backends_for_kernel,
+    source_context,
+    step,
 )
-
+from brainsmith.registry._decorators import (
+    _current_source,
+)
+from brainsmith.registry._discovery import _load_component, _resolve_component_name
+from brainsmith.registry._manifest import (
+    _save_manifest,
+)
 from brainsmith.registry._state import _component_index
-from brainsmith.registry._decorators import _current_source, _register_step, _register_kernel, _register_backend
-import brainsmith.registry._state as registry_state
-import brainsmith.registry._discovery as discovery_module
-from brainsmith.registry._discovery import _resolve_component_name, _load_component
-from brainsmith.registry._manifest import _build_manifest_from_index, _save_manifest, _load_manifest, _is_manifest_stale
 from brainsmith.settings import reset_config
 
 logger = logging.getLogger(__name__)
@@ -192,7 +186,7 @@ class TestManifestCaching:
         assert manifest_path.exists()
 
         # Manifest should contain type-stratified components (v2.0 format)
-        with open(manifest_path, 'r') as f:
+        with open(manifest_path) as f:
             data = json.load(f)
 
         assert data['version'] == '2.0'

@@ -32,13 +32,12 @@ Output:
 
 import sys
 import time
-from typing import Dict, List, Tuple
-from onnx import helper, TensorProto
+
+from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.custom_op.registry import getCustomOp
 
 from brainsmith.dataflow.utils import iter_valid_configurations
-
 
 # ============================================================================
 # ANSI Color Codes
@@ -147,7 +146,7 @@ def print_section(title: str):
 
 def print_distribution_histogram(
     param_name: str,
-    value_counts: Dict[int, int],
+    value_counts: dict[int, int],
     max_width: int = 50
 ):
     """Print ASCII histogram of parameter value distribution.
@@ -184,7 +183,7 @@ def print_distribution_histogram(
 
 
 def print_parameter_grid(
-    configs: List[Dict[str, int]],
+    configs: list[dict[str, int]],
     param1: str,
     param2: str = None
 ):
@@ -239,8 +238,8 @@ def print_parameter_grid(
 
 
 def print_performance_heatmap(
-    configs: List[Dict[str, int]],
-    scores: List[float],
+    configs: list[dict[str, int]],
+    scores: list[float],
     param_name: str = "SIMD"
 ):
     """Print performance heatmap (simulated performance scores).
@@ -256,7 +255,7 @@ def print_performance_heatmap(
         return
 
     # Group configs by parameter value
-    value_scores: Dict[int, List[float]] = {}
+    value_scores: dict[int, list[float]] = {}
     for cfg, score in zip(configs, scores):
         value = cfg.get(param_name)
         if value is not None:
@@ -298,8 +297,8 @@ def print_performance_heatmap(
 
 
 def print_table(
-    headers: List[str],
-    rows: List[List],
+    headers: list[str],
+    rows: list[list],
     title: str = None
 ):
     """Print ASCII table.
@@ -353,7 +352,7 @@ def print_table(
         for cell, width in zip(row, col_widths):
             # Right-align numbers, left-align strings
             cell_str = str(cell)
-            if isinstance(cell, (int, float)):
+            if isinstance(cell, int | float):
                 formatted = cell_str.rjust(width)
             else:
                 formatted = cell_str.ljust(width)
@@ -391,7 +390,7 @@ def print_progress_bar(current: int, total: int, width: int = 50):
 # Main Demo
 # ============================================================================
 
-def simulate_performance_score(config: Dict[str, int]) -> float:
+def simulate_performance_score(config: dict[str, int]) -> float:
     """Simulate a performance score for demonstration.
 
     Higher SIMD generally gives better performance (lower latency),
@@ -538,7 +537,7 @@ def main():
         max_score = max(scores)
         min_score = min(scores)
 
-        print(f"  Performance scores:")
+        print("  Performance scores:")
         print(f"    Best:    {c.BRIGHT_GREEN}{max_score:.2f}{c.RESET}")
         print(f"    Average: {c.BRIGHT_YELLOW}{avg_score:.2f}{c.RESET}")
         print(f"    Worst:   {c.BRIGHT_RED}{min_score:.2f}{c.RESET}")
@@ -546,11 +545,11 @@ def main():
     print(f"\n{c.BOLD}{c.GREEN}Demo completed successfully!{c.RESET}\n")
 
     print(f"{c.DIM}This demo used the two-phase kernel construction system to:")
-    print(f"  • Systematically explore all valid configurations")
-    print(f"  • Avoid invalid configuration attempts")
-    print(f"  • Provide rich visualizations of the design space")
-    print(f"\nFor more information, see:")
-    print(f"  • docs/two_phase_architecture.md - System architecture")
+    print("  • Systematically explore all valid configurations")
+    print("  • Avoid invalid configuration attempts")
+    print("  • Provide rich visualizations of the design space")
+    print("\nFor more information, see:")
+    print("  • docs/two_phase_architecture.md - System architecture")
     print(f"  • docs/two_phase_user_guide.md - Usage guide{c.RESET}\n")
 
 

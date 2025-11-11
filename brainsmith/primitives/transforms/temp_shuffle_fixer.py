@@ -14,8 +14,9 @@ Temporary shuffle sizing fix for BERT builds.
 """
 
 import logging
-from qonnx.transformation.base import Transformation
+
 import qonnx.custom_op.registry as registry
+from qonnx.transformation.base import Transformation
 
 logger = logging.getLogger(__name__)
 

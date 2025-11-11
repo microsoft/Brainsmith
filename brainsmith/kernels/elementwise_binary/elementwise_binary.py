@@ -22,22 +22,24 @@ Broadcasting Support (Phase 2):
 """
 
 import logging
+
 import numpy as np
 from onnx import NodeProto, helper
-from typing import Optional
-
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
-from brainsmith.dataflow import KernelOp, FULL_DIM
-from brainsmith.dataflow.types import VALUE_OPTIMIZED
-from brainsmith.dataflow.transformation import TransformationResult
-from brainsmith.dataflow.spec_helpers import (
-    add_datatype, sub_datatype, smallest_datatype_for_range, derive_dim
-)
-from brainsmith.dataflow.types import ShapeHierarchy
 import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_DIM, KernelOp
+from brainsmith.dataflow.spec_helpers import (
+    add_datatype,
+    derive_dim,
+    smallest_datatype_for_range,
+    sub_datatype,
+)
+from brainsmith.dataflow.transformation import TransformationResult
+from brainsmith.dataflow.types import VALUE_OPTIMIZED, ShapeHierarchy
 from brainsmith.registry import kernel
+
 from .operations import BinaryOperations
 
 logger = logging.getLogger(__name__)
@@ -342,7 +344,7 @@ class ElementwiseBinaryOp(KernelOp):
     # ================================================================
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         return ELEMENTWISE_BINARY_SCHEMA
 
     # ================================================================
@@ -365,9 +367,9 @@ class ElementwiseBinaryOp(KernelOp):
             True if node can be inferred as this kernel
         """
         from brainsmith.dataflow.inference_helpers import (
-            find_static_dynamic_pair,
+            check_shapes_broadcastable,
             find_dynamic_dynamic_pair,
-            check_shapes_broadcastable
+            find_static_dynamic_pair,
         )
 
         # Must be supported operation
@@ -416,12 +418,12 @@ class ElementwiseBinaryOp(KernelOp):
         Returns:
             TransformationResult with new HW node
         """
-        from brainsmith.dataflow.inference_helpers import (
-            find_static_dynamic_pair,
-            find_dynamic_dynamic_pair,
-            get_broadcast_info
-        )
         from brainsmith.dataflow import lift_scalar_to_rank1
+        from brainsmith.dataflow.inference_helpers import (
+            find_dynamic_dynamic_pair,
+            find_static_dynamic_pair,
+            get_broadcast_info,
+        )
 
         # IMPORTANT: Normalize scalar inputs before pattern detection and validation
         # ONNX semantics: [] (scalar) broadcasts identically to [1] in all contexts
@@ -508,8 +510,9 @@ class ElementwiseBinaryOp(KernelOp):
         Returns:
             NumPy ufunc for the operation
         """
-        from .operations import BinaryOperations
         import numpy as np
+
+        from .operations import BinaryOperations
 
         func = self.get_nodeattr("func")
 

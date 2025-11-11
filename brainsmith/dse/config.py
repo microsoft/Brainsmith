@@ -9,8 +9,7 @@ from blueprint YAML files.
 """
 
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from brainsmith.dse.types import OutputType
 
@@ -34,14 +33,14 @@ class DSEConfig:
     output: OutputType = OutputType.ESTIMATES
 
     # Target (required for rtl/bitfile)
-    board: Optional[str] = None
+    board: str | None = None
 
     # Step range control (optional overrides)
-    start_step: Optional[str] = None
-    stop_step: Optional[str] = None
+    start_step: str | None = None
+    stop_step: str | None = None
 
     # Direct FINN parameter overrides
-    finn_overrides: Dict[str, Any] = field(default_factory=dict)
+    finn_overrides: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate configuration invariants."""
@@ -63,7 +62,7 @@ def _parse_output_type(output_str: str) -> OutputType:
         raise ValueError(f"Invalid output '{output_str}'. Must be one of: {valid}")
 
 
-def extract_config(data: Dict[str, Any]) -> DSEConfig:
+def extract_config(data: dict[str, Any]) -> DSEConfig:
     """Extract DSEConfig from blueprint data.
 
     Config fields are expected at the blueprint top level (flat structure).

@@ -17,22 +17,24 @@ Organization:
 3. DSE testing assertions (tree, execution, blueprints)
 """
 
-from typing import Any, Callable, Optional, Tuple, List, Dict, Union
-import numpy as np
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
-from brainsmith.dse.tree import DSETree
-from brainsmith.dse.design_space import GlobalDesignSpace
+
 from brainsmith.dse.config import DSEConfig
-from brainsmith.dse.types import TreeExecutionResult, SegmentStatus, OutputType
+from brainsmith.dse.design_space import GlobalDesignSpace
+from brainsmith.dse.tree import DSETree
+from brainsmith.dse.types import OutputType, SegmentStatus, TreeExecutionResult
 from tests.support.constants import (
+    EFFICIENCY_DECIMAL_PLACES,
+    EFFICIENCY_PERCENTAGE_MULTIPLIER,
     MIN_CHILDREN_FOR_BRANCH,
     NO_EFFICIENCY,
-    EFFICIENCY_DECIMAL_PLACES,
-    EFFICIENCY_PERCENTAGE_MULTIPLIER
 )
-
 
 # =============================================================================
 # Base Assertion Helper (from tests/common/assertions.py)
@@ -50,7 +52,7 @@ class AssertionHelper:
         description: str,
         expected: Any,
         actual: Any,
-        formatter: Optional[Callable[[Any], str]] = None
+        formatter: Callable[[Any], str] | None = None
     ) -> str:
         """Format standard mismatch error message.
 
@@ -89,7 +91,7 @@ class AssertionHelper:
         value_b: Any,
         label_a: str = "A",
         label_b: str = "B",
-        formatter: Optional[Callable[[Any], str]] = None
+        formatter: Callable[[Any], str] | None = None
     ) -> str:
         """Format comparison error message (for parity testing).
 
@@ -129,7 +131,7 @@ class AssertionHelper:
         expected: Any,
         actual: Any,
         description: str,
-        formatter: Optional[Callable[[Any], str]] = None
+        formatter: Callable[[Any], str] | None = None
     ) -> None:
         """Assert values are equal with consistent error formatting.
 
@@ -164,7 +166,7 @@ class AssertionHelper:
         description: str,
         label_a: str = "A",
         label_b: str = "B",
-        formatter: Optional[Callable[[Any], str]] = None
+        formatter: Callable[[Any], str] | None = None
     ) -> None:
         """Assert two values match (for parity testing).
 
@@ -203,7 +205,7 @@ class ParityAssertion(AssertionHelper):
         description: str,
         manual_value: Any,
         auto_value: Any,
-        formatter: Optional[Callable[[Any], str]] = None
+        formatter: Callable[[Any], str] | None = None
     ) -> str:
         """Format parity mismatch error message (Manual vs Auto).
 
@@ -235,7 +237,7 @@ class ParityAssertion(AssertionHelper):
         manual_value: Any,
         auto_value: Any,
         description: str,
-        formatter: Optional[Callable[[Any], str]] = None
+        formatter: Callable[[Any], str] | None = None
     ) -> None:
         """Assert parity between manual and auto implementations.
 
@@ -259,8 +261,8 @@ class ParityAssertion(AssertionHelper):
 # -----------------------------------------------------------------------------
 
 def assert_shapes_match(
-    manual_shape: Tuple[int, ...],
-    auto_shape: Tuple[int, ...],
+    manual_shape: tuple[int, ...],
+    auto_shape: tuple[int, ...],
     index: int,
     kind: str
 ) -> None:
@@ -394,7 +396,7 @@ def assert_values_match(
     manual_value: Any,
     auto_value: Any,
     description: str,
-    formatter: Optional[Callable[[Any], str]] = None
+    formatter: Callable[[Any], str] | None = None
 ) -> None:
     """Generic assertion for any value comparison.
 
@@ -538,14 +540,14 @@ class ExpectedTreeStructure:
     total_leaves: int
     total_paths: int
     total_segments: int
-    segment_efficiency: Optional[float] = None
+    segment_efficiency: float | None = None
 
 
 @dataclass
 class ExpectedExecutionLevel:
     """Expected execution level for validation."""
     level: int
-    nodes: List[str]
+    nodes: list[str]
 
 
 @dataclass
@@ -594,7 +596,7 @@ class TreeAssertions(AssertionHelper):
                 f"Expected efficiency {expected.segment_efficiency}%, got {stats['segment_efficiency']}%"
 
     @staticmethod
-    def assert_execution_order_structure(execution_order: List, tree: DSETree):
+    def assert_execution_order_structure(execution_order: list, tree: DSETree):
         """Assert basic execution order properties.
 
         Args:
@@ -874,9 +876,9 @@ class BlueprintAssertions(AssertionHelper):
     @staticmethod
     def assert_design_space_structure(
         design_space: GlobalDesignSpace,
-        expected_steps: List[Union[str, List[str]]],
-        expected_kernel_count: Optional[int] = None,
-        expected_model_path: Optional[str] = None
+        expected_steps: list[str | list[str]],
+        expected_kernel_count: int | None = None,
+        expected_model_path: str | None = None
     ):
         """Assert design space has expected structure.
 
@@ -901,9 +903,9 @@ class BlueprintAssertions(AssertionHelper):
     @staticmethod
     def assert_config_values(
         config: DSEConfig,
-        expected_clock_ns: Optional[float] = None,
-        expected_board: Optional[str] = None,
-        expected_output: Optional[OutputType] = None
+        expected_clock_ns: float | None = None,
+        expected_board: str | None = None,
+        expected_output: OutputType | None = None
     ):
         """Assert DSEConfig has expected values.
 
@@ -928,7 +930,7 @@ class BlueprintAssertions(AssertionHelper):
     @staticmethod
     def assert_step_sequence(
         design_space: GlobalDesignSpace,
-        expected_sequence: List[str],
+        expected_sequence: list[str],
         ignore_branches: bool = False
     ):
         """Assert steps appear in expected sequence.
@@ -957,7 +959,7 @@ class BlueprintAssertions(AssertionHelper):
     def assert_branch_point(
         design_space: GlobalDesignSpace,
         index: int,
-        expected_options: List[str]
+        expected_options: list[str]
     ):
         """Assert specific index contains branch point with expected options.
 
@@ -980,8 +982,8 @@ class BlueprintAssertions(AssertionHelper):
     @staticmethod
     def assert_inheritance_applied(
         child_config: DSEConfig,
-        parent_values: Dict[str, Any],
-        child_overrides: Dict[str, Any]
+        parent_values: dict[str, Any],
+        child_overrides: dict[str, Any]
     ):
         """Assert inheritance correctly merged parent and child values.
 
@@ -1009,7 +1011,7 @@ class BlueprintAssertions(AssertionHelper):
     def assert_step_operation_applied(
         design_space: GlobalDesignSpace,
         operation_type: str,
-        expected_result: List[str]
+        expected_result: list[str]
     ):
         """Assert step operation produced expected result.
 

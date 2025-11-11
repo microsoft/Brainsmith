@@ -25,24 +25,25 @@ Usage:
     context = make_execution_context_qonnx(model, op, seed=42)
 """
 
+
 import numpy as np
-from typing import Dict, List, Optional
-from qonnx.core.modelwrapper import ModelWrapper
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from tests.support.constants import (
-    UNSIGNED_TEST_DATA_CAP,
-    SIGNED_TEST_DATA_MIN,
-    SIGNED_TEST_DATA_MAX,
-)
+from qonnx.core.modelwrapper import ModelWrapper
+
 from tests.fixtures.test_data import generate_onnx_test_data
+from tests.support.constants import (
+    SIGNED_TEST_DATA_MAX,
+    SIGNED_TEST_DATA_MIN,
+    UNSIGNED_TEST_DATA_CAP,
+)
 from tests.support.onnx_utils import get_onnx_tensor_type
 
 
 def make_execution_context_onnx(
     model: ModelWrapper,
-    input_names: List[str],
-    seed: Optional[int] = None
-) -> Dict[str, np.ndarray]:
+    input_names: list[str],
+    seed: int | None = None
+) -> dict[str, np.ndarray]:
     """Create execution context from pure ONNX model (TensorProto types).
 
     Generates test data based on ONNX TensorProto types, independent of
@@ -108,8 +109,8 @@ def make_execution_context_onnx(
 def make_execution_context_qonnx(
     model: ModelWrapper,
     op: HWCustomOp,
-    seed: Optional[int] = None
-) -> Dict[str, np.ndarray]:
+    seed: int | None = None
+) -> dict[str, np.ndarray]:
     """Create execution context from QONNX model (DataType annotations).
 
     Generates test data based on QONNX DataType annotations. Used for
@@ -219,8 +220,8 @@ def make_execution_context_qonnx(
 def make_execution_context(
     model: ModelWrapper,
     op: HWCustomOp,
-    seed: Optional[int] = None
-) -> Dict[str, np.ndarray]:
+    seed: int | None = None
+) -> dict[str, np.ndarray]:
     """[DEPRECATED] Use make_execution_context_qonnx() instead.
 
     This function is kept for backward compatibility but will be removed

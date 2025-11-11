@@ -1,20 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-import numpy as np
-from scipy.special import softmax
-from onnx import NodeProto, helper
-from typing import Optional
 
+import numpy as np
+from onnx import NodeProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import get_by_name
-from brainsmith.dataflow import KernelOp, constant_datatype
+from scipy.special import softmax
+
+import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_DIM, KernelOp, constant_datatype
 from brainsmith.dataflow.spec_helpers import derive_dim
 from brainsmith.dataflow.types import ShapeHierarchy
-import brainsmith.dataflow as df
-from brainsmith.dataflow import FULL_DIM
 from brainsmith.registry import kernel
-
 
 # Module-level unified KernelSchema (structure + transformation)
 SOFTMAX_SCHEMA = df.KernelSchema(
@@ -53,7 +51,7 @@ class Softmax(KernelOp):
         super().__init__(onnx_node, **kwargs)
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         return SOFTMAX_SCHEMA
 
     @classmethod

@@ -10,15 +10,14 @@ This module contains pragmas that modify interface metadata including
 datatype constraints, parameter mappings, and interface types.
 """
 
-from dataclasses import dataclass
-from typing import Dict
 import logging
+from dataclasses import dataclass
 
-from .base import InterfacePragma, PragmaError
 from brainsmith.dataflow.constraint_types import DatatypeConstraintGroup
 from brainsmith.dataflow.types import InterfaceType
-from brainsmith.tools.kernel_integrator.metadata import InterfaceMetadata, KernelMetadata
-from ..types import PragmaType
+from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
+
+from .base import InterfacePragma, PragmaError
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,7 @@ class DatatypeConstraintPragma(InterfacePragma):
     def __post_init__(self):
         super().__post_init__()
 
-    def _parse_inputs(self) -> Dict:
+    def _parse_inputs(self) -> dict:
         """
         Handles DATATYPE_CONSTRAINT pragma with constraint groups:
         @brainsmith DATATYPE_CONSTRAINT <interface_name> <base_type> <min_bits> <max_bits>
@@ -174,7 +173,7 @@ class WeightPragma(InterfacePragma):
     def __post_init__(self):
         super().__post_init__()
 
-    def _parse_inputs(self) -> Dict:
+    def _parse_inputs(self) -> dict:
         """Handles WEIGHT pragma: @brainsmith WEIGHT <interface_name_0> [<interface_name_1> ...]"""
         logger.debug(f"Parsing WEIGHT pragma: {self.inputs} at line {self.inputs.get('line_number', 'unknown')}")
         
@@ -228,7 +227,7 @@ class DatatypePragma(InterfacePragma):
     - @brainsmith datatype accumulator width ACC_WIDTH
     """
     
-    def _parse_inputs(self) -> Dict:
+    def _parse_inputs(self) -> dict:
         pos = self.inputs['positional']
         
         if len(pos) != 3:

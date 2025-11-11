@@ -12,7 +12,8 @@ This module provides:
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from typing import Any
+
 from onnx import NodeProto
 
 
@@ -26,6 +27,6 @@ class TransformationResult:
         metadata: Optional transformation metadata
     """
 
-    nodes_to_insert: List[NodeProto]
-    nodes_to_remove: List[NodeProto]
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    nodes_to_insert: list[NodeProto]
+    nodes_to_remove: list[NodeProto]
+    metadata: dict[str, Any] = field(default_factory=dict)

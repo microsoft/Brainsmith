@@ -8,9 +8,9 @@ import click
 
 # Import explore_design_space lazily inside function to keep --help fast
 from ..context import ApplicationContext
-from ..utils import console, success
 from ..exceptions import CLIError
 from ..messages import DFC_ERROR_HINT
+from ..utils import console, success
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def dfc(
     """
     config = ctx.get_effective_config()
 
-    console.print(f"[bold blue]Brainsmith DFC[/bold blue] - Dataflow Core Creation")
+    console.print("[bold blue]Brainsmith DFC[/bold blue] - Dataflow Core Creation")
     console.print(f"Model: {model}")
     console.print(f"Blueprint: {blueprint}")
 

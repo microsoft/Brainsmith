@@ -5,6 +5,7 @@ These steps are used in blueprint parsing and DSE execution tests.
 
 import logging
 from typing import Any
+
 from brainsmith.registry import step
 
 logger = logging.getLogger(__name__)
@@ -33,8 +34,8 @@ def test_identity_step(model: Any, cfg: Any) -> Any:
 def test_transform_sequence_step(model: Any, cfg: Any) -> Any:
     """Test step that applies multiple QONNX transforms in sequence."""
     from qonnx.transformation.general import GiveUniqueNodeNames
-    from qonnx.transformation.infer_shapes import InferShapes
     from qonnx.transformation.infer_datatypes import InferDataTypes
+    from qonnx.transformation.infer_shapes import InferShapes
 
     logger.info("Executing test_transform_sequence")
 

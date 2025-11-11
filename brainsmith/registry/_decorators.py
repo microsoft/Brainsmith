@@ -13,17 +13,18 @@ Logging Strategy:
 """
 
 import logging
+from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any
 
-from ._state import _component_index, _discovered_sources
 from ._metadata import ComponentMetadata, ComponentType, ImportSpec
+from ._state import _component_index, _discovered_sources
 
 logger = logging.getLogger(__name__)
 
 # Current source context (set during plugin discovery)
 # Using ContextVar for thread-safe source tracking
-_current_source: ContextVar[Optional[str]] = ContextVar('current_source', default=None)
+_current_source: ContextVar[str | None] = ContextVar('current_source', default=None)
 
 
 # ============================================================================
@@ -95,7 +96,7 @@ def _detect_source(obj: Any) -> str:
 # Helper Functions
 # ============================================================================
 
-def _convert_lazy_import_spec(spec: Optional[Union[str, Dict, Type]]) -> Optional[Union[Dict, Type]]:
+def _convert_lazy_import_spec(spec: str | dict | type | None) -> dict | type | None:
     """Convert 'module:ClassName' string to {'module': ..., 'class_name': ...}.
 
     Passes through None, class references, or dicts unchanged.
@@ -111,11 +112,11 @@ def _convert_lazy_import_spec(spec: Optional[Union[str, Dict, Type]]) -> Optiona
 # ============================================================================
 
 def _register_step(
-    func_or_class: Union[Callable, Type],
+    func_or_class: Callable | type,
     *,
-    name: Optional[str] = None,
+    name: str | None = None,
     **kwargs  # Accept and ignore extra parameters (category, description, etc.) for backwards compat
-) -> Union[Callable, Type]:
+) -> Callable | type:
     """Register step in global component index."""
     if 'source' in kwargs:
         raise ValueError(
@@ -166,13 +167,13 @@ def _register_step(
 
 
 def _register_kernel(
-    cls: Type,
+    cls: type,
     *,
-    name: Optional[str] = None,
-    infer_transform: Optional[Type] = None,
+    name: str | None = None,
+    infer_transform: type | None = None,
     is_infrastructure: bool = False,  # True for topology-based kernels (DuplicateStreams, FIFO)
     **kwargs  # Accept and ignore extra parameters (e.g., op_type, domain) for backwards compat
-) -> Type:
+) -> type:
     """Register kernel in global component index."""
     if 'source' in kwargs:
         raise ValueError(
@@ -247,14 +248,14 @@ def _register_kernel(
 
 
 def _register_backend(
-    cls: Type,
+    cls: type,
     *,
-    name: Optional[str] = None,
-    target_kernel: Optional[str] = None,
-    language: Optional[str] = None,
-    variant: Optional[str] = None,
+    name: str | None = None,
+    target_kernel: str | None = None,
+    language: str | None = None,
+    variant: str | None = None,
     **kwargs  # Accept and ignore extra parameters (e.g., author, description) for backwards compat
-) -> Type:
+) -> type:
     """Register backend in global component index."""
     if 'source' in kwargs:
         raise ValueError(

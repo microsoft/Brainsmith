@@ -10,14 +10,14 @@ This module contains pragmas for defining relationships between interfaces
 in the Kernel Modeling system.
 """
 
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Any, Union
 import logging
+from dataclasses import dataclass
+from typing import Any
+
+from brainsmith.dataflow.relationships import DimensionRelationship, RelationType
+from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
 
 from .base import Pragma, PragmaError
-from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
-from ..types import PragmaType
-from brainsmith.dataflow.relationships import DimensionRelationship, RelationType
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class RelationshipPragma(Pragma):
         # Call parent __post_init__ first
         super().__post_init__()
     
-    def _parse_inputs(self) -> Dict[str, Any]:
+    def _parse_inputs(self) -> dict[str, Any]:
         """Parse relationship pragma inputs.
         
         Returns:

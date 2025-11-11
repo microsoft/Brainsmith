@@ -17,17 +17,22 @@ import os
 import click
 from rich.table import Table
 
-from brainsmith._internal.io.dependencies import DependencyManager, BoardManager
+from brainsmith._internal.io.dependencies import BoardManager, DependencyManager
+
 from ...utils import (
-    console, error_exit, success, tip, show_panel,
-    format_status, format_warning_status
+    console,
+    format_status,
+    format_warning_status,
+    show_panel,
+    success,
+    tip,
 )
+from .boards import boards
 
 # Lazy import settings - only imported when check() command is run
 from .cppsim import cppsim
+from .helpers import _are_hlslib_headers_installed, _is_cnpy_installed, _is_finnxsim_built
 from .xsim import xsim
-from .boards import boards
-from .helpers import _is_cnpy_installed, _are_hlslib_headers_installed, _is_finnxsim_built
 
 logger = logging.getLogger(__name__)
 

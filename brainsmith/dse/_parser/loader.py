@@ -8,17 +8,18 @@ Handles loading YAML blueprints and resolving inheritance chains.
 """
 
 import os
-import yaml
 from pathlib import Path
 from string import Template
-from typing import Dict, Any, Optional, Tuple
+from typing import Any
 
-from brainsmith._internal.io.yaml import load_yaml, deep_merge
+import yaml
+
+from brainsmith._internal.io.yaml import deep_merge, load_yaml
 
 
 def _expand_env_vars_with_context(
     data: Any,
-    context_vars: Dict[str, str]
+    context_vars: dict[str, str]
 ) -> Any:
     """Expand environment variables with additional context variables.
 
@@ -53,7 +54,7 @@ def _expand_env_vars_with_context(
         return data
 
 
-def _load_with_inheritance(file_path: Path, context_vars: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def _load_with_inheritance(file_path: Path, context_vars: dict[str, str] | None = None) -> dict[str, Any]:
     """Load a YAML file with inheritance support via 'extends' field.
 
     Args:
@@ -63,7 +64,7 @@ def _load_with_inheritance(file_path: Path, context_vars: Optional[Dict[str, str
     Returns:
         Merged YAML data
     """
-    with open(file_path, 'r') as f:
+    with open(file_path) as f:
         data = yaml.safe_load(f) or {}
 
     if 'extends' in data:
@@ -89,7 +90,7 @@ def _load_with_inheritance(file_path: Path, context_vars: Optional[Dict[str, str
     return data
 
 
-def load_blueprint_with_inheritance(blueprint_path: str) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
+def load_blueprint_with_inheritance(blueprint_path: str) -> tuple[dict[str, Any], dict[str, Any], str | None]:
     """Load blueprint YAML and resolve inheritance.
 
     Args:

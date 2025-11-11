@@ -8,14 +8,13 @@ This module is responsible for building the segment-based DSE tree
 from a parsed GlobalDesignSpace. Separated from parsing for single responsibility.
 """
 
-from typing import Dict, Any, List
+from typing import Any
 
+from brainsmith.dse._constants import SKIP_INDICATOR
+from brainsmith.dse.config import DSEConfig
+from brainsmith.dse.design_space import GlobalDesignSpace
 from brainsmith.dse.segment import DSESegment
 from brainsmith.dse.tree import DSETree
-from brainsmith.dse.design_space import GlobalDesignSpace
-from brainsmith.dse.config import DSEConfig
-from brainsmith.dse._constants import SKIP_INDICATOR
-from brainsmith.dse.types import OutputType
 
 
 class DSETreeBuilder:
@@ -64,7 +63,7 @@ class DSETreeBuilder:
         
         return tree
     
-    def _create_step_dict(self, step_spec: str, space: GlobalDesignSpace) -> Dict[str, Any]:
+    def _create_step_dict(self, step_spec: str, space: GlobalDesignSpace) -> dict[str, Any]:
         """Create a standardized step dictionary.
 
         Args:
@@ -76,7 +75,7 @@ class DSETreeBuilder:
         """
         return {"name": step_spec}
     
-    def _extract_finn_config(self, space: GlobalDesignSpace, blueprint_config: DSEConfig) -> Dict[str, Any]:
+    def _extract_finn_config(self, space: GlobalDesignSpace, blueprint_config: DSEConfig) -> dict[str, Any]:
         """Extract FINN-relevant configuration from DSEConfig.
 
         Args:
@@ -149,7 +148,7 @@ class DSETreeBuilder:
 
         return finn_config
     
-    def _append_steps_to_segments(self, segments: List[DSESegment], steps: List[Dict]) -> None:
+    def _append_steps_to_segments(self, segments: list[DSESegment], steps: list[dict]) -> None:
         """Append accumulated steps to all segments.
 
         Args:
@@ -159,9 +158,9 @@ class DSETreeBuilder:
         for segment in segments:
             segment.steps.extend(steps)
     
-    def _create_branches(self, segments: List[DSESegment],
+    def _create_branches(self, segments: list[DSESegment],
                         branch_index: int,
-                        branch_options: List[str]) -> List[DSESegment]:
+                        branch_options: list[str]) -> list[DSESegment]:
         new_segments = []
 
         for segment in segments:

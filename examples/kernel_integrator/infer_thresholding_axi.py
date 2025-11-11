@@ -11,18 +11,12 @@ Matches the behavior of InferThresholdingLayer but targets the auto-generated
 ThresholdingAxi RTL implementation.
 """
 
-import numpy as np
-from typing import Dict, Any
-from onnx import NodeProto, helper
-
-from onnx import NodeProto
+import qonnx.core.data_layout as DataLayout
+from onnx import helper
 from qonnx.core.datatype import DataType
-from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.custom_op.registry import getCustomOp
 from qonnx.transformation.base import Transformation
 from qonnx.util.onnx import nchw_to_nhwc
-import qonnx.core.data_layout as DataLayout
-from qonnx.core.datatype import DataType
 
 
 # QONNX wrapper to ONNX model graphs

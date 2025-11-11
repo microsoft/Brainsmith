@@ -10,12 +10,13 @@
 import pytest
 from qonnx.core.datatype import DataType
 
-from brainsmith.dataflow.builder import DesignSpaceBuilder, BuildContext
-from brainsmith.dataflow.schemas import KernelSchema, InputSchema, OutputSchema
-from brainsmith.dataflow.dse_models import KernelDesignSpace
-from brainsmith.dataflow.validation import DesignSpaceValidationContext
+from brainsmith.dataflow.builder import BuildContext, DesignSpaceBuilder
 from brainsmith.dataflow.constraints import DatatypeInteger, ShapesEqual
-from brainsmith.dataflow.types import ShapeHierarchy, FULL_DIM
+from brainsmith.dataflow.dse_models import KernelDesignSpace
+from brainsmith.dataflow.schemas import InputSchema, KernelSchema, OutputSchema
+from brainsmith.dataflow.types import FULL_DIM, ShapeHierarchy
+from brainsmith.dataflow.validation import DesignSpaceValidationContext
+
 
 # Mock ONNX graph for testing
 class MockModelWrapper:

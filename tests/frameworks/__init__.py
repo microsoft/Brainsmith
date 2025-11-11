@@ -97,16 +97,16 @@ Example (KernelParityTest):
             return lambda: InferKernels([ElementwiseBinaryOp])
 """
 
+from tests.frameworks.kernel_parity_test import KernelParityTest
+from tests.frameworks.kernel_test import KernelTest
+from tests.frameworks.kernel_test_base import KernelTestBase
 from tests.frameworks.test_config import (
+    DesignParameters,
     KernelTestConfig,
     ModelStructure,
-    DesignParameters,
     PlatformConfig,
     ValidationConfig,
 )
-from tests.frameworks.kernel_test_base import KernelTestBase
-from tests.frameworks.kernel_test import KernelTest
-from tests.frameworks.kernel_parity_test import KernelParityTest
 
 __all__ = [
     "KernelTestConfig",

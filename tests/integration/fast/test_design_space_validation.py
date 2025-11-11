@@ -7,6 +7,7 @@ Execution time: < 1 min (pure Python validation)
 """
 
 import pytest
+
 from brainsmith.dse.design_space import GlobalDesignSpace
 
 

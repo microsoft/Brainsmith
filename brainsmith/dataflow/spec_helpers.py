@@ -25,7 +25,9 @@ Design Philosophy (Arete):
 - Two-layer API: primitives (building blocks) + builders (common patterns)
 """
 
-from typing import Callable, Dict, Any, Optional, TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 
 if TYPE_CHECKING:
@@ -33,7 +35,6 @@ if TYPE_CHECKING:
 
 # Import from types to access ShapeHierarchy
 from .types import ShapeHierarchy
-
 
 # =============================================================================
 # Dimension Derivation Helpers
@@ -43,7 +44,7 @@ def derive_dim(
     interface: str,
     hierarchy: ShapeHierarchy,
     dim_idx: int
-) -> Callable[[Dict[str, Any], Callable, Any, Optional[str]], int]:
+) -> Callable[[dict[str, Any], Callable, Any, str | None], int]:
     """Create dimension derivation function (for use in DimSpec).
 
     Derives dimension value from another interface's shape at specified hierarchy.
@@ -66,10 +67,10 @@ def derive_dim(
     """
 
     def resolver(
-        interfaces: Dict[str, Any],
+        interfaces: dict[str, Any],
         param_getter: Callable,
         model: Any,  # ModelWrapper - unused but part of unified signature
-        tensor_name: Optional[str]  # Unused but part of unified signature
+        tensor_name: str | None  # Unused but part of unified signature
     ) -> int:
         """Resolve dimension value from interface shape (unified 4-param signature)."""
         if interface not in interfaces:
@@ -93,8 +94,8 @@ def derive_dim(
                 shape = interface_obj.block_shape
             elif hierarchy == ShapeHierarchy.STREAM:
                 raise ValueError(
-                    f"Cannot derive stream shape from InterfaceDesignSpace. "
-                    f"Stream shapes require configuration (use get_shape on InterfaceDesignPoint)."
+                    "Cannot derive stream shape from InterfaceDesignSpace. "
+                    "Stream shapes require configuration (use get_shape on InterfaceDesignPoint)."
                 )
             else:
                 raise ValueError(f"Invalid hierarchy: {hierarchy}")
@@ -117,7 +118,7 @@ def derive_dim(
 # Datatype Derivation Helpers
 # =============================================================================
 
-def derive_datatype(interface: str) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+def derive_datatype(interface: str) -> Callable[[dict, Callable, Any, str], 'BaseDataType']:
     """Create datatype derivation function (for use in DatatypeSpec).
 
     Derives datatype from another interface's datatype.
@@ -136,7 +137,7 @@ def derive_datatype(interface: str) -> Callable[[Dict, Callable, Any, str], 'Bas
         datatype="input"
     """
     def resolver(
-        interfaces: Dict[str, Any],
+        interfaces: dict[str, Any],
         param_getter: Callable,
         model: Any,  # ModelWrapper
         tensor_name: str
@@ -154,7 +155,7 @@ def derive_datatype(interface: str) -> Callable[[Dict, Callable, Any, str], 'Bas
     return resolver
 
 
-def constant_datatype(datatype_name: str) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+def constant_datatype(datatype_name: str) -> Callable[[dict, Callable, Any, str], 'BaseDataType']:
     """Create constant datatype function (for use in DatatypeSpec).
 
     Returns a fixed DataType regardless of context. Useful for operations that
@@ -194,7 +195,7 @@ def constant_datatype(datatype_name: str) -> Callable[[Dict, Callable, Any, str]
         )
 
     def resolver(
-        interfaces: Dict[str, Any],
+        interfaces: dict[str, Any],
         param_getter: Callable,
         model: Any,  # ModelWrapper
         tensor_name: str
@@ -205,7 +206,7 @@ def constant_datatype(datatype_name: str) -> Callable[[Dict, Callable, Any, str]
     return resolver
 
 
-def value_optimized_datatype() -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+def value_optimized_datatype() -> Callable[[dict, Callable, Any, str], 'BaseDataType']:
     """Create value-optimized datatype function (for use in DatatypeSpec).
 
     Derives optimal datatype from actual tensor values (static inputs only).
@@ -223,7 +224,7 @@ def value_optimized_datatype() -> Callable[[Dict, Callable, Any, str], 'BaseData
         datatype=value_optimized_datatype()
     """
     def resolver(
-        interfaces: Dict[str, Any],
+        interfaces: dict[str, Any],
         param_getter: Callable,
         model: Any,  # ModelWrapper
         tensor_name: str
@@ -363,8 +364,8 @@ def smallest_datatype_for_range(min_val: float, max_val: float) -> 'BaseDataType
         dt = smallest_datatype_for_range(0, 255)     # Returns DataType["UINT8"]
         dt = smallest_datatype_for_range(-1016, 1024)  # Returns DataType["INT12"]
     """
-    from qonnx.core.datatype import DataType
     import numpy as np
+    from qonnx.core.datatype import DataType
 
     # Create array with both bounds (matches FINN's approach)
     # This ensures we correctly detect when range includes negative values
@@ -427,7 +428,7 @@ def _binary_op_datatype(
     a_interface: str,
     b_interface: str,
     range_fn: Callable[[float, float, float, float], tuple[float, float]]
-) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+) -> Callable[[dict, Callable, Any, str], 'BaseDataType']:
     """Generic binary operation datatype builder.
 
     Automatically optimizes based on whether interfaces are static or dynamic:
@@ -465,7 +466,7 @@ def _binary_op_datatype(
 def add_datatype(
     a_interface: str,
     b_interface: str
-) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+) -> Callable[[dict, Callable, Any, str], 'BaseDataType']:
     """Compute addition output datatype (context-aware)."""
     return _binary_op_datatype(a_interface, b_interface, compute_add_range)
 
@@ -473,7 +474,7 @@ def add_datatype(
 def sub_datatype(
     a_interface: str,
     b_interface: str
-) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+) -> Callable[[dict, Callable, Any, str], 'BaseDataType']:
     """Compute subtraction output datatype (context-aware)."""
     return _binary_op_datatype(a_interface, b_interface, compute_sub_range)
 
@@ -481,7 +482,7 @@ def sub_datatype(
 def mul_datatype(
     a_interface: str,
     b_interface: str
-) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+) -> Callable[[dict, Callable, Any, str], 'BaseDataType']:
     """Compute multiplication output datatype (context-aware)."""
     return _binary_op_datatype(a_interface, b_interface, compute_mul_range)
 
@@ -489,7 +490,7 @@ def mul_datatype(
 def min_datatype(
     a_interface: str,
     b_interface: str
-) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+) -> Callable[[dict, Callable, Any, str], 'BaseDataType']:
     """Compute min() output datatype (context-aware)."""
     return _binary_op_datatype(a_interface, b_interface, compute_min_range)
 
@@ -497,6 +498,6 @@ def min_datatype(
 def max_datatype(
     a_interface: str,
     b_interface: str
-) -> Callable[[Dict, Callable, Any, str], 'BaseDataType']:
+) -> Callable[[dict, Callable, Any, str], 'BaseDataType']:
     """Compute max() output datatype (context-aware)."""
     return _binary_op_datatype(a_interface, b_interface, compute_max_range)

@@ -26,13 +26,11 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+
 import numpy as np
-import warnings
+from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 from qonnx.custom_op.general.multithreshold import multithreshold
-from qonnx.util.basic import interleave_matrix_outer_dim_from_partitions
-
-from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
 
 class Thresholding(HWCustomOp):

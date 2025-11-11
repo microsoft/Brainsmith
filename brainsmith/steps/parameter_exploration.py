@@ -2,17 +2,17 @@
 # Licensed under the MIT License.
 
 """Parameter exploration step for DSE (Phase 7)."""
+import json
 import logging
 import time
-import json
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any
 
 from qonnx.custom_op.registry import getCustomOp
 
-from brainsmith.registry import step
-from brainsmith.dataflow.utils import iter_valid_configurations
 from brainsmith.dataflow.kernel_op import KernelOp
+from brainsmith.dataflow.utils import iter_valid_configurations
+from brainsmith.registry import step
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ def _explore_kernel_configs(
     kernel_op: KernelOp,
     model,
     expected_count: int
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Explore all configurations for a single kernel.
 
     Args:
@@ -236,7 +236,7 @@ def _explore_kernel_configs(
     }
 
 
-def _save_results(output_path: Path, results: List[Dict[str, Any]], total_time: float):
+def _save_results(output_path: Path, results: list[dict[str, Any]], total_time: float):
     """Save exploration results to JSON file.
 
     Args:

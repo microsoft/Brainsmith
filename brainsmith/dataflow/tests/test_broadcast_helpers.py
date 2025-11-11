@@ -5,7 +5,7 @@
 """Tests for broadcasting helpers."""
 
 import pytest
-import numpy as np
+
 from brainsmith.dataflow.broadcast_helpers import BroadcastInfo, compute_broadcast_info
 
 

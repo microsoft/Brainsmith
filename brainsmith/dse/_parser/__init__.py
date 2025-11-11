@@ -8,16 +8,15 @@ This module parses blueprint YAML files and creates GlobalDesignSpace objects
 with all components resolved from the registry.
 """
 
-import os
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+import os
 
-from brainsmith.dse.design_space import GlobalDesignSpace
 from brainsmith.dse.config import DSEConfig, extract_config
+from brainsmith.dse.design_space import GlobalDesignSpace
 
+from .kernels import parse_kernels
 from .loader import load_blueprint_with_inheritance
 from .steps import parse_steps
-from .kernels import parse_kernels
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +24,9 @@ logger = logging.getLogger(__name__)
 def parse_blueprint(
     blueprint_path: str,
     model_path: str,
-    start_step: Optional[str] = None,
-    stop_step: Optional[str] = None
-) -> Tuple[GlobalDesignSpace, DSEConfig]:
+    start_step: str | None = None,
+    stop_step: str | None = None
+) -> tuple[GlobalDesignSpace, DSEConfig]:
     """Parse blueprint YAML to design space and configuration.
 
     Supports blueprint inheritance via the 'extends' field.

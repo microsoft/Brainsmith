@@ -11,13 +11,12 @@ import pytest
 from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.dse_models import (
-    InterfaceDesignSpace,
-    KernelDesignSpace,
     InterfaceDesignPoint,
+    InterfaceDesignSpace,
     KernelDesignPoint,
+    KernelDesignSpace,
 )
 from brainsmith.dataflow.types import ShapeHierarchy
-
 
 # =============================================================================
 # Test InterfaceDesignPoint

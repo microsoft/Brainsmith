@@ -19,8 +19,9 @@ nodeattr system and stored as frozensets.
 """
 
 import math
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator, Literal, Optional, Tuple
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -49,8 +50,8 @@ class OrderedParameter:
     """
 
     name: str
-    values: Tuple[int, ...]
-    default: Optional[int] = None
+    values: tuple[int, ...]
+    default: int | None = None
 
     def __post_init__(self):
         """Validate invariants: sorted, unique, non-empty."""

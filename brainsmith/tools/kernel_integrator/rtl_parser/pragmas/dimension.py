@@ -9,13 +9,13 @@
 This module contains pragmas for block and stream dimension configuration.
 """
 
-from dataclasses import dataclass
-from typing import Dict, List, Optional
 import logging
+from dataclasses import dataclass
 
-from .base import InterfacePragma, PragmaError
 from brainsmith.dataflow.types import InterfaceType
 from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
+
+from .base import InterfacePragma, PragmaError
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +63,9 @@ class BDimPragma(InterfacePragma):
         This is called after the kernel metadata is available, allowing us to check
         parameter existence without class-level state.
         """
-        logger.debug(f"BDIM pragma parameter validation starting")
+        logger.debug("BDIM pragma parameter validation starting")
         if not self.parsed_data:
-            logger.debug(f"BDIM pragma has no parsed_data, skipping validation")
+            logger.debug("BDIM pragma has no parsed_data, skipping validation")
             return
         
         bdim_params = self.parsed_data.get("bdim_params", [])
@@ -86,9 +86,9 @@ class BDimPragma(InterfacePragma):
                 else:
                     logger.debug(f"BDIM pragma parameter '{element}' validated successfully")
         
-        logger.debug(f"BDIM pragma parameter validation completed successfully")
+        logger.debug("BDIM pragma parameter validation completed successfully")
 
-    def _validate_shape_expression(self, shape_expr: List[str], expected_length: int) -> List:
+    def _validate_shape_expression(self, shape_expr: list[str], expected_length: int) -> list:
         """
         Validate SHAPE expression for BDIM pragma.
         
@@ -128,7 +128,7 @@ class BDimPragma(InterfacePragma):
         logger.debug(f"BDIM SHAPE expression validated: {validated_shape}")
         return validated_shape
 
-    def _parse_inputs(self) -> Dict:
+    def _parse_inputs(self) -> dict:
         """
         Parse BDIM pragma format with optional SHAPE parameter.
         
@@ -325,9 +325,9 @@ class SDimPragma(InterfacePragma):
         This is called after the kernel metadata is available, allowing us to check
         parameter existence without class-level state.
         """
-        logger.debug(f"SDIM pragma parameter validation starting")
+        logger.debug("SDIM pragma parameter validation starting")
         if not self.parsed_data:
-            logger.debug(f"SDIM pragma has no parsed_data, skipping validation")
+            logger.debug("SDIM pragma has no parsed_data, skipping validation")
             return
         
         # Get parameter list - always a list now
@@ -348,9 +348,9 @@ class SDimPragma(InterfacePragma):
             elif param != '1':
                 logger.debug(f"SDIM pragma parameter '{param}' validated successfully")
         
-        logger.debug(f"SDIM pragma parameter validation completed successfully")
+        logger.debug("SDIM pragma parameter validation completed successfully")
 
-    def _validate_shape_expression(self, shape_expr: List[str], expected_length: int) -> List:
+    def _validate_shape_expression(self, shape_expr: list[str], expected_length: int) -> list:
         """
         Validate SHAPE expression for SDIM pragma.
         
@@ -390,7 +390,7 @@ class SDimPragma(InterfacePragma):
         logger.debug(f"SDIM SHAPE expression validated: {validated_shape}")
         return validated_shape
 
-    def _parse_inputs(self) -> Dict:
+    def _parse_inputs(self) -> dict:
         """
         Parse SDIM pragma format with optional SHAPE parameter.
         

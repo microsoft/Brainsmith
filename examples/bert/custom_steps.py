@@ -31,17 +31,15 @@ how to create example-specific steps using the @step decorator without
 needing a full package structure.
 """
 
-import os
-import shutil
 import logging
-from typing import Any
-import numpy as np
 
 import finn.core.onnx_exec as oxe
+import numpy as np
 from qonnx.core.datatype import DataType
+from qonnx.transformation.general import GiveReadableTensorNames, RemoveUnusedTensors
 from qonnx.util.basic import gen_finn_dt_tensor
+
 from brainsmith.registry import step
-from qonnx.transformation.general import RemoveUnusedTensors, GiveReadableTensorNames
 
 logger = logging.getLogger(__name__)
 

@@ -5,12 +5,11 @@
 
 """Tests for InferKernels meta-transform."""
 
-import pytest
 import numpy as np
-from onnx import helper, TensorProto
-
-from qonnx.core.modelwrapper import ModelWrapper
+import pytest
+from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.primitives.transforms.infer_kernels import InferKernels
 
@@ -114,9 +113,11 @@ def test_infer_kernels_backward_compatible():
 
 def test_infer_kernels_filters_infrastructure():
     """Test that InferKernels skips infrastructure kernels in backward compatible mode."""
-    from brainsmith.registry import kernel, reset_registry, discover_components
-    from brainsmith.registry import get_component_metadata
     from brainsmith.dataflow import KernelOp
+    from brainsmith.registry import (
+        get_component_metadata,
+        kernel,
+    )
 
     # Create a mock infrastructure kernel for testing
     @kernel(name="TestInfraKernel", is_infrastructure=True)
@@ -244,9 +245,10 @@ def test_infer_kernels_error_handling():
 
 def test_infer_kernels_logging():
     """Test that InferKernels logs appropriately."""
-    from brainsmith.kernels.addstreams import AddStreams
     import logging
     from io import StringIO
+
+    from brainsmith.kernels.addstreams import AddStreams
 
     # Create Add model
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64])

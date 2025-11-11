@@ -10,7 +10,6 @@ import pytest
 
 from brainsmith.dataflow.ordered_parameter import OrderedParameter
 
-
 # ============================================================================
 # Construction and Validation Tests
 # ============================================================================

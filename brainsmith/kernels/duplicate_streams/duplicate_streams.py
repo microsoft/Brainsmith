@@ -9,14 +9,12 @@
 
 """DuplicateStreams hardware kernel - stream fanout routing."""
 
-import numpy as np
-from onnx import NodeProto
-from typing import Optional
 
+from onnx import NodeProto
 from qonnx.core.modelwrapper import ModelWrapper
 
 import brainsmith.dataflow as df
-from brainsmith.dataflow import KernelOp, FULL_DIM
+from brainsmith.dataflow import FULL_DIM, KernelOp
 from brainsmith.dataflow.spec_helpers import derive_dim
 from brainsmith.dataflow.types import ShapeHierarchy
 from brainsmith.registry import kernel
@@ -62,7 +60,7 @@ class DuplicateStreams(KernelOp):
     def build_schema(
         cls,
         node: NodeProto,
-        model: Optional[ModelWrapper]
+        model: ModelWrapper | None
     ) -> df.KernelSchema:
         """Build schema with dynamic output count from node structure.
 

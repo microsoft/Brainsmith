@@ -7,10 +7,10 @@
 """Tests for dataflow utility functions (Phase 7)."""
 
 import pytest
-from onnx import helper, TensorProto
+from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 
-from brainsmith.dataflow.utils import iter_valid_configurations, get_interface
+from brainsmith.dataflow.utils import get_interface, iter_valid_configurations
 from brainsmith.kernels.layernorm import LayerNorm
 
 

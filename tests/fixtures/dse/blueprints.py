@@ -5,9 +5,8 @@ Programmatic YAML blueprint generation - avoids string templates.
 """
 
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-import pytest
 
+import pytest
 
 # YAML Blueprint Templates
 
@@ -125,7 +124,7 @@ def create_blueprint_file(
     template: str,
     name: str,
     clock_ns: float = 5.0,
-    steps: Optional[List[str]] = None,
+    steps: list[str] | None = None,
     **kwargs
 ) -> Path:
     """Create a blueprint YAML file from a template.
@@ -197,7 +196,7 @@ def create_full_blueprint(
     description: str = "Test blueprint",
     output: str = "bitfile",
     board: str = "V80",
-    target_fps: Optional[int] = None,
+    target_fps: int | None = None,
     **kwargs
 ) -> Path:
     """Create a full blueprint with all common fields.
@@ -233,7 +232,7 @@ def create_extends_blueprint(
     tmp_path: Path,
     name: str = "test_child",
     extends: str = "parent.yaml",
-    clock_ns: Optional[float] = None,
+    clock_ns: float | None = None,
     **kwargs
 ) -> Path:
     """Create a blueprint that extends another (inheritance).
@@ -264,7 +263,7 @@ def create_extends_blueprint(
 def create_base_steps_blueprint(
     tmp_path: Path,
     name: str = "base",
-    steps: Optional[List[str]] = None,
+    steps: list[str] | None = None,
     **kwargs
 ) -> Path:
     """Create a base blueprint for step operations testing.
@@ -467,9 +466,9 @@ def create_branch_points_blueprint(
 def create_inheritance_parent(
     tmp_path: Path,
     name: str = "parent",
-    steps: Optional[List[str]] = None,
-    kernels: Optional[List[str]] = None,
-    board: Optional[str] = None,
+    steps: list[str] | None = None,
+    kernels: list[str] | None = None,
+    board: str | None = None,
     **kwargs
 ) -> Path:
     """Create a parent blueprint for inheritance testing.
@@ -515,8 +514,8 @@ def create_inheritance_parent(
 def create_inheritance_grandparent(
     tmp_path: Path,
     name: str = "grandparent",
-    steps: Optional[List[str]] = None,
-    board: Optional[str] = None,
+    steps: list[str] | None = None,
+    board: str | None = None,
     **kwargs
 ) -> Path:
     """Create a grandparent blueprint for inheritance testing.
@@ -550,9 +549,9 @@ def create_inheritance_grandparent(
 def create_step_range_blueprint(
     tmp_path: Path,
     name: str = "test_step_range",
-    start_step: Optional[str] = None,
-    stop_step: Optional[str] = None,
-    steps: Optional[List[str]] = None,
+    start_step: str | None = None,
+    stop_step: str | None = None,
+    steps: list[str] | None = None,
     **kwargs
 ) -> Path:
     """Create a blueprint with step range control.
@@ -629,7 +628,7 @@ FINN_PIPELINE_STITCHED_IP = [
 def create_finn_blueprint(
     tmp_path: Path,
     name: str = "finn_test",
-    steps: Optional[List[str]] = None,
+    steps: list[str] | None = None,
     clock_ns: float = 5.0,
     target_fps: int = 100,  # Required for estimate pipelines
     **kwargs

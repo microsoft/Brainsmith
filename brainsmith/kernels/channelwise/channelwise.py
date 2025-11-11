@@ -7,24 +7,25 @@
 
 """ChannelwiseOp hardware kernel using modern KernelOp system."""
 
+
 import numpy as np
 from onnx import NodeProto, helper
-from typing import Optional
-
-from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.util.basic import get_by_name
 
-from brainsmith.dataflow import KernelOp, FULL_SHAPE
-from brainsmith.dataflow.types import VALUE_OPTIMIZED
-from brainsmith.dataflow.transformation import TransformationResult
-from brainsmith.dataflow.spec_helpers import add_datatype, mul_datatype, smallest_datatype_for_range, derive_dim
-from brainsmith.dataflow.types import ShapeHierarchy
 import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_SHAPE, KernelOp
 from brainsmith.dataflow.inference_helpers import (
-    find_static_dynamic_pair,
     expand_scalar_to_channels,
+    find_static_dynamic_pair,
 )
+from brainsmith.dataflow.spec_helpers import (
+    add_datatype,
+    derive_dim,
+    mul_datatype,
+    smallest_datatype_for_range,
+)
+from brainsmith.dataflow.transformation import TransformationResult
+from brainsmith.dataflow.types import VALUE_OPTIMIZED, ShapeHierarchy
 from brainsmith.registry import kernel
 
 
@@ -123,7 +124,7 @@ class ChannelwiseOp(KernelOp):
     # ================================================================
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         return CHANNELWISE_SCHEMA
 
     # ================================================================

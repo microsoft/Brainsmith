@@ -21,21 +21,27 @@ Key principles:
 """
 
 import logging
-from dataclasses import dataclass, field
-from typing import Iterator, List, Dict, Tuple, Optional, Union, Any, Set, Sequence, TYPE_CHECKING, FrozenSet, Literal
-from abc import ABC
 import math
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    Optional,
+    Union,
+)
 
-from .types import Shape, ShapeHierarchy, prod
-from .ordered_parameter import OrderedParameter
 from qonnx.core.datatype import BaseDataType
 
+from .ordered_parameter import OrderedParameter
+from .types import Shape, ShapeHierarchy, prod
+
 if TYPE_CHECKING:
-    from .dimension_sources import DimensionSource
     from .constraints import Constraint
 
 # Type alias for tiling specifications (avoid circular import)
-TilingSpec = Sequence[Union[int, str, Any]]  # Any covers FULL_DIM and DimensionSource
+TilingSpec = Sequence[int | str | Any]  # Any covers FULL_DIM and DimensionSource
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +74,11 @@ class InterfaceDesignSpace:
     stream_tiling: TilingSpec
     datatype: BaseDataType
     is_weight: bool = False
-    tensor_name: Optional[str] = None  # ONNX tensor name for initializer lookups
+    tensor_name: str | None = None  # ONNX tensor name for initializer lookups
 
     # Parallelism metadata (None if no stream parameters)
-    parallelism_dimension: Optional[OrderedParameter] = None
-    parallelism_param: Optional[str] = None
+    parallelism_dimension: OrderedParameter | None = None
+    parallelism_param: str | None = None
 
 
 @dataclass(frozen=True)
@@ -216,14 +222,14 @@ class KernelDesignSpace:
                    frozenset (discrete categories like ram_style)
     """
     name: str
-    inputs: Dict[str, InterfaceDesignSpace]
-    outputs: Dict[str, InterfaceDesignSpace]
-    internal_datatypes: Dict[str, BaseDataType]
-    optimization_constraints: List['Constraint']
-    parameters: Dict[str, Union['OrderedParameter', FrozenSet]]  # OrderedParameter for ordered, frozenset for discrete
+    inputs: dict[str, InterfaceDesignSpace]
+    outputs: dict[str, InterfaceDesignSpace]
+    internal_datatypes: dict[str, BaseDataType]
+    optimization_constraints: list['Constraint']
+    parameters: dict[str, Union['OrderedParameter', frozenset]]  # OrderedParameter for ordered, frozenset for discrete
 
     @property
-    def input_list(self) -> List[InterfaceDesignSpace]:
+    def input_list(self) -> list[InterfaceDesignSpace]:
         """Inputs in declaration order (for ONNX positional mapping).
 
         Returns inputs as list preserving dict insertion order (Python 3.7+).
@@ -232,7 +238,7 @@ class KernelDesignSpace:
         return list(self.inputs.values())
 
     @property
-    def output_list(self) -> List[InterfaceDesignSpace]:
+    def output_list(self) -> list[InterfaceDesignSpace]:
         """Outputs in declaration order (for ONNX positional mapping).
 
         Returns outputs as list preserving dict insertion order (Python 3.7+).
@@ -244,7 +250,7 @@ class KernelDesignSpace:
     # Dimension Query Methods
     # =========================================================================
 
-    def get_parameter(self, name: str) -> Union['OrderedParameter', FrozenSet]:
+    def get_parameter(self, name: str) -> Union['OrderedParameter', frozenset]:
         """Get parameter by name.
 
         Args:
@@ -307,7 +313,7 @@ class KernelDesignSpace:
         """
         return isinstance(self.parameters[name], frozenset)
 
-    def configure(self, config: Dict[str, Union[int, str]]) -> 'KernelDesignPoint':
+    def configure(self, config: dict[str, int | str]) -> 'KernelDesignPoint':
         """Instantiate kernel at specified point in design space.
 
         Creates a KernelDesignPoint with resolved stream shapes and validates
@@ -339,7 +345,7 @@ class KernelDesignSpace:
         self._validate_instance(instance, config)
         return instance
 
-    def _validate_params(self, params: Dict[str, Union[int, str]]) -> None:
+    def _validate_params(self, params: dict[str, int | str]) -> None:
         """Validate parameters specify valid point in design space."""
         for param_name, value in params.items():
             if param_name not in self.parameters:
@@ -376,10 +382,10 @@ class KernelDesignSpace:
 
     def _instantiate_interfaces(
         self,
-        interfaces: Dict[str, Any],
-        params: Dict[str, int],
-        interface_lookup: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        interfaces: dict[str, Any],
+        params: dict[str, int],
+        interface_lookup: dict[str, Any]
+    ) -> dict[str, Any]:
         """Create instance interfaces with resolved stream shapes.
 
         Args:
@@ -418,7 +424,7 @@ class KernelDesignSpace:
     def _validate_instance(
         self,
         instance: 'KernelDesignPoint',
-        config: Dict[str, Union[int, str]]
+        config: dict[str, int | str]
     ) -> None:
         """Validate instance satisfies parametric constraints.
 
@@ -457,17 +463,17 @@ class KernelDesignPoint:
         config: Dimension values defining this point (e.g., {"SIMD": 16, "PE": 4})
     """
     design_space: KernelDesignSpace
-    inputs: Dict[str, InterfaceDesignPoint]
-    outputs: Dict[str, InterfaceDesignPoint]
-    config: Dict[str, Union[int, str]]  # Unified: tiling + resource dimensions
+    inputs: dict[str, InterfaceDesignPoint]
+    outputs: dict[str, InterfaceDesignPoint]
+    config: dict[str, int | str]  # Unified: tiling + resource dimensions
 
     @property
-    def input_list(self) -> List[InterfaceDesignPoint]:
+    def input_list(self) -> list[InterfaceDesignPoint]:
         """Inputs in declaration order (for ONNX positional mapping)."""
         return list(self.inputs.values())
 
     @property
-    def output_list(self) -> List[InterfaceDesignPoint]:
+    def output_list(self) -> list[InterfaceDesignPoint]:
         """Outputs in declaration order (for ONNX positional mapping)."""
         return list(self.outputs.values())
     # Convenience properties (delegate to design space)
@@ -476,7 +482,7 @@ class KernelDesignPoint:
         return self.design_space.name
 
     @property
-    def internal_datatypes(self) -> Dict[str, BaseDataType]:
+    def internal_datatypes(self) -> dict[str, BaseDataType]:
         return self.design_space.internal_datatypes
 
     # Computed properties for compatibility with existing code
@@ -527,7 +533,7 @@ class KernelDesignPoint:
     # Navigation Methods (Immutable - Return New Instances)
     # =========================================================================
 
-    def with_dimension(self, name: str, value: Union[int, str]) -> 'KernelDesignPoint':
+    def with_dimension(self, name: str, value: int | str) -> 'KernelDesignPoint':
         """Create new design point with specified dimension value.
 
         Works for both ordered and discrete dimensions.
@@ -689,8 +695,8 @@ class KernelDesignPoint:
     def sweep_dimension(
         self,
         name: str,
-        start: Optional[Union[int, str]] = None,
-        stop: Optional[Union[int, str]] = None
+        start: int | str | None = None,
+        stop: int | str | None = None
     ) -> Iterator['KernelDesignPoint']:
         """Sweep through all valid values for a dimension.
 
@@ -739,7 +745,7 @@ class KernelDesignPoint:
     def sweep_percentage(
         self,
         name: str,
-        percentages: List[float],
+        percentages: list[float],
         rounding: Literal['natural', 'down', 'up'] = 'natural'
     ) -> Iterator['KernelDesignPoint']:
         """Sweep through ordered dimension at specified percentage points.
@@ -777,7 +783,7 @@ class KernelDesignPoint:
 
     def _with_stream_helper(
         self,
-        interface_list: List[InterfaceDesignPoint],
+        interface_list: list[InterfaceDesignPoint],
         interface_type: str,
         index: int,
         value: int
@@ -812,7 +818,7 @@ class KernelDesignPoint:
 
     def _with_stream_percentage_helper(
         self,
-        interface_list: List[InterfaceDesignPoint],
+        interface_list: list[InterfaceDesignPoint],
         interface_type: str,
         index: int,
         percentage: float,
@@ -938,7 +944,7 @@ class KernelDesignPoint:
     # Interface Stream Query Helpers
     # =========================================================================
 
-    def get_input_stream_param(self, index: int) -> Optional[str]:
+    def get_input_stream_param(self, index: int) -> str | None:
         """Get parallelism parameter name for input interface.
 
         Args:
@@ -957,7 +963,7 @@ class KernelDesignPoint:
 
         return self.input_list[index].design_space.parallelism_param
 
-    def get_output_stream_param(self, index: int) -> Optional[str]:
+    def get_output_stream_param(self, index: int) -> str | None:
         """Get parallelism parameter name for output interface.
 
         Args:
@@ -976,7 +982,7 @@ class KernelDesignPoint:
 
         return self.output_list[index].design_space.parallelism_param
 
-    def get_input_stream_value(self, index: int) -> Optional[int]:
+    def get_input_stream_value(self, index: int) -> int | None:
         """Get current parallelism value for input interface.
 
         Args:
@@ -991,7 +997,7 @@ class KernelDesignPoint:
         param = self.get_input_stream_param(index)
         return self.config.get(param) if param else None
 
-    def get_output_stream_value(self, index: int) -> Optional[int]:
+    def get_output_stream_value(self, index: int) -> int | None:
         """Get current parallelism value for output interface.
 
         Args:

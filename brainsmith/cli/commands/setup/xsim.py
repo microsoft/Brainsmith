@@ -6,10 +6,8 @@
 import click
 
 from brainsmith._internal.io.dependencies import DependencyManager
-from ...utils import (
-    console, error_exit, success, warning,
-    progress_spinner, confirm_or_abort
-)
+
+from ...utils import confirm_or_abort, console, error_exit, progress_spinner, success, warning
 from .helpers import _is_finnxsim_built
 
 

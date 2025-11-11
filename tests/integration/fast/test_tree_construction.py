@@ -8,9 +8,10 @@ Execution time: < 1 min (no FINN execution)
 """
 
 import pytest
+
 from brainsmith.dse import build_tree, parse_blueprint
-from brainsmith.dse.tree import DSETree
 from brainsmith.dse.segment import DSESegment
+from brainsmith.dse.tree import DSETree
 
 
 class TestTreeBuilding:

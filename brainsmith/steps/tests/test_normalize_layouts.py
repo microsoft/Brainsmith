@@ -6,11 +6,10 @@
 """Integration tests for normalize_layouts build step."""
 
 import pytest
-from onnx import helper, TensorProto
-
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
 import qonnx.core.data_layout as DataLayout
+from onnx import TensorProto, helper
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.steps.normalize_layouts import normalize_dataflow_layouts_step
 

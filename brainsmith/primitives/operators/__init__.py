@@ -6,4 +6,3 @@ Brainsmith Pure QONNX Operators Library
 Pure QONNX-compatible custom operators (not hardware-specific).
 """
 
-from .norms import FuncLayerNorm

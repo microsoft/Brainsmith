@@ -4,9 +4,10 @@ Single source of truth for all 17 supported binary operations.
 Eliminates duplication across npy_op and cpp_op properties.
 """
 
-import numpy as np
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Set
+
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -184,7 +185,7 @@ class BinaryOperations:
         return cls._OPERATION_MAP[name]
 
     @classmethod
-    def all_operation_names(cls) -> Set[str]:
+    def all_operation_names(cls) -> set[str]:
         """Get set of all operation names for schema validation.
 
         Returns:

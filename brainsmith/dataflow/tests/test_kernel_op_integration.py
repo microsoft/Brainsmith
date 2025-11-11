@@ -11,12 +11,11 @@ like LayerNorm and AddStreams.
 """
 
 import time
-import pytest
-from onnx import helper, TensorProto, numpy_helper
-import numpy as np
 
+import pytest
+from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
-import brainsmith.dataflow as df
+
 from brainsmith.kernels.layernorm import LayerNorm
 
 

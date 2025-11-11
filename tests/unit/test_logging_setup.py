@@ -10,17 +10,13 @@ Arete Approach: No mocking. Real logging setup, real handlers.
 """
 
 import logging
-import pytest
 import tempfile
 from pathlib import Path
 
-from brainsmith._internal.logging import (
-    setup_logging,
-    get_finn_config,
-    _SuppressFilter
-)
-from brainsmith.settings.schema import LoggingConfig
+import pytest
 
+from brainsmith._internal.logging import _SuppressFilter, get_finn_config, setup_logging
+from brainsmith.settings.schema import LoggingConfig
 
 # ============================================================================
 # Test Utilities

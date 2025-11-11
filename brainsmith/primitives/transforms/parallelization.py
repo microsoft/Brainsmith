@@ -34,18 +34,18 @@ Parameter Setting Strategy:
 import inspect
 import json
 import warnings
-from typing import Any, Dict, List, Optional, Tuple, Union, Callable, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol, Union
 
-from qonnx.transformation.base import Transformation
-from qonnx.core.modelwrapper import ModelWrapper
-from finn.util.basic import getHWCustomOp
-from finn.util.fpgadataflow import is_hls_node, is_rtl_node
-from finn.transformation.fpgadataflow.set_folding import divisors
-from finn.transformation.fpgadataflow.annotate_cycles import AnnotateCycles
+import finn.custom_op.fpgadataflow.hls.elementwise_binary_hls as elementwise_binary_hls
 from finn.analysis.fpgadataflow.dataflow_performance import dataflow_performance
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-import finn.custom_op.fpgadataflow.hls.elementwise_binary_hls as elementwise_binary_hls
-
+from finn.transformation.fpgadataflow.annotate_cycles import AnnotateCycles
+from finn.transformation.fpgadataflow.set_folding import divisors
+from finn.util.basic import getHWCustomOp
+from finn.util.fpgadataflow import is_hls_node, is_rtl_node
+from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.transformation.base import Transformation
 
 # ============================================================================
 # Type Hints
@@ -77,13 +77,13 @@ NodeInstance = Union[HWCustomOp, KernelOpProtocol]
 # ============================================================================
 
 # Parameter setting strategies (try in order until one succeeds)
-PARAM_STRATEGIES: Dict[str, List[str]] = {
+PARAM_STRATEGIES: dict[str, list[str]] = {
     "PE": ["dimension", "input:0", "output:0"],
     "SIMD": ["dimension", "input:1", "input:0"],
 }
 
 
-def _discover_elementwise_binary_ops() -> List[str]:
+def _discover_elementwise_binary_ops() -> list[str]:
     """Discover all HLS elementwise binary op types via reflection.
 
     Returns:
@@ -238,7 +238,7 @@ def _try_strategy(
     return False
 
 
-def get_node_interface(node, model: ModelWrapper) -> Tuple[NodeInstance, bool]:
+def get_node_interface(node, model: ModelWrapper) -> tuple[NodeInstance, bool]:
     """Detect node type and return (instance, is_brainsmith) tuple.
 
     Args:
@@ -262,7 +262,7 @@ def set_parallelization(
     param_name: str,
     value: int,
     model: ModelWrapper,
-    strategies: Optional[List[str]] = None
+    strategies: list[str] | None = None
 ) -> None:
     """Set parallelization parameter (PE, SIMD, etc.) on mixed graph nodes.
 
@@ -313,7 +313,7 @@ def get_parallelization(
     node_inst: NodeInstance,
     is_brainsmith: bool,
     param_name: str
-) -> Optional[int]:
+) -> int | None:
     """Get current parallelization parameter value.
 
     Args:
@@ -415,7 +415,7 @@ class ApplyParallelizationConfig(Transformation):
 
     def __init__(
         self,
-        config: Union[str, Dict[str, Any]],
+        config: str | dict[str, Any],
         node_filter: Callable = lambda x: True
     ):
         super().__init__()
@@ -437,7 +437,7 @@ class ApplyParallelizationConfig(Transformation):
         if isinstance(self.config, dict):
             model_config = self.config
         else:
-            with open(self.config, "r") as f:
+            with open(self.config) as f:
                 model_config = json.load(f)
 
         used_configurations = ["Defaults"] if "Defaults" in model_config else []
@@ -519,7 +519,7 @@ def get_valid_values_for_param(
     is_brainsmith: bool,
     param_name: str,
     model: ModelWrapper
-) -> List[int]:
+) -> list[int]:
     """Get valid values for a parallelization parameter.
 
     For Brainsmith nodes, extracts valid values from get_valid_ranges().

@@ -10,15 +10,12 @@ Provides 18 inherited tests:
 - 5 HW estimation tests (cycles, resources, efficiency)
 """
 
-import pytest
-import numpy as np
 import onnx.helper as helper
+import pytest
 from onnx import TensorProto
-
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import qonnx_make_model
-
 from tests.frameworks.kernel_parity_test import KernelParityTest
 from tests.frameworks.test_config import (
     KernelTestConfig,

@@ -23,7 +23,6 @@ Usage:
 """
 
 from qonnx.core.datatype import DataType
-
 from tests.frameworks.test_config import (
     DesignParameters,
     KernelTestConfig,

@@ -7,15 +7,14 @@ Tests the core domain resolution functions that enable hierarchical
 prefix matching and ONNX domain alignment.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from brainsmith.registry._domain_utils import (
-    get_subdomain_for_type,
-    match_domain_to_source,
     derive_domain_from_module,
     expand_short_form,
+    get_subdomain_for_type,
+    match_domain_to_source,
 )
 
 

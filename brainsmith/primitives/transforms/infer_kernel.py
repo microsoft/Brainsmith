@@ -20,12 +20,11 @@ Example usage:
 """
 
 import logging
-from typing import Type
 
-from qonnx.transformation.base import Transformation
-from qonnx.transformation.infer_shapes import InferShapes
-from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.transformation.base import Transformation
+from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.infer_shapes import InferShapes
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,7 @@ class InferKernel(Transformation):
         - Uses InferenceResult to structure graph modifications
     """
 
-    def __init__(self, kernel_cls: Type):
+    def __init__(self, kernel_cls: type):
         """Initialize with kernel class.
 
         Args:

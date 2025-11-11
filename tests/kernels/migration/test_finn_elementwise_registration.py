@@ -11,27 +11,20 @@ Tests the complete workflow after registering all 16 elementwise operations:
 """
 
 import pytest
-import numpy as np
-from onnx import helper, TensorProto
-
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
-from qonnx.util.basic import gen_finn_dt_tensor
-
-from finn.transformation.fpgadataflow.convert_to_hw_layers import (
-    InferElementwiseBinaryOperation
-)
-from finn.util.basic import getHWCustomOp
-
-from brainsmith.registry import (
-    get_kernel,
-    get_backend,
-    list_backends_for_kernel,
-    discover_components,
-)
-from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
 from finn.builder.build_dataflow_config import DataflowBuildConfig
+from finn.transformation.fpgadataflow.convert_to_hw_layers import InferElementwiseBinaryOperation
+from finn.util.basic import getHWCustomOp
+from onnx import TensorProto, helper
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 
+from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
+from brainsmith.registry import (
+    discover_components,
+    get_backend,
+    get_kernel,
+    list_backends_for_kernel,
+)
 
 # Ensure registry is initialized
 discover_components()

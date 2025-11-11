@@ -56,14 +56,14 @@ Advanced Usage:
         .build())
 """
 
-from typing import List, Union, Optional, Tuple
+
 import numpy as np
-from onnx import helper, TensorProto, NodeProto
-from qonnx.core.modelwrapper import ModelWrapper
+from onnx import NodeProto, TensorProto, helper
 from qonnx.core.datatype import DataType
-from qonnx.util.basic import qonnx_make_model
-from qonnx.transformation.infer_shapes import InferShapes
+from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.infer_shapes import InferShapes
+from qonnx.util.basic import qonnx_make_model
 
 
 class OnnxModelBuilder:
@@ -109,9 +109,9 @@ class OnnxModelBuilder:
     def __init__(self):
         """Initialize builder with sensible defaults."""
         self._op_type: str = "Add"
-        self._inputs: List[str] = ["in0", "in1"]
-        self._outputs: List[str] = ["output"]
-        self._shape: List[int] = [1, 8, 8, 64]
+        self._inputs: list[str] = ["in0", "in1"]
+        self._outputs: list[str] = ["output"]
+        self._shape: list[int] = [1, 8, 8, 64]
         self._datatype: DataType = DataType["INT8"]
         self._static_inputs: dict = {}  # {name: shape}
         self._initializer_values: dict = {}  # {name: numpy_array}
@@ -131,7 +131,7 @@ class OnnxModelBuilder:
         self._op_type = op_type
         return self
 
-    def inputs(self, inputs: List[str]) -> 'OnnxModelBuilder':
+    def inputs(self, inputs: list[str]) -> 'OnnxModelBuilder':
         """Set input tensor names.
 
         Args:
@@ -143,7 +143,7 @@ class OnnxModelBuilder:
         self._inputs = inputs
         return self
 
-    def outputs(self, outputs: List[str]) -> 'OnnxModelBuilder':
+    def outputs(self, outputs: list[str]) -> 'OnnxModelBuilder':
         """Set output tensor names.
 
         Args:
@@ -155,7 +155,7 @@ class OnnxModelBuilder:
         self._outputs = outputs
         return self
 
-    def shape(self, shape: List[int]) -> 'OnnxModelBuilder':
+    def shape(self, shape: list[int]) -> 'OnnxModelBuilder':
         """Set default shape for all inputs/outputs.
 
         Args:
@@ -167,7 +167,7 @@ class OnnxModelBuilder:
         self._shape = shape
         return self
 
-    def input_shape(self, name: str, shape: List[int]) -> 'OnnxModelBuilder':
+    def input_shape(self, name: str, shape: list[int]) -> 'OnnxModelBuilder':
         """Override shape for specific input.
 
         Args:
@@ -195,7 +195,7 @@ class OnnxModelBuilder:
     def static_input(
         self,
         name: str,
-        shape: Union[List[int], int] = None,
+        shape: list[int] | int = None,
         values: np.ndarray = None
     ) -> 'OnnxModelBuilder':
         """Mark input as static (initializer) with optional shape/values.
@@ -261,7 +261,7 @@ class OnnxModelBuilder:
         self._node_name = name
         return self
 
-    def build(self) -> Tuple[ModelWrapper, NodeProto]:
+    def build(self) -> tuple[ModelWrapper, NodeProto]:
         """Build the ONNX model and return (model, node).
 
         Returns:
@@ -342,12 +342,12 @@ class OnnxModelBuilder:
 
 def make_binary_op_model(
     op_type: str,
-    shape: List[int] = None,
+    shape: list[int] = None,
     input0: str = "in0",
     input1: str = "in1",
     output: str = "output",
     datatype: DataType = DataType["INT8"]
-) -> Tuple[ModelWrapper, NodeProto]:
+) -> tuple[ModelWrapper, NodeProto]:
     """Create binary operation model (Add, Mul, etc.) with two dynamic inputs.
 
     Use this for kernels that operate on two streaming inputs, such as:
@@ -393,11 +393,11 @@ def make_parametric_op_model(
     op_type: str,
     dynamic_input: str = "data",
     param_input: str = "param",
-    shape: List[int] = None,
-    param_shape: Union[List[int], int] = None,
+    shape: list[int] = None,
+    param_shape: list[int] | int = None,
     datatype: DataType = DataType["INT8"],
     input_order: str = "dynamic_first"
-) -> Tuple[ModelWrapper, NodeProto]:
+) -> tuple[ModelWrapper, NodeProto]:
     """Create parametric operation model (one dynamic, one static input).
 
     Use this for kernels that have one streaming input and one static parameter:
@@ -464,9 +464,9 @@ def make_unary_op_model(
     op_type: str,
     input_name: str = "input",
     output: str = "output",
-    shape: List[int] = None,
+    shape: list[int] = None,
     datatype: DataType = DataType["INT8"]
-) -> Tuple[ModelWrapper, NodeProto]:
+) -> tuple[ModelWrapper, NodeProto]:
     """Create unary operation model (Softmax, LayerNorm, etc.).
 
     Use this for kernels that have a single streaming input:
@@ -512,14 +512,14 @@ def make_unary_op_model(
 # =============================================================================
 
 def make_multithreshold_model(
-    shape: List[int] = [1, 28, 28, 128],
+    shape: list[int] = [1, 28, 28, 128],
     input_dtype: str = "INT8",
     threshold_dtype: str = "INT8",
     output_dtype: str = "UINT4",
     out_scale: float = 1.0,
     out_bias: int = 0,
-    num_thresholds: Optional[int] = None
-) -> Tuple[ModelWrapper, NodeProto]:
+    num_thresholds: int | None = None
+) -> tuple[ModelWrapper, NodeProto]:
     """Create MultiThreshold operation model with automatic threshold generation.
 
     Use this for thresholding operations that quantize activations to lower bitwidths.
@@ -607,13 +607,13 @@ def make_multithreshold_model(
 
 
 def make_funclayernorm_model(
-    shape: List[int] = [1, 128, 768],
+    shape: list[int] = [1, 128, 768],
     datatype: str = "INT8",
     epsilon: float = 1e-5,
     axis: int = -1,
     input_name: str = "inp",
     output_name: str = "out"
-) -> Tuple[ModelWrapper, NodeProto]:
+) -> tuple[ModelWrapper, NodeProto]:
     """Create FuncLayerNorm operation model for BERT-style normalization.
 
     Use this for LayerNorm operations with single input/output and shape preservation.
@@ -672,8 +672,8 @@ def make_funclayernorm_model(
 
 def make_vvau_model(
     channels: int = 16,
-    kernel_shape: List[int] = [3, 3],
-    dim: List[int] = [28, 28],
+    kernel_shape: list[int] = [3, 3],
+    dim: list[int] = [28, 28],
     input_dtype: str = "INT8",
     weight_dtype: str = "INT8",
     output_dtype: str = "INT8",
@@ -681,7 +681,7 @@ def make_vvau_model(
     SIMD: int = 3,
     no_activation: int = 1,
     mode: str = "vvau_node"
-) -> Tuple[ModelWrapper, NodeProto]:
+) -> tuple[ModelWrapper, NodeProto]:
     """Create VVAU (Vector-Vector Activation) model with depthwise sparse weights.
 
     Use this for depthwise convolution tests. Supports two modes:
@@ -819,14 +819,14 @@ def make_vvau_model(
 
 
 def make_broadcast_model(
-    lhs_shape: List[int],
-    rhs_shape: List[int],
+    lhs_shape: list[int],
+    rhs_shape: list[int],
     operation: str = "Add",
     datatype: str = "INT8",
     lhs_name: str = "lhs",
     rhs_name: str = "rhs",
     output_name: str = "output"
-) -> Tuple[ModelWrapper, NodeProto]:
+) -> tuple[ModelWrapper, NodeProto]:
     """Create binary operation model with broadcasting semantics.
 
     Use this for testing broadcasting behavior in elementwise operations.
@@ -896,14 +896,14 @@ def make_broadcast_model(
 
 
 def make_duplicate_streams_model(
-    shape: List[int] = [1, 8, 8, 64],
+    shape: list[int] = [1, 8, 8, 64],
     num_outputs: int = 2,
     datatype: str = "INT8",
-    PE: Optional[int] = None,
+    PE: int | None = None,
     input_name: str = "inp",
     output_prefix: str = "out",
     mode: str = "duplicate_node"
-) -> Tuple[ModelWrapper, NodeProto]:
+) -> tuple[ModelWrapper, NodeProto]:
     """Create DuplicateStreams model with variable-arity outputs.
 
     Use this for testing stream fanout/duplication. Supports two modes:

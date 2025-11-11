@@ -15,8 +15,8 @@ py-tree-sitter >= 0.25.0 with tree-sitter-systemverilog package support.
 """
 
 import logging
-from typing import Optional, List
-from tree_sitter import Parser, Node, Tree, Language
+
+from tree_sitter import Language, Node, Parser, Tree
 
 # Import will fail if tree-sitter-systemverilog is not installed
 try:
@@ -60,7 +60,7 @@ class ASTParser:
             RuntimeError: If grammar loading fails.
         """
         self.debug = debug
-        self.parser: Optional[Parser] = None
+        self.parser: Parser | None = None
         
         try:
             # Create Language object from the systemverilog package
@@ -93,7 +93,7 @@ class ASTParser:
             logger.exception(f"Tree-sitter parsing failed: {e}")
             raise ASTParserError(f"Core parsing failed: {e}")
     
-    def check_syntax_errors(self, tree: Tree) -> Optional[SyntaxError]:
+    def check_syntax_errors(self, tree: Tree) -> SyntaxError | None:
         """Check AST for syntax errors.
         
         Args:
@@ -111,7 +111,7 @@ class ASTParser:
             return SyntaxError(error_msg)
         return None
     
-    def find_modules(self, tree: Tree) -> List[Node]:
+    def find_modules(self, tree: Tree) -> list[Node]:
         """Find all module declaration nodes in the AST.
         
         Args:
@@ -122,7 +122,7 @@ class ASTParser:
         """
         return self._find_nodes_by_type(tree.root_node, "module_declaration")
     
-    def find_first_error_node(self, node: Node) -> Optional[Node]:
+    def find_first_error_node(self, node: Node) -> Node | None:
         """Find the first AST node marked with an error using BFS.
         
         Args:
@@ -150,7 +150,7 @@ class ASTParser:
         
         return None
     
-    def find_child(self, node: Node, types: List[str]) -> Optional[Node]:
+    def find_child(self, node: Node, types: list[str]) -> Node | None:
         """Find the first direct child node matching any of the given types.
         
         Args:
@@ -167,7 +167,7 @@ class ASTParser:
                 return child
         return None
     
-    def find_children(self, node: Node, types: List[str]) -> List[Node]:
+    def find_children(self, node: Node, types: list[str]) -> list[Node]:
         """Find all direct child nodes matching any of the given types.
         
         Args:
@@ -217,7 +217,7 @@ class ASTParser:
                 current_depth=current_depth + 1
             )
     
-    def _find_nodes_by_type(self, root: Node, node_type: str) -> List[Node]:
+    def _find_nodes_by_type(self, root: Node, node_type: str) -> list[Node]:
         """Find all nodes of a specific type in the AST.
         
         Args:

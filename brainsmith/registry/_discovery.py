@@ -18,32 +18,38 @@ Logging Strategy:
     - ERROR: Import failures in strict mode, entry point load failures
 """
 
-import os
-import sys
 import importlib
 import importlib.util
 import logging
+import os
+import sys
 import time
 from contextlib import contextmanager
-from pathlib import Path
 from importlib.metadata import entry_points
-from typing import Dict, List, Any
+from pathlib import Path
+from typing import Any
 
-from ._state import _component_index, _components_discovered, _discovered_sources
-from ._decorators import _register_kernel, _register_backend, _register_step, source_context, _convert_lazy_import_spec
-from ._metadata import ComponentMetadata, ComponentType, ImportSpec, resolve_lazy_class
-from .constants import (
-    SOURCE_BRAINSMITH,
-    SOURCE_FINN,
-    SOURCE_PROJECT,
-    DEFAULT_SOURCE_PRIORITY,
+from ._decorators import (
+    _convert_lazy_import_spec,
+    _register_backend,
+    _register_kernel,
+    _register_step,
+    source_context,
 )
 from ._manifest import (
     _build_manifest_from_index,
-    _save_manifest,
-    _load_manifest,
     _is_manifest_stale,
+    _load_manifest,
     _populate_index_from_manifest,
+    _save_manifest,
+)
+from ._metadata import ComponentMetadata, ComponentType, ImportSpec, resolve_lazy_class
+from ._state import _component_index, _components_discovered, _discovered_sources
+from .constants import (
+    DEFAULT_SOURCE_PRIORITY,
+    SOURCE_BRAINSMITH,
+    SOURCE_FINN,
+    SOURCE_PROJECT,
 )
 
 logger = logging.getLogger(__name__)
@@ -146,7 +152,7 @@ def _resolve_component_name(name_or_qualified: str, component_type: str = 'step'
 def _index_entry_point_components(
     source: str,
     component_type: str,
-    metas: List[Dict]
+    metas: list[dict]
 ):
     """Index entry point components - unified for all types.
 
@@ -456,10 +462,9 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         # Decorators fire during import and auto-populate registry + index
         _discovered_sources.add(SOURCE_BRAINSMITH)
         with source_context(SOURCE_BRAINSMITH):
-            import brainsmith.kernels  # noqa: E402
-            import brainsmith.steps    # noqa: E402
+            pass  # noqa: E402
 
-        logger.debug(f"Loaded core brainsmith components")
+        logger.debug("Loaded core brainsmith components")
 
         # 2. Entry point components (FINN, etc.)
         _load_entry_point_components()

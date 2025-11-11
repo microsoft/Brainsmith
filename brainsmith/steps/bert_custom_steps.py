@@ -13,32 +13,34 @@ These steps are highly specific to BERT model architecture and
 are not general-purpose FINN dataflow compilation steps.
 """
 
+import logging
 import os
 import shutil
-import logging
 from typing import Any
 
-from brainsmith.primitives.transforms.extract_shell_integration_metadata import ExtractShellIntegrationMetadata
-from qonnx.transformation.general import SortCommutativeInputsInitializerLast, GiveUniqueNodeNames
-from qonnx.transformation.remove import RemoveIdentityOps
-from qonnx.transformation.infer_datatypes import InferDataTypes
 from finn.transformation.streamline.absorb import (
-    AbsorbSignBiasIntoMultiThreshold,
     AbsorbAddIntoMultiThreshold,
-    AbsorbMulIntoMultiThreshold
+    AbsorbMulIntoMultiThreshold,
+    AbsorbSignBiasIntoMultiThreshold,
 )
-from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
 from finn.transformation.streamline.reorder import (
     MoveOpPastFork,
+    MoveScalarLinearPastInvariants,
     MoveScalarMulPastMatMul,
-    MoveScalarLinearPastInvariants
+)
+from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
+from qonnx.transformation.general import GiveUniqueNodeNames, SortCommutativeInputsInitializerLast
+from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.remove import RemoveIdentityOps
+
+from brainsmith.primitives.transforms.extract_shell_integration_metadata import (
+    ExtractShellIntegrationMetadata,
 )
 
 logger = logging.getLogger(__name__)
 
 # Import decorator for registration
 from brainsmith.registry import step
-
 
 # === Pre-Processing ===
 

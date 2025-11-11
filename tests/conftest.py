@@ -3,12 +3,12 @@
 This conftest.py is the root configuration for the DSE integration test suite.
 """
 
+
 import pytest
-import shutil
-from pathlib import Path
+
+from brainsmith.registry import reset_registry
 from brainsmith.settings import reset_config
 from brainsmith.settings.validation import ensure_environment_sourced
-from brainsmith.registry import reset_registry
 
 # Validate environment is sourced before any tests run
 # This ensures FINN_ROOT, VIVADO_PATH, etc. are available for tests
@@ -16,29 +16,14 @@ ensure_environment_sourced()
 
 # Import test components - these register @step, @kernel, @backend decorators
 # Available for tests that need globally-registered test components
-import tests.fixtures.components.kernels
-import tests.fixtures.components.backends
-import tests.fixtures.components.steps
-
-# Phase 4: Fixture imports for global availability
-from tests.fixtures.models import *
-from tests.fixtures.dse.design_spaces import *
 from tests.fixtures.dse.blueprints import *
+from tests.fixtures.dse.design_spaces import *
 
 # Import kernel test helpers for easy access in all kernel tests
 # Use these for unit testing kernels (schema, inference, transformation)
 # For parity testing (comparing implementations), use tests/parity/ParityTestBase
-from tests.fixtures.model_builders import (
-    OnnxModelBuilder,
-    make_binary_op_model,
-    make_parametric_op_model,
-    make_unary_op_model,
-    make_multithreshold_model,
-    make_funclayernorm_model,
-    make_vvau_model,
-    make_broadcast_model,
-    make_duplicate_streams_model,
-)
+# Phase 4: Fixture imports for global availability
+from tests.fixtures.models import *
 
 
 def pytest_addoption(parser):

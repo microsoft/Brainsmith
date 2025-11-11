@@ -4,19 +4,19 @@ Ported from OLD_FOR_REFERENCE_ONLY/fixtures/model_utils.py
 Real ONNX models - no mocks.
 """
 
-import onnx
-from onnx import helper, TensorProto
-import numpy as np
 from pathlib import Path
-from typing import List
+
+import numpy as np
+import onnx
 import pytest
+from onnx import TensorProto, helper
 
 from .constants import FIXTURE_RANDOM_SEED
 
 
 def create_simple_model(
-    input_shape: List[int] = [1, 3, 32, 32],
-    output_shape: List[int] = [1, 10],
+    input_shape: list[int] = [1, 3, 32, 32],
+    output_shape: list[int] = [1, 10],
     op_type: str = "MatMul",
     model_name: str = "simple_test_model"
 ) -> onnx.ModelProto:
@@ -254,20 +254,20 @@ def brevitas_fc_model(tmp_path_factory):
     """
     import torch
     import torch.nn as nn
-    from brevitas.nn import QuantLinear, QuantReLU
     from brevitas.core.quant import QuantType
     from brevitas.export import export_qonnx
-    from qonnx.util.cleanup import cleanup as qonnx_cleanup
-    from qonnx.core.modelwrapper import ModelWrapper
+    from brevitas.nn import QuantLinear, QuantReLU
     from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
-    from qonnx.transformation.infer_shapes import InferShapes
+    from qonnx.core.modelwrapper import ModelWrapper
     from qonnx.transformation.fold_constants import FoldConstants
     from qonnx.transformation.general import (
-        GiveUniqueNodeNames,
         GiveReadableTensorNames,
-        RemoveStaticGraphInputs
+        GiveUniqueNodeNames,
+        RemoveStaticGraphInputs,
     )
     from qonnx.transformation.infer_datatypes import InferDataTypes
+    from qonnx.transformation.infer_shapes import InferShapes
+    from qonnx.util.cleanup import cleanup as qonnx_cleanup
 
     # Use session-scoped cache directory
     cache_dir = tmp_path_factory.mktemp("brevitas_models")

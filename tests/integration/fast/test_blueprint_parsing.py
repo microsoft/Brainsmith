@@ -7,25 +7,24 @@ Marker: @pytest.mark.fast
 Execution time: < 1 min (no FINN execution)
 """
 
-import pytest
-from pathlib import Path
 
-from brainsmith.dse import parse_blueprint, GlobalDesignSpace, DSEConfig
+import pytest
+
+from brainsmith.dse import parse_blueprint
 from brainsmith.dse.types import OutputType
 from tests.fixtures.dse.blueprints import (
-    create_minimal_blueprint,
-    create_full_blueprint,
-    create_extends_blueprint,
-    create_inheritance_parent,
-    create_inheritance_grandparent,
     create_base_steps_blueprint,
-    create_step_insert_after_blueprint,
-    create_step_insert_start_blueprint,
-    create_step_insert_end_blueprint,
-    create_step_replace_blueprint,
-    create_step_remove_blueprint,
     create_branch_points_blueprint,
-    create_blueprint_file
+    create_extends_blueprint,
+    create_full_blueprint,
+    create_inheritance_grandparent,
+    create_inheritance_parent,
+    create_minimal_blueprint,
+    create_step_insert_after_blueprint,
+    create_step_insert_end_blueprint,
+    create_step_insert_start_blueprint,
+    create_step_remove_blueprint,
+    create_step_replace_blueprint,
 )
 
 

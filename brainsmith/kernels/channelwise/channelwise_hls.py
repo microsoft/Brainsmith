@@ -29,12 +29,12 @@
 # Modified by Microsoft Corporation for integration with Brainsmith toolchain.
 # Modifications licensed under the MIT License.
 
-import numpy as np
 from math import ceil
-from qonnx.core.datatype import DataType
 
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import numpy_to_hls_code
+from qonnx.core.datatype import DataType
+
 from brainsmith.kernels.channelwise.channelwise import ChannelwiseOp
 from brainsmith.registry import backend
 

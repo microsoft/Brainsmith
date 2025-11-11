@@ -13,9 +13,10 @@ on the is_infrastructure metadata flag, then dispatches to the appropriate trans
 import logging
 from typing import Any
 
-from brainsmith.registry import get_kernel, get_component_metadata, step
-from brainsmith.primitives.transforms import InferKernels, InsertInfrastructureKernels
 from qonnx.transformation.general import GiveUniqueNodeNames
+
+from brainsmith.primitives.transforms import InferKernels, InsertInfrastructureKernels
+from brainsmith.registry import get_component_metadata, get_kernel, step
 
 logger = logging.getLogger(__name__)
 

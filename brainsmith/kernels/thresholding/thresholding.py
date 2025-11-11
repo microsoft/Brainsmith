@@ -16,25 +16,19 @@
 # - Trusts the dataflow system instead of manual reimplementation
 ############################################################################
 
-import numpy as np
-import warnings
-from typing import Callable, List
-from onnx import helper
 
+import numpy as np
+from onnx import NodeProto, helper
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.custom_op.general.multithreshold import multithreshold
 from qonnx.util.basic import interleave_matrix_outer_dim_from_partitions
-import qonnx.core.data_layout as DataLayout
 
-from brainsmith.dataflow import KernelOp, FULL_DIM
+import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_DIM, KernelOp
 from brainsmith.dataflow.spec_helpers import derive_dim
 from brainsmith.dataflow.types import VALUE_OPTIMIZED, ShapeHierarchy
 from brainsmith.registry import kernel
-import brainsmith.dataflow as df
-from typing import Optional
-from onnx import NodeProto
-
 
 # =============================================================================
 # Thresholding Schema
@@ -132,7 +126,7 @@ class Thresholding(KernelOp):  # → HWCustomOp → CustomOp (inheritance chain)
     # ================================================================
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         """Build Thresholding schema (constant for all instances)."""
         return THRESHOLDING_SCHEMA
 

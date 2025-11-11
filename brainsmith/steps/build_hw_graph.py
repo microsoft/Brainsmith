@@ -11,21 +11,20 @@ The combined step simplifies the blueprint configuration and ensures proper
 sequencing of these tightly-coupled transformations.
 """
 
-import os
 import logging
+import os
 from typing import Any
-
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.transformation.general import (
-    GiveUniqueNodeNames,
-    ApplyConfig,
-)
-from qonnx.transformation.infer_shapes import InferShapes
-from qonnx.transformation.infer_datatypes import InferDataTypes
-from qonnx.util.config import extract_model_config_to_json
 
 from finn.transformation.fpgadataflow.create_dataflow_partition import CreateDataflowPartition
 from finn.util.basic import getHWCustomOp
+from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.transformation.general import (
+    ApplyConfig,
+    GiveUniqueNodeNames,
+)
+from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.infer_shapes import InferShapes
+from qonnx.util.config import extract_model_config_to_json
 
 from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
 from brainsmith.registry import step

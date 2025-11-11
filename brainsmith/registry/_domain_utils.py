@@ -13,7 +13,6 @@ component namespace system with ONNX domain conventions.
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ _SUBDOMAIN_MAP = {
 }
 
 
-def get_subdomain_for_type(component_type: str) -> Optional[str]:
+def get_subdomain_for_type(component_type: str) -> str | None:
     """Get subdomain for a component type.
 
     Args:

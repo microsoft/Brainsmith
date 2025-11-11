@@ -26,17 +26,19 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import math
-import numpy as np
 import os
 import shutil
-import pyxsi_utils
-from qonnx.util.basic import roundup_to_integer_multiple
 
-from finnbrainsmith.custom_op.fpgadataflow.rotaryembedding import RotaryEmbedding
+import numpy as np
 from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
 from finn.util.basic import get_rtlsim_trace_depth, make_build_dir
-from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy, pack_innermost_dim_as_hex_string
+from finn.util.data_packing import (
+    npy_to_rtlsim_input,
+    pack_innermost_dim_as_hex_string,
+    rtlsim_output_to_npy,
+)
+from finnbrainsmith.custom_op.fpgadataflow.rotaryembedding import RotaryEmbedding
+from qonnx.util.basic import roundup_to_integer_multiple
 
 try:
     from pyverilator import PyVerilator
@@ -160,10 +162,8 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
 
         else:
             raise Exception(
-                """Invalid value for attribute exec_mode! Is currently set to: {}
-            has to be set to one of the following value ("cppsim", "rtlsim")""".format(
-                    mode
-                )
+                f"""Invalid value for attribute exec_mode! Is currently set to: {mode}
+            has to be set to one of the following value ("cppsim", "rtlsim")"""
             )
 
     def get_template_values(self, head_dim, seq_len, hidden, simd, idt, wdt):
@@ -240,7 +240,7 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
 
         # apply code generation to templates
         code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
-        with open(finnbrainsmith_rtllib + '/rope_template.v', "r") as f:
+        with open(finnbrainsmith_rtllib + '/rope_template.v') as f:
              template = f.read()
         for key_name in code_gen_dict:
              key = "$%s$" % key_name

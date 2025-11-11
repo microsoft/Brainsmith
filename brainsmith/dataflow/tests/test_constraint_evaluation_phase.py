@@ -11,24 +11,23 @@ as 'structural' or 'parametric' for two-phase kernel construction.
 """
 
 import pytest
+
 from brainsmith.dataflow.constraints import (
-    Constraint,
-    DatatypeInteger,
+    CustomConstraint,
     DatatypeFloat,
     DatatypeInRange,
+    DatatypeInteger,
     DatatypesEqual,
-    ShapesEqual,
     DimensionDivisible,
-    DimensionInRange,
     DimensionEquals,
+    DimensionInRange,
+    HasLayout,
     IsDynamic,
     IsStatic,
-    HasLayout,
     NodeAttributeEquals,
-    CustomConstraint,
+    ShapesEqual,
 )
 from brainsmith.dataflow.types import ShapeHierarchy
-
 
 # ====================================================================
 # Test 1: Datatype Constraints (No Hierarchy)

@@ -7,9 +7,9 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from rich.table import Table
-from rich.panel import Panel
 from rich.console import Console as RichConsole
+from rich.panel import Panel
+from rich.table import Table
 
 from .messages import XILINX_NOT_CONFIGURED, XILINX_NOT_FOUND
 

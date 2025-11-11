@@ -3,7 +3,6 @@
 
 """Shared helper functions for setup commands."""
 
-from pathlib import Path
 
 from brainsmith._internal.io.dependencies import DependencyManager
 

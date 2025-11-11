@@ -19,13 +19,13 @@ Key differences from legacy implementation:
 - Intelligent two-level caching (design space + kernel instance)
 """
 
-import numpy as np
 import os
 
+import numpy as np
 from finn.custom_op.fpgadataflow import templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
+from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 
 from brainsmith.kernels.softmax.softmax import Softmax
 from brainsmith.registry import backend

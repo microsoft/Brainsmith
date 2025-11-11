@@ -14,7 +14,6 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from typing import Dict, List
 from urllib.request import urlretrieve
 
 logger = logging.getLogger(__name__)
@@ -75,7 +74,7 @@ class GitDependencyInstaller:
     def install(
         self,
         name: str,
-        dep: Dict,
+        dep: dict,
         dest: Path,
         force: bool,
         quiet: bool
@@ -154,7 +153,7 @@ class ZipDependencyInstaller:
     def install(
         self,
         name: str,
-        dep: Dict,
+        dep: dict,
         dest: Path,
         force: bool,
         quiet: bool
@@ -211,7 +210,7 @@ class BuildDependencyInstaller:
     def install(
         self,
         name: str,
-        dep: Dict,
+        dep: dict,
         dest: Path,
         force: bool,
         quiet: bool
@@ -323,7 +322,7 @@ class BuildDependencyInstaller:
     def _install_generic_build(
         self,
         name: str,
-        dep: Dict,
+        dep: dict,
         force: bool,
         quiet: bool
     ) -> None:

@@ -24,45 +24,45 @@ Usage:
 from .assertions import (
     # Base
     AssertionHelper,
-    # Kernel testing
-    ParityAssertion,
-    assert_shapes_match,
-    assert_datatypes_match,
-    assert_widths_match,
-    assert_values_match,
-    assert_arrays_close,
-    assert_model_tensors_match,
-    # DSE testing
-    TreeAssertions,
-    ExecutionAssertions,
     BlueprintAssertions,
-    ExpectedTreeStructure,
+    ExecutionAssertions,
     ExpectedExecutionLevel,
     ExpectedExecutionStats,
+    ExpectedTreeStructure,
+    # Kernel testing
+    ParityAssertion,
+    # DSE testing
+    TreeAssertions,
+    assert_arrays_close,
+    assert_datatypes_match,
+    assert_model_tensors_match,
+    assert_shapes_match,
+    assert_values_match,
+    assert_widths_match,
     calculate_segment_efficiency,
 )
 
+# Constants (export all)
+from .constants import *
+
+# Test data generation
+from .context import make_execution_context
+
 # Executors
 from .executors import (
-    PythonExecutor,
     CppSimExecutor,
+    PythonExecutor,
     RTLSimExecutor,
 )
+
+# Pipeline execution
+from .pipeline import PipelineRunner
 
 # Validation
 from .validator import (
     GoldenValidator,
     TolerancePresets,
 )
-
-# Pipeline execution
-from .pipeline import PipelineRunner
-
-# Test data generation
-from .context import make_execution_context
-
-# Constants (export all)
-from .constants import *
 
 __all__ = [
     # Assertions - Base

@@ -17,26 +17,20 @@ Primary implementation uses inherited defaults from KernelTestBase.
 """
 
 from abc import abstractmethod
-from typing import Dict, List, Optional, Tuple, Type
 
 import numpy as np
 import pytest
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.onnx_exec import execute_onnx
-from qonnx.transformation.infer_datatypes import InferDataTypes
-from qonnx.transformation.infer_shapes import InferShapes
 
 from tests.frameworks.kernel_test_base import KernelTestBase
 from tests.support.assertions import (
-    assert_shapes_match,
-    assert_widths_match,
     assert_datatypes_match,
+    assert_shapes_match,
     assert_values_match,
+    assert_widths_match,
 )
 from tests.support.backend_utils import specialize_to_backend
-from tests.support.pipeline import PipelineRunner
 
 
 class KernelParityTest(KernelTestBase):
@@ -94,7 +88,7 @@ class KernelParityTest(KernelTestBase):
         self,
         model: ModelWrapper,
         target_node: str,
-    ) -> Tuple[HWCustomOp, ModelWrapper]:
+    ) -> tuple[HWCustomOp, ModelWrapper]:
         """Infer reference implementation.
 
         Reference implementation uses this method to transform ONNX → Reference Kernel.
@@ -121,7 +115,7 @@ class KernelParityTest(KernelTestBase):
         pass
 
     @abstractmethod
-    def get_backend_variants_reference(self) -> List[Type]:
+    def get_backend_variants_reference(self) -> list[type]:
         """Return backend variants for reference implementation.
 
         Reference implementation uses this method to specify HLS/RTL backends.
@@ -166,7 +160,7 @@ class KernelParityTest(KernelTestBase):
         op: HWCustomOp,
         model: ModelWrapper,
         config: "KernelTestConfig",
-    ) -> Tuple[HWCustomOp, ModelWrapper]:
+    ) -> tuple[HWCustomOp, ModelWrapper]:
         """Specialize reference to backend.
 
         Uses explicit backend variants (no method swapping).
@@ -214,7 +208,7 @@ class KernelParityTest(KernelTestBase):
     @pytest.fixture(scope="function")
     def test_inputs(
         self, kernel_test_config: "KernelTestConfig", model_cache
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """Generate test inputs (shared by both kernels).
 
         Same as KernelTest.test_inputs - generates test data.
@@ -237,9 +231,9 @@ class KernelParityTest(KernelTestBase):
         self,
         kernel_test_config: "KernelTestConfig",
         stage1_model: ModelWrapper,
-        test_inputs: Dict[str, np.ndarray],
+        test_inputs: dict[str, np.ndarray],
         model_cache,
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """Golden reference from Stage 1 ONNX (shared by both kernels).
 
         Same as KernelTest.golden_outputs - computes golden reference once.
@@ -269,7 +263,7 @@ class KernelParityTest(KernelTestBase):
         kernel_test_config: "KernelTestConfig",
         stage1_model: ModelWrapper,
         model_cache,
-    ) -> Tuple:
+    ) -> tuple:
         """Stage 2 primary model.
 
         Uses inherited infer_kernel() from base class.
@@ -297,7 +291,7 @@ class KernelParityTest(KernelTestBase):
         kernel_test_config: "KernelTestConfig",
         stage1_model: ModelWrapper,
         model_cache,
-    ) -> Tuple:
+    ) -> tuple:
         """Stage 2 reference model.
 
         Uses infer_kernel_reference() method.
@@ -323,9 +317,9 @@ class KernelParityTest(KernelTestBase):
     def stage3_model(
         self,
         kernel_test_config: "KernelTestConfig",
-        stage2_model: Tuple,
+        stage2_model: tuple,
         model_cache,
-    ) -> Tuple:
+    ) -> tuple:
         """Stage 3 primary model.
 
         Uses inherited specialize_to_backend() from base class.
@@ -351,9 +345,9 @@ class KernelParityTest(KernelTestBase):
     def stage3_model_reference(
         self,
         kernel_test_config: "KernelTestConfig",
-        stage2_model_reference: Tuple,
+        stage2_model_reference: tuple,
         model_cache,
-    ) -> Tuple:
+    ) -> tuple:
         """Stage 3 reference model.
 
         Uses specialize_to_backend_reference() method.
@@ -593,7 +587,7 @@ class KernelParityTest(KernelTestBase):
             # Compare datatypes (names may differ)
             assert_datatypes_match(
                 dt, dt_ref, i,
-                f"After infer_node_datatype, input"
+                "After infer_node_datatype, input"
             )
 
         # Verify output datatypes (compare by position, not name)
@@ -608,7 +602,7 @@ class KernelParityTest(KernelTestBase):
             # Compare datatypes (names may differ)
             assert_datatypes_match(
                 dt, dt_ref, i,
-                f"After infer_node_datatype, output"
+                "After infer_node_datatype, output"
             )
 
     @pytest.mark.parity

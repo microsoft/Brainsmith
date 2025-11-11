@@ -1,20 +1,20 @@
 """Tests for inference helper functions."""
 
-import pytest
 import numpy as np
-from onnx import helper, TensorProto
-from qonnx.core.modelwrapper import ModelWrapper
+import pytest
+from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import qonnx_make_model
 
 from brainsmith.dataflow.inference_helpers import (
-    find_static_dynamic_pair,
-    find_dynamic_inputs,
-    find_static_inputs,
     check_all_integer_types,
-    check_shapes_equal,
     check_parameter_shape_matches_channels,
+    check_shapes_equal,
     expand_scalar_to_channels,
+    find_dynamic_inputs,
+    find_static_dynamic_pair,
+    find_static_inputs,
     lift_scalar_to_rank1,
 )
 

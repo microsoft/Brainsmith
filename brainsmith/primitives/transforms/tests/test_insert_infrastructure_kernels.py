@@ -5,19 +5,17 @@
 
 """Tests for InsertInfrastructureKernels transform."""
 
-import pytest
 import numpy as np
-from onnx import helper, TensorProto
-
-from qonnx.core.modelwrapper import ModelWrapper
+from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 
+from brainsmith.kernels.duplicate_streams import DuplicateStreams
 from brainsmith.primitives.transforms import InsertInfrastructureKernels
 from brainsmith.primitives.transforms.insert_infrastructure_kernels import (
-    _register_infrastructure_transform,
     INFRASTRUCTURE_TRANSFORM_MAP,
+    _register_infrastructure_transform,
 )
-from brainsmith.kernels.duplicate_streams import DuplicateStreams
 
 
 def make_fanout_model():

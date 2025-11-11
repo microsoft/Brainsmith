@@ -7,22 +7,22 @@
 # Migration to KernelOp by Microsoft Corporation
 ############################################################################
 
-import numpy as np
 import os
 import textwrap
 from math import ceil, log2
-from qonnx.core.datatype import DataType
-from qonnx.util.basic import roundup_to_integer_multiple
 
+import numpy as np
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from finn.custom_op.fpgadataflow import templates
-from brainsmith.kernels.thresholding.thresholding import Thresholding
 from finn.util.data_packing import (
     npy_to_rtlsim_input,
     numpy_to_hls_code,
     pack_innermost_dim_as_hex_string,
     rtlsim_output_to_npy,
 )
+from qonnx.core.datatype import DataType
+from qonnx.util.basic import roundup_to_integer_multiple
+
+from brainsmith.kernels.thresholding.thresholding import Thresholding
 from brainsmith.registry import backend
 
 

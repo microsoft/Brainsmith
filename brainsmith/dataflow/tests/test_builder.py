@@ -14,7 +14,6 @@ from brainsmith._internal.math import divisors
 from brainsmith.dataflow.builder import DesignSpaceBuilder
 from brainsmith.dataflow.dse_models import InterfaceDesignSpace
 
-
 # =============================================================================
 # Test divisors() Helper
 # =============================================================================

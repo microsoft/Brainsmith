@@ -3,7 +3,7 @@ Simplified code generator for Brainsmith kernels.
 """
 
 from pathlib import Path
-from typing import Optional, Dict
+
 from jinja2 import Environment, FileSystemLoader
 
 from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
@@ -31,7 +31,7 @@ class KernelGenerator:
         }
     }
     
-    def __init__(self, template_dir: Optional[Path] = None):
+    def __init__(self, template_dir: Path | None = None):
         if template_dir is None:
             template_dir = Path(__file__).parent / "templates"
         
@@ -63,7 +63,7 @@ class KernelGenerator:
         
         return output_path
     
-    def generate_all(self, kernel_metadata: KernelMetadata, output_dir: Path) -> Dict[str, Path]:
+    def generate_all(self, kernel_metadata: KernelMetadata, output_dir: Path) -> dict[str, Path]:
         """Generate all artifacts and save to files."""
         output_dir = Path(output_dir)
         return {

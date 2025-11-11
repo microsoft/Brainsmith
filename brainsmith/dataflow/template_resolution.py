@@ -18,18 +18,18 @@ TilingSpec Syntax:
 """
 
 import logging
-import math
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from .types import FULL_DIM, FULL_SHAPE, ShapeHierarchy
-from .spec_helpers import derive_dim
+from collections.abc import Callable
+from typing import Any
+
+from .types import FULL_DIM, FULL_SHAPE
 
 logger = logging.getLogger(__name__)
 
 
 def normalize_template(
-    template: Union[List[Union[int, str, type]], type],
-    reference_shape: Tuple[int, ...]
-) -> List[Union[int, str, type]]:
+    template: list[int | str | type] | type,
+    reference_shape: tuple[int, ...]
+) -> list[int | str | type]:
     """Normalize template structure to match reference rank (no value resolution).
 
     Handles both list-based templates and FULL_SHAPE sentinel. Pads templates
@@ -156,10 +156,10 @@ def _resolve_literal(value: int) -> int:
 
 def _resolve_callable(
     func: Callable,
-    interfaces: Dict[str, Any],
+    interfaces: dict[str, Any],
     param_getter: Callable,
-    model: Optional[Any],
-    tensor_name: Optional[str]
+    model: Any | None,
+    tensor_name: str | None
 ) -> int:
     """Execute custom dimension computation function.
 
@@ -193,13 +193,13 @@ def _resolve_callable(
 
 
 def resolve_template(
-    template: Union[List[Union[int, str, Callable, type]], type],
-    reference_shape: Tuple[int, ...],
+    template: list[int | str | Callable | type] | type,
+    reference_shape: tuple[int, ...],
     param_getter: Callable[[str], Any],
-    interfaces: Optional[Dict[str, Any]] = None,
-    model: Optional[Any] = None,
-    tensor_name: Optional[str] = None
-) -> Tuple[int, ...]:
+    interfaces: dict[str, Any] | None = None,
+    model: Any | None = None,
+    tensor_name: str | None = None
+) -> tuple[int, ...]:
     """Resolve template dimensions to concrete shape.
 
     Supports both list-based templates and FULL_SHAPE sentinel.

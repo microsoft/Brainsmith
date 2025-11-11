@@ -5,15 +5,14 @@
 
 """Tests for build_dataflow_graph step."""
 
-import pytest
 import tempfile
-import os
 from types import SimpleNamespace
-from onnx import helper, TensorProto
 
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
+import pytest
 import qonnx.core.data_layout as DataLayout
+from onnx import TensorProto, helper
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.steps.build_dataflow_graph import build_dataflow_graph
 

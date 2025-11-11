@@ -1,11 +1,7 @@
 """Tests for TensorDimMatches and TensorSizeMatches constraints."""
 
-import pytest
-import numpy as np
 from brainsmith.dataflow.constraints import TensorDimMatches, TensorSizeMatches
-from brainsmith.dataflow.validation import DesignSpaceValidationContext, ShapeHierarchy
-from brainsmith.dataflow.dse_models import InterfaceDesignSpace
-from qonnx.core.datatype import DataType
+from brainsmith.dataflow.validation import ShapeHierarchy
 
 
 class MockValidationContext:

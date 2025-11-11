@@ -11,20 +11,21 @@ This module tests the complete flow of internal datatypes from schema
 definition through resolution during model building.
 """
 
-import pytest
 from dataclasses import dataclass
 
+import pytest
 from qonnx.core.datatype import DataType
+
 from brainsmith.dataflow import (
-    # Schemas
-    InputSchema,
-    OutputSchema,
-    KernelSchema,
+    ComputedDatatype,
     # Datatype sources
     DerivedDatatype,
-    WidenedDatatype,
+    # Schemas
+    InputSchema,
+    KernelSchema,
+    OutputSchema,
     UnionDatatype,
-    ComputedDatatype,
+    WidenedDatatype,
 )
 
 

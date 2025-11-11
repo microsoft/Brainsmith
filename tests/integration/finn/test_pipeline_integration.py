@@ -10,12 +10,12 @@ Timeout: 600-900 seconds per test
 IMPORTANT: Real FINN execution - validates complete pipelines!
 """
 
-import pytest
 import json
-from pathlib import Path
 
-from brainsmith.dse import explore_design_space, parse_blueprint, build_tree, execute_tree
-from brainsmith.dse.types import SegmentStatus, OutputType
+import pytest
+
+from brainsmith.dse import build_tree, execute_tree, explore_design_space, parse_blueprint
+from brainsmith.dse.types import SegmentStatus
 
 
 class TestPipelineIntegration:
@@ -145,7 +145,7 @@ class TestPipelineIntegration:
         - Verify only specified steps executed
         """
         # Create blueprint with multiple steps, stopping at tidy_up
-        blueprint_yaml = f"""
+        blueprint_yaml = """
 name: step_range
 clock_ns: 10.0
 output: estimates
@@ -252,7 +252,7 @@ design_space:
                 for report_path in potential_reports:
                     if report_path.exists():
                         try:
-                            with open(report_path, 'r') as f:
+                            with open(report_path) as f:
                                 report_data = json.load(f)
 
                             # Validate report structure (flexible - FINN format may vary)
@@ -270,7 +270,7 @@ design_space:
                                 # Successfully found and validated a report
                                 break
 
-                        except (json.JSONDecodeError, IOError):
+                        except (OSError, json.JSONDecodeError):
                             # Not a valid JSON report, continue searching
                             continue
 

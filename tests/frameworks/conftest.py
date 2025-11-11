@@ -29,5 +29,3 @@ Usage:
         pass
 """
 
-import pytest
-from qonnx.core.datatype import DataType

@@ -7,13 +7,11 @@
 """Tests for parameter exploration step (Phase 7)."""
 
 import json
-import pytest
-from pathlib import Path
-from onnx import helper, TensorProto
+
+from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.steps.parameter_exploration import explore_kernel_params_step
-from brainsmith.kernels.layernorm import LayerNorm
 
 
 class MockConfig:

@@ -13,16 +13,16 @@ names (e.g., 'brainsmith:LayerNorm'). Short names use source priority resolution
 """
 
 import logging
-from typing import Type, Optional, Dict, List, Any
+from typing import Any
 
-from ._state import _component_index, _components_discovered
 from ._discovery import (
-    discover_components,
-    _resolve_component_name,
     _load_component,
     _measure_load,
+    _resolve_component_name,
+    discover_components,
 )
 from ._metadata import ComponentType, resolve_lazy_class
+from ._state import _component_index, _components_discovered
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 def _format_not_found_error(
     component_type: str,
     full_name: str,
-    available: List[str]
+    available: list[str]
 ) -> str:
     """Format helpful error message with troubleshooting guide.
 
@@ -72,10 +72,10 @@ def _format_not_found_error(
     else:
         # Name doesn't exist anywhere - show troubleshooting
         msg += f"\n✗ No {type_str} named '{requested_name}' found in any source.\n"
-        msg += f"\nTroubleshooting:\n"
+        msg += "\nTroubleshooting:\n"
         msg += f"  1. List all: list_{type_str}s()\n"
         msg += f"  2. Check decorator: @{type_str} applied?\n"
-        msg += f"  3. Check paths: Verify component_sources config\n"
+        msg += "  3. Check paths: Verify component_sources config\n"
 
     msg += f"\nAvailable {type_str}s: {', '.join(available[:10])}"
     if len(available) > 10:
@@ -143,7 +143,7 @@ def _has_component(name: str, component_type: str) -> bool:
     return full_name in _component_index
 
 
-def _list_components(component_type: str, source: Optional[str] = None) -> List[str]:
+def _list_components(component_type: str, source: str | None = None) -> list[str]:
     """Unified component listing.
 
     All public list_*() functions delegate to this implementation.
@@ -218,7 +218,7 @@ def has_step(name: str) -> bool:
     return _has_component(name, 'step')
 
 
-def list_steps(source: Optional[str] = None) -> List[str]:
+def list_steps(source: str | None = None) -> list[str]:
     """List all available steps.
 
     Args:
@@ -236,7 +236,7 @@ def list_steps(source: Optional[str] = None) -> List[str]:
 
 # === Kernels ===
 
-def get_kernel(name: str) -> Type:
+def get_kernel(name: str) -> type:
     """Get kernel class.
 
     Accepts both short names ('LayerNorm') and qualified names ('user:LayerNorm').
@@ -259,7 +259,7 @@ def get_kernel(name: str) -> Type:
     return _get_component(name, 'kernel')
 
 
-def get_kernel_infer(name: str) -> Type:
+def get_kernel_infer(name: str) -> type:
     """Get kernel's inference transform class.
 
     Args:
@@ -318,7 +318,7 @@ def has_kernel(name: str) -> bool:
     return _has_component(name, 'kernel')
 
 
-def list_kernels(source: Optional[str] = None) -> List[str]:
+def list_kernels(source: str | None = None) -> list[str]:
     """List all available kernels.
 
     Args:
@@ -336,7 +336,7 @@ def list_kernels(source: Optional[str] = None) -> List[str]:
 
 # === Backends ===
 
-def get_backend(name: str) -> Type:
+def get_backend(name: str) -> type:
     """Get backend class by name.
 
     Accepts both short names ('LayerNorm_HLS') and qualified names ('user:LayerNorm_HLS_Fast').
@@ -358,7 +358,7 @@ def get_backend(name: str) -> Type:
     return _get_component(name, 'backend')
 
 
-def get_backend_metadata(name: str) -> Dict[str, Any]:
+def get_backend_metadata(name: str) -> dict[str, Any]:
     """Get backend metadata.
 
     Args:
@@ -395,9 +395,9 @@ def get_backend_metadata(name: str) -> Dict[str, Any]:
 
 def list_backends_for_kernel(
     kernel: str,
-    language: Optional[str] = None,
-    sources: Optional[List[str]] = None
-) -> List[str]:
+    language: str | None = None,
+    sources: list[str] | None = None
+) -> list[str]:
     """List backends that target a specific kernel.
 
     Backends are stored directly on kernel metadata during discovery, so this
@@ -457,7 +457,7 @@ def list_backends_for_kernel(
     return sorted(matching)
 
 
-def list_backends(source: Optional[str] = None) -> List[str]:
+def list_backends(source: str | None = None) -> list[str]:
     """List all available backends.
 
     Args:
@@ -507,7 +507,7 @@ def get_component_metadata(name: str, component_type: str):
     return _component_index[full_name]
 
 
-def get_all_component_metadata() -> Dict[str, Any]:
+def get_all_component_metadata() -> dict[str, Any]:
     """Get all component metadata.
 
     Returns:

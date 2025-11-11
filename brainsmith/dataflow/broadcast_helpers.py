@@ -17,8 +17,9 @@ Key Concepts:
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional, Tuple, List
+
 import numpy as np
 
 
@@ -49,11 +50,11 @@ class BroadcastInfo:
         >>> info.broadcast_last_axis_rhs
         False  # RHS does not broadcast in last dimension
     """
-    lhs_shape: Tuple[int, ...]
-    rhs_shape: Tuple[int, ...]
-    output_shape: Tuple[int, ...]
-    broadcast_dims_lhs: Tuple[int, ...]
-    broadcast_dims_rhs: Tuple[int, ...]
+    lhs_shape: tuple[int, ...]
+    rhs_shape: tuple[int, ...]
+    output_shape: tuple[int, ...]
+    broadcast_dims_lhs: tuple[int, ...]
+    broadcast_dims_rhs: tuple[int, ...]
     broadcast_last_axis_lhs: bool
     broadcast_last_axis_rhs: bool
 
@@ -75,8 +76,8 @@ class BroadcastInfo:
     @classmethod
     def compute(
         cls,
-        lhs_shape: Tuple[int, ...],
-        rhs_shape: Tuple[int, ...]
+        lhs_shape: tuple[int, ...],
+        rhs_shape: tuple[int, ...]
     ) -> BroadcastInfo:
         """Compute broadcasting metadata from input shapes.
 
@@ -151,7 +152,7 @@ class BroadcastInfo:
             broadcast_last_axis_rhs=broadcast_last_axis_rhs,
         )
 
-    def get_buffer_shape(self, input_name: str, pe: int) -> Tuple[int, ...]:
+    def get_buffer_shape(self, input_name: str, pe: int) -> tuple[int, ...]:
         """Compute buffer shape for HLS memory allocation.
 
         For inputs that broadcast, buffer shape may differ from tensor shape:
@@ -224,8 +225,8 @@ class BroadcastInfo:
     def should_read_new_value(
         self,
         input_name: str,
-        loop_counters: Tuple[str, ...]
-    ) -> Optional[str]:
+        loop_counters: tuple[str, ...]
+    ) -> str | None:
         """Generate condition for conditional reads in HLS loops.
 
         For static inputs with broadcasting, determine when to read new values
@@ -269,7 +270,7 @@ class BroadcastInfo:
     def get_index_expression(
         self,
         input_name: str,
-        loop_counters: Tuple[str, ...],
+        loop_counters: tuple[str, ...],
         pe_variable: str = "pe"
     ) -> str:
         """Generate C++ indexing expression for buffer access.
@@ -330,8 +331,8 @@ class BroadcastInfo:
 
 
 def compute_broadcast_info(
-    lhs_shape: Tuple[int, ...],
-    rhs_shape: Tuple[int, ...]
+    lhs_shape: tuple[int, ...],
+    rhs_shape: tuple[int, ...]
 ) -> BroadcastInfo:
     """Convenience function for computing broadcast info.
 

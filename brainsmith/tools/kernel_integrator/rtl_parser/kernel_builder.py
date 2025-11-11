@@ -13,20 +13,20 @@ This module handles:
 """
 
 import logging
-from typing import Optional, List, Dict
 from collections import defaultdict
-from tree_sitter import Tree
 
-from brainsmith.dataflow.types import ProtocolType, InterfaceType
+from brainsmith.dataflow.types import InterfaceType, ProtocolType
 from brainsmith.tools.kernel_integrator.metadata import (
-    KernelMetadata, InterfaceMetadata, AXIStreamMetadata, 
-    AXILiteMetadata, ControlMetadata
+    AXILiteMetadata,
+    AXIStreamMetadata,
+    ControlMetadata,
+    InterfaceMetadata,
+    KernelMetadata,
 )
-from .types import Port, Parameter, Direction, ParsedModule
+
 from .ast_parser import ASTParser
 from .protocol_validator import ProtocolScanner
-from .pragmas import Pragma
-
+from .types import Direction, ParsedModule, Port
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ class KernelBuilder:
             parameters=parameters
         )
 
-    def scan_and_build_interfaces(self, ports: List[Port]) -> Dict[ProtocolType, List[InterfaceMetadata]]:
+    def scan_and_build_interfaces(self, ports: list[Port]) -> dict[ProtocolType, list[InterfaceMetadata]]:
         """Scan ports for protocol patterns and build validated interface metadata.
         
         This method:

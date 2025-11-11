@@ -8,9 +8,9 @@ from pathlib import Path
 import click
 
 from ..context import ApplicationContext
-from ..utils import console, success, progress_spinner
 from ..exceptions import CLIError
-from ..messages import KERNEL_VALIDATION_HINTS, KERNEL_TOOL_NOT_FOUND_HINTS
+from ..messages import KERNEL_TOOL_NOT_FOUND_HINTS, KERNEL_VALIDATION_HINTS
+from ..utils import console, progress_spinner, success
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -46,7 +46,7 @@ def kernel(
     verbose: bool
 ) -> None:
     """RTL_FILE: Path to SystemVerilog RTL source file (.sv) with embedded pragmas"""
-    console.print(f"[bold blue]Brainsmith Kernel Integrator[/bold blue]")
+    console.print("[bold blue]Brainsmith Kernel Integrator[/bold blue]")
     console.print(f"RTL File: {rtl_file}")
 
     if output_dir is None:

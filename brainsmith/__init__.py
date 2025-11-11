@@ -35,10 +35,9 @@ Modules are loaded on-demand when attributes are accessed.
 __version__ = "0.1.0"
 
 # Eager imports for decorators (needed at import time for deferred registration)
-from .registry import step, kernel, backend
-
 # Lazy import mappings - using shared LazyModuleLoader for performance
 from ._internal.lazy_imports import LazyModuleLoader
+from .registry import backend, kernel, step
 
 _LAZY_MODULES = {
     # DSE module

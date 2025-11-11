@@ -12,17 +12,21 @@ based on naming conventions. Parameters are moved from kernel.parameters to
 appropriate interface fields based on pattern matching.
 """
 
-import re
 import logging
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import List, Optional, Pattern, Callable, Union
-from collections import defaultdict
+from re import Pattern
 
-from brainsmith.tools.kernel_integrator.metadata import (
-    KernelMetadata, AXIStreamMetadata, AXILiteMetadata, DatatypeParameters
-)
-from .types import Parameter
 from brainsmith.dataflow.types import InterfaceType
+from brainsmith.tools.kernel_integrator.metadata import (
+    AXILiteMetadata,
+    AXIStreamMetadata,
+    DatatypeParameters,
+    KernelMetadata,
+)
+
+from .types import Parameter
 
 logger = logging.getLogger(__name__)
 
@@ -60,16 +64,16 @@ class LinkingRule:
     """A rule for linking parameters based on patterns."""
     name: str
     pattern: Pattern[str]
-    handler: Callable[[Parameter, KernelMetadata, re.Match, Optional[dict]], bool]
+    handler: Callable[[Parameter, KernelMetadata, re.Match, dict | None], bool]
     priority: int = 100  # Lower = higher priority
-    metadata: Optional[dict] = None  # Additional data for handler
+    metadata: dict | None = None  # Additional data for handler
 
 
 class ParameterLinker:
     """Modular parameter linker with extensible rule system."""
     
     def __init__(self):
-        self.rules: List[LinkingRule] = []
+        self.rules: list[LinkingRule] = []
         self._setup_default_rules()
     
     def _setup_default_rules(self):
@@ -179,7 +183,7 @@ class ParameterLinker:
 
 # Handler functions for each parameter type
 
-def link_dimension_parameter(param: Parameter, kernel: KernelMetadata, match: re.Match, metadata: Optional[dict]) -> bool:
+def link_dimension_parameter(param: Parameter, kernel: KernelMetadata, match: re.Match, metadata: dict | None) -> bool:
     """Try to link parameter as dimension (BDIM or SDIM).
     
     This is a consolidated handler that uses the rule metadata to determine
@@ -240,7 +244,7 @@ def link_dimension_parameter(param: Parameter, kernel: KernelMetadata, match: re
         return _assign_if_empty(interface, attr_name, [param], context)
 
 
-def link_dtype_parameter(param: Parameter, kernel: KernelMetadata, match: re.Match, metadata: Optional[dict]) -> bool:
+def link_dtype_parameter(param: Parameter, kernel: KernelMetadata, match: re.Match, metadata: dict | None) -> bool:
     """Try to link parameter as datatype property."""
     # Find the best (longest) matching pattern to handle compound suffixes correctly
     best_match = None
@@ -285,7 +289,7 @@ def link_dtype_parameter(param: Parameter, kernel: KernelMetadata, match: re.Mat
     return False
 
 
-def link_axilite_parameter(param: Parameter, kernel: KernelMetadata, match: re.Match, metadata: Optional[dict]) -> bool:
+def link_axilite_parameter(param: Parameter, kernel: KernelMetadata, match: re.Match, metadata: dict | None) -> bool:
     """Try to link parameter to AXI-Lite interface."""
     # Extract interface name from match groups
     interface_name = None
@@ -348,7 +352,7 @@ def _assign_if_empty(obj, attr_name: str, value, logger_context: str = "") -> bo
     return False
 
 
-def _find_stream_interface(name: str, kernel: KernelMetadata) -> Optional[AXIStreamMetadata]:
+def _find_stream_interface(name: str, kernel: KernelMetadata) -> AXIStreamMetadata | None:
     """Find an AXI-Stream interface by name."""
     # Check inputs
     for interface in kernel.inputs:
@@ -363,7 +367,7 @@ def _find_stream_interface(name: str, kernel: KernelMetadata) -> Optional[AXIStr
     return None
 
 
-def _find_axilite_interface(name: str, kernel: KernelMetadata) -> Optional[AXILiteMetadata]:
+def _find_axilite_interface(name: str, kernel: KernelMetadata) -> AXILiteMetadata | None:
     """Find an AXI-Lite interface by name."""
     for interface in kernel.config:
         if interface.name == name or interface.name == f"s_axilite_{name}":

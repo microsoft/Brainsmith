@@ -10,13 +10,11 @@ Timeout: 600-900 seconds per test
 IMPORTANT: Real FINN execution - validates actual DSE behavior!
 """
 
+
 import pytest
-from pathlib import Path
 
 from brainsmith.dse import build_tree, execute_tree, parse_blueprint
-from brainsmith.dse.types import SegmentStatus, OutputType
-from brainsmith.dse.runner import SegmentRunner
-from brainsmith._internal.finn.adapter import FINNAdapter
+from brainsmith.dse.types import SegmentStatus
 
 
 class TestSegmentExecution:
@@ -30,10 +28,8 @@ class TestSegmentExecution:
         Tests basic execution path: quantized model → finn:streamline
         Validates segment completion, artifacts, and model output.
         """
-        from tests.fixtures.dse.blueprints import create_finn_blueprint
-
         # Create minimal FINN blueprint with single fast step
-        from tests.fixtures.dse.blueprints import FINN_PIPELINE_MINIMAL
+        from tests.fixtures.dse.blueprints import FINN_PIPELINE_MINIMAL, create_finn_blueprint
 
         blueprint_path = create_finn_blueprint(
             tmp_path,
@@ -87,7 +83,6 @@ class TestSegmentExecution:
         Tests branching: model → finn:streamline → [option1, skip]
         Validates both branch paths execute correctly.
         """
-        from tests.fixtures.dse.blueprints import create_blueprint_file, FULL_BLUEPRINT
 
         # Create branching blueprint
         blueprint_yaml = """
@@ -141,7 +136,6 @@ design_space:
         Tests that when execution branches, child segments receive
         the parent's output model as their input.
         """
-        from tests.fixtures.dse.blueprints import create_blueprint_file
 
         # Create branching blueprint
         blueprint_yaml = """

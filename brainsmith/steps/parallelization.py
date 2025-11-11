@@ -12,11 +12,11 @@ while ApplyParallelizationConfig and SetParallelization handle the actual logic.
 import logging
 from typing import Any
 
-from brainsmith.registry import step
 from brainsmith.primitives.transforms.parallelization import (
     ApplyParallelizationConfig,
     SetParallelization,
 )
+from brainsmith.registry import step
 
 logger = logging.getLogger(__name__)
 

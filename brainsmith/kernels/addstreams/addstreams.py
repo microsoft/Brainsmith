@@ -16,17 +16,15 @@ Hardware mapping:
     AddStreams with PE parallelism for channel-wise processing
 """
 
-import numpy as np
-from onnx import NodeProto, helper
-from typing import Optional
 
-from brainsmith.dataflow import KernelOp, FULL_SHAPE
+from onnx import NodeProto, helper
+from qonnx.core.modelwrapper import ModelWrapper
+
 import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_SHAPE, KernelOp
 from brainsmith.dataflow.spec_helpers import add_datatype, derive_dim
 from brainsmith.dataflow.types import ShapeHierarchy
 from brainsmith.registry import kernel
-from qonnx.core.modelwrapper import ModelWrapper
-
 
 ADDSTREAMS_SCHEMA = df.KernelSchema(
     name="AddStreams",
@@ -72,7 +70,7 @@ class AddStreams(KernelOp):
         super().__init__(onnx_node, **kwargs)
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         """Build AddStreams schema (constant for all instances)."""
         return ADDSTREAMS_SCHEMA
 

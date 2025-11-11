@@ -20,8 +20,6 @@ Usage:
 """
 
 # Re-export base test class
-from .test_elementwise_binary import ElementwiseBinaryTestBase
-
 # Re-export test case utilities
 from .test_cases import (
     DESIGN_BASELINE,
@@ -47,11 +45,6 @@ from .test_cases import (
     DTYPES_UINT16,
     DTYPES_UINT32,
     PLATFORM_ZYNQ7020,
-    SHAPE_2D_1x16,
-    SHAPE_2D_1x64,
-    SHAPE_2D_4x128,
-    SHAPE_3D_1x16x64,
-    SHAPE_4D_1x8x8x32,
     SHAPE_BROADCAST_BIDIR,
     SHAPE_BROADCAST_CHANNEL,
     SHAPE_BROADCAST_RANK,
@@ -59,8 +52,14 @@ from .test_cases import (
     SHAPE_BROADCAST_SPATIAL,
     VALIDATION_CASES_BASE,
     VALIDATION_STANDARD,
+    SHAPE_2D_1x16,
+    SHAPE_2D_1x64,
+    SHAPE_2D_4x128,
+    SHAPE_3D_1x16x64,
+    SHAPE_4D_1x8x8x32,
     make_elementwise_case,
 )
+from .test_elementwise_binary import ElementwiseBinaryTestBase
 
 __all__ = [
     # Base test class

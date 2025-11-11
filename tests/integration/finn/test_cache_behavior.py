@@ -13,13 +13,12 @@ Timeout: 1200-1800 seconds per test
 IMPORTANT: Cache validation critical for DSE performance!
 """
 
-import pytest
 import time
-import onnx
-from pathlib import Path
 
-from brainsmith.dse import explore_design_space, parse_blueprint, build_tree, execute_tree
-from brainsmith.dse.types import SegmentStatus, ExecutionError
+import pytest
+
+from brainsmith.dse import explore_design_space
+from brainsmith.dse.types import ExecutionError, SegmentStatus
 
 
 class TestCacheBehavior:
@@ -99,10 +98,8 @@ class TestCacheBehavior:
         2. Corrupt cached ONNX file
         3. Re-execute (should detect corruption and rebuild)
         """
-        from tests.fixtures.dse.blueprints import create_finn_blueprint
-
         # Create blueprint (use minimal pipeline for cache test)
-        from tests.fixtures.dse.blueprints import FINN_PIPELINE_MINIMAL
+        from tests.fixtures.dse.blueprints import FINN_PIPELINE_MINIMAL, create_finn_blueprint
 
         blueprint_path = create_finn_blueprint(
             tmp_path,
@@ -286,7 +283,7 @@ class TestCacheBehavior:
                     # (valid protobuf but semantically invalid)
                     try:
                         import onnx
-                        from onnx import helper, TensorProto
+                        from onnx import helper
 
                         # Create model with no operations (invalid for execution)
                         invalid_model = helper.make_model(

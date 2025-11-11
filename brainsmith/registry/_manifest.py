@@ -15,16 +15,16 @@ Functions:
     - _populate_index_from_manifest() - Rebuild index from cached manifest
 """
 
-import os
-import json
 import importlib.util
+import json
 import logging
-from pathlib import Path
+import os
 from datetime import datetime
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any
 
-from ._state import _component_index
 from ._metadata import ComponentMetadata, ComponentType, ImportSpec
+from ._state import _component_index
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # Manifest Caching (Simplified - Direct JSON Operations)
 # ============================================================================
 
-def _build_manifest_from_index() -> Dict[str, Any]:
+def _build_manifest_from_index() -> dict[str, Any]:
     """Build type-stratified manifest from current component index.
 
     Creates manifest with components separated by type (kernels/backends/steps).
@@ -95,7 +95,7 @@ def _build_manifest_from_index() -> Dict[str, Any]:
     }
 
 
-def _save_manifest(manifest: Dict[str, Any], path: Path) -> None:
+def _save_manifest(manifest: dict[str, Any], path: Path) -> None:
     """Save manifest dict to JSON file.
 
     Args:
@@ -113,7 +113,7 @@ def _save_manifest(manifest: Dict[str, Any], path: Path) -> None:
     logger.debug(f"Saved manifest with {total} components to {path}")
 
 
-def _load_manifest(path: Path) -> Dict[str, Any]:
+def _load_manifest(path: Path) -> dict[str, Any]:
     """Load and validate manifest from JSON file.
 
     Args:
@@ -127,7 +127,7 @@ def _load_manifest(path: Path) -> Dict[str, Any]:
         ValueError: If manifest has invalid version or structure
         json.JSONDecodeError: If manifest is corrupted JSON
     """
-    with open(path, 'r') as f:
+    with open(path) as f:
         data = json.load(f)
 
     # Version validation
@@ -163,7 +163,7 @@ def _load_manifest(path: Path) -> Dict[str, Any]:
     return data
 
 
-def _is_manifest_stale(manifest: Dict[str, Any]) -> bool:
+def _is_manifest_stale(manifest: dict[str, Any]) -> bool:
     """Check if manifest is stale by comparing file mtimes to manifest timestamp.
 
     A manifest is stale if any component file OR package __init__.py has been
@@ -214,8 +214,8 @@ def _is_manifest_stale(manifest: Dict[str, Any]) -> bool:
 
     # Check package __init__.py files that control component discovery
     try:
-        from brainsmith.settings import get_config
         from brainsmith.registry.constants import SOURCE_PROJECT
+        from brainsmith.settings import get_config
         config = get_config()
 
         # Core brainsmith packages (always checked)
@@ -248,7 +248,7 @@ def _is_manifest_stale(manifest: Dict[str, Any]) -> bool:
     return False
 
 
-def _populate_index_from_manifest(manifest: Dict[str, Any]) -> None:
+def _populate_index_from_manifest(manifest: dict[str, Any]) -> None:
     """Populate component index from type-stratified manifest.
 
     Rebuilds _component_index from manifest without importing components.

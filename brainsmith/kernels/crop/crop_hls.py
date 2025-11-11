@@ -6,15 +6,15 @@
 # @author       Thomas Keller <thomaskeller@microsoft.com> (AutoCrop adaptation)
 ############################################################################
 
-import numpy as np
 import os
 
 from finn.custom_op.fpgadataflow import templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from brainsmith.kernels.crop.crop import Crop
-from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
+
+from brainsmith.kernels.crop.crop import Crop
 from brainsmith.registry import backend
+
 
 @backend(
     target_kernel="brainsmith:Crop",
@@ -102,7 +102,7 @@ class Crop_hls(Crop, HLSBackend):
 
     def docompute(self):
         self.code_gen_dict["$DOCOMPUTE$"] = [
-            f"""
+            """
             hls::stream<TV>  src0;
             hls::stream<TV>  dst0;
             #pragma HLS stream variable=src0 depth=2
@@ -126,7 +126,7 @@ class Crop_hls(Crop, HLSBackend):
 
     def pragmas(self):
         self.code_gen_dict["$PRAGMAS$"] = [
-            f"""
+            """
             #pragma HLS interface AXIS port=in0_V
             #pragma HLS interface AXIS port=out0_V
             #pragma HLS aggregate variable=in0_V compact=bit

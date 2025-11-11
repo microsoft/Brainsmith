@@ -7,24 +7,30 @@ import logging
 import shutil
 import time
 from pathlib import Path
-from typing import Dict, Any, Set, List
+from typing import Any
 
 import onnx
 from onnx.onnx_cpp2py_export.checker import ValidationError as OnnxValidationError
 from onnx.onnx_cpp2py_export.shape_inference import InferenceError as OnnxInferenceError
 
+from brainsmith._internal.finn.adapter import FINNAdapter
 from brainsmith.dse.segment import DSESegment
 from brainsmith.dse.tree import DSETree
+from brainsmith.dse.types import (
+    ExecutionError,
+    OutputType,
+    SegmentResult,
+    SegmentStatus,
+    TreeExecutionResult,
+)
 from brainsmith.registry import get_step
-from brainsmith.dse.types import SegmentResult, SegmentStatus, TreeExecutionResult, ExecutionError, OutputType
-from brainsmith._internal.finn.adapter import FINNAdapter
 
 logger = logging.getLogger(__name__)
 
 
 def _share_artifacts_at_branch(
     parent_result: SegmentResult,
-    child_segments: List[DSESegment],
+    child_segments: list[DSESegment],
     base_output_dir: Path
 ) -> None:
     """Copy build artifacts to child segments at branch points.
@@ -60,7 +66,7 @@ class SegmentRunner:
     def __init__(
         self,
         finn_adapter: FINNAdapter,
-        base_config: Dict[str, Any]
+        base_config: dict[str, Any]
     ) -> None:
         """Initialize runner.
 
@@ -307,7 +313,7 @@ class SegmentRunner:
             # Not in registry, return as-is (may be FINN internal step)
             return step_name
 
-    def _resolve_steps(self, segment: DSESegment) -> List:
+    def _resolve_steps(self, segment: DSESegment) -> list:
         """Resolve step names to callable functions.
 
         Attempts to resolve step names from the component registry.
@@ -345,7 +351,7 @@ class SegmentRunner:
                 steps.append(step_name)
         return steps
 
-    def _make_finn_config(self, segment: DSESegment, output_dir: Path) -> Dict[str, Any]:
+    def _make_finn_config(self, segment: DSESegment, output_dir: Path) -> dict[str, Any]:
         """Create FINN configuration for segment.
 
         Args:
@@ -370,7 +376,7 @@ class SegmentRunner:
 
         return config
 
-    def _mark_descendants_skipped(self, segment: DSESegment, skipped: Set[str]) -> None:
+    def _mark_descendants_skipped(self, segment: DSESegment, skipped: set[str]) -> None:
         """Mark all descendants as skipped."""
         for child in segment.children.values():
             skipped.add(child.segment_id)

@@ -42,8 +42,9 @@ Example usage (Configuration):
 """
 
 import logging
-from typing import Any, List, Optional, Callable, Dict
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from qonnx.core.datatype import DataType
 
@@ -56,7 +57,7 @@ logger = logging.getLogger(__name__)
 # Helper Functions
 # =============================================================================
 
-def _find_interface_in_dicts(name: str, inputs: Dict, outputs: Dict) -> Any:
+def _find_interface_in_dicts(name: str, inputs: dict, outputs: dict) -> Any:
     """Find interface by name from input/output dicts.
 
     Args:
@@ -150,10 +151,10 @@ class DesignSpaceValidationContext:
                 raise ValueError(error)
     """
 
-    inputs: Dict[str, Any]  # InterfaceDesignSpace
-    outputs: Dict[str, Any]  # InterfaceDesignSpace
-    internal_datatypes: Dict[str, DataType]
-    param_getter: Optional[Callable[[str], Any]] = None
+    inputs: dict[str, Any]  # InterfaceDesignSpace
+    outputs: dict[str, Any]  # InterfaceDesignSpace
+    internal_datatypes: dict[str, DataType]
+    param_getter: Callable[[str], Any] | None = None
 
     def _find_interface(self, name: str) -> Any:
         """Find interface from inputs or outputs."""
@@ -283,7 +284,7 @@ class ConfigurationValidationContext:
     """
 
     configured_model: Any  # KernelDesignPoint
-    params: Dict[str, int]
+    params: dict[str, int]
 
     def _find_interface(self, name: str) -> Any:
         """Find interface from configured model."""

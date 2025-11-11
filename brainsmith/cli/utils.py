@@ -10,18 +10,16 @@ Provides standardized functions for:
 - User messaging (success, warning, tips)
 """
 
-import logging
-import os
 import sys
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import NoReturn, Iterator
+from typing import NoReturn
 
 from rich.console import Console
-from rich.logging import RichHandler
-from rich.progress import Progress, SpinnerColumn, TextColumn, TaskID
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn
 
-from .constants import ENV_QUIET, ExitCode
+from .constants import ExitCode
 
 console = Console()
 

@@ -29,7 +29,7 @@ from typing import Optional
 
 def setup_logging(
     level: str = "normal",
-    output_dir: Optional[Path] = None,
+    output_dir: Path | None = None,
     config: Optional['LoggingConfig'] = None
 ) -> None:
     """Configure logging for Brainsmith and FINN.
@@ -52,7 +52,7 @@ def setup_logging(
     _setup_finn(level, config)
 
 
-def _setup_root(output_dir: Optional[Path], config: 'LoggingConfig') -> None:
+def _setup_root(output_dir: Path | None, config: 'LoggingConfig') -> None:
     """Configure root logger with file handler.
 
     Root logger is permissive (DEBUG) and propagates everything to file.

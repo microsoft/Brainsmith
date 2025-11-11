@@ -6,9 +6,11 @@ Design Space Exploration Tree structure and operations.
 """
 
 from collections import deque
-from typing import Dict, List, Any
-from .segment import DSESegment
+from typing import Any
+
 from brainsmith.dse.types import SegmentStatus
+
+from .segment import DSESegment
 
 
 class DSETree:
@@ -41,7 +43,7 @@ class DSETree:
         self._format_node(self.root, "", True, lines)
         return "\n".join(lines)
 
-    def _format_node(self, node: DSESegment, indent: str, last: bool, lines: List[str]) -> None:
+    def _format_node(self, node: DSESegment, indent: str, last: bool, lines: list[str]) -> None:
         """Format a node and its children into line list."""
         if node.segment_id != "root":
             prefix = "└── " if last else "├── "
@@ -66,7 +68,7 @@ class DSETree:
             new_indent = indent + extension if node.segment_id != "root" else indent
             self._format_node(child, new_indent, is_last, lines)
     
-    def get_all_segments(self) -> List[DSESegment]:
+    def get_all_segments(self) -> list[DSESegment]:
         """Get all segments in the tree."""
         all_segments = []
         
@@ -78,7 +80,7 @@ class DSETree:
         collect_segments(self.root)
         return all_segments
     
-    def get_execution_order(self) -> List[DSESegment]:
+    def get_execution_order(self) -> list[DSESegment]:
         """Get breadth-first execution order for the tree.
 
         Skips root if it has no steps (purely structural).
@@ -98,7 +100,7 @@ class DSETree:
 
         return order
     
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get statistics about the DSE tree."""
         stats = {
             'nodes': 0,

@@ -9,24 +9,23 @@ These steps use the comprehensive component registry to access
 transforms from QONNX, FINN, and Brainsmith.
 """
 
-import os
 import logging
 from typing import Any
 
-from brainsmith.primitives.transforms.expand_norms import ExpandNorms
-from brainsmith.primitives.transforms.temp_shuffle_fixer import TempShuffleFixer
-from brainsmith.primitives.transforms.set_pumped_compute import SetPumpedCompute
+from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from qonnx.transformation.fold_constants import FoldConstants
 from qonnx.transformation.general import (
+    ApplyConfig,
     ConvertDivToMul,
     GiveUniqueNodeNames,
-    ApplyConfig,
 )
-from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
-from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
-from finn.builder.build_dataflow_steps import step_specialize_layers
+from qonnx.transformation.infer_shapes import InferShapes
+
+from brainsmith.primitives.transforms.expand_norms import ExpandNorms
+from brainsmith.primitives.transforms.set_pumped_compute import SetPumpedCompute
 from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
+from brainsmith.primitives.transforms.temp_shuffle_fixer import TempShuffleFixer
 
 logger = logging.getLogger(__name__)
 

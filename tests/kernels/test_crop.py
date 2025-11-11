@@ -13,22 +13,20 @@ Usage:
     pytest -m validation -k crop
 """
 
-import pytest
 import numpy as np
+import pytest
 from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import qonnx_make_model
-
 from tests.frameworks.kernel_test import KernelTest
 from tests.frameworks.test_config import (
+    DesignParameters,
     KernelTestConfig,
     ModelStructure,
-    DesignParameters,
     PlatformConfig,
     ValidationConfig,
 )
-
 
 # ============================================================================
 # Shared Constants

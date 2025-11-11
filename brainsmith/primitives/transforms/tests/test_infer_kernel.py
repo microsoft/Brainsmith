@@ -6,12 +6,9 @@
 """Tests for InferKernel transform."""
 
 import pytest
-import numpy as np
-from onnx import helper, TensorProto
-
-from qonnx.core.modelwrapper import ModelWrapper
+from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
-from qonnx.util.basic import gen_finn_dt_tensor
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.primitives.transforms.infer_kernel import InferKernel
 
@@ -111,9 +108,10 @@ def test_infer_kernel_no_matching_nodes():
 
 def test_infer_kernel_statistics():
     """Test that InferKernel logs statistics correctly."""
-    from brainsmith.kernels.addstreams import AddStreams
     import logging
     from io import StringIO
+
+    from brainsmith.kernels.addstreams import AddStreams
 
     # Create model with two Add nodes
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64])

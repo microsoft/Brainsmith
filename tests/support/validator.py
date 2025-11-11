@@ -35,10 +35,10 @@ Verbose Mode (show passing assertions):
     )
 """
 
-from typing import Dict, Optional
-import numpy as np
 import logging
 import os
+
+import numpy as np
 
 from tests.support.assertions import assert_arrays_close
 
@@ -88,8 +88,8 @@ class GoldenValidator:
 
     def validate(
         self,
-        actual_outputs: Dict[str, np.ndarray],
-        golden_outputs: Dict[str, np.ndarray],
+        actual_outputs: dict[str, np.ndarray],
+        golden_outputs: dict[str, np.ndarray],
         backend_name: str,
         rtol: float = 1e-5,
         atol: float = 1e-6,

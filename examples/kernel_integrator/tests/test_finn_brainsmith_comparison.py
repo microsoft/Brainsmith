@@ -13,21 +13,20 @@ This test:
 """
 
 import os
-import sys
-import tempfile
 import shutil
+import sys
 from pathlib import Path
+
 import numpy as np
-from onnx import helper, TensorProto, numpy_helper
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
-from qonnx.util.basic import qonnx_make_model
-from qonnx.custom_op.registry import getCustomOp
-from qonnx.transformation.infer_shapes import InferShapes
 
 # Import transforms
 from finn.transformation.fpgadataflow.convert_to_hw_layers import InferThresholdingLayer
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
+from onnx import TensorProto, helper
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.custom_op.registry import getCustomOp
+from qonnx.util.basic import qonnx_make_model
 
 # Import from the manually implemented infer transform
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -118,7 +117,7 @@ def compare_node_attributes(finn_node, brainsmith_node, report_lines):
     
     if finn_node:
         finn_inst = getCustomOp(finn_node)
-        report_lines.append(f"\nFINN Thresholding node:")
+        report_lines.append("\nFINN Thresholding node:")
         report_lines.append(f"  Type: {finn_node.op_type}")
         report_lines.append(f"  Domain: {finn_node.domain}")
         report_lines.append(f"  NumChannels: {finn_inst.get_nodeattr('NumChannels')}")
@@ -134,7 +133,7 @@ def compare_node_attributes(finn_node, brainsmith_node, report_lines):
         # Get attributes
         attrs = {attr.name: attr for attr in brainsmith_node.attribute}
         
-        report_lines.append(f"\nBrainsmith ThresholdingAxi node:")
+        report_lines.append("\nBrainsmith ThresholdingAxi node:")
         report_lines.append(f"  Type: {brainsmith_node.op_type}")
         report_lines.append(f"  Domain: {brainsmith_node.domain}")
         report_lines.append(f"  CHANNELS: {attrs['CHANNELS'].i}")
@@ -152,7 +151,7 @@ def compare_node_attributes(finn_node, brainsmith_node, report_lines):
         rtl_attrs = ['input_FPARG', 'DEPTH_TRIGGER_URAM', 'DEPTH_TRIGGER_BRAM', 'DEEP_PIPELINE', 'USE_AXILITE']
         has_rtl_attrs = any(attr in attrs for attr in rtl_attrs)
         if has_rtl_attrs:
-            report_lines.append(f"\n  RTL-specific attributes:")
+            report_lines.append("\n  RTL-specific attributes:")
             for attr in rtl_attrs:
                 if attr in attrs:
                     report_lines.append(f"    {attr}: {attrs[attr].i}")
@@ -160,7 +159,7 @@ def compare_node_attributes(finn_node, brainsmith_node, report_lines):
         # Compare values if FINN node exists
         if finn_node:
             finn_inst = getCustomOp(finn_node)
-            report_lines.append(f"\n  Attribute Mapping:")
+            report_lines.append("\n  Attribute Mapping:")
             report_lines.append(f"    Channels: NumChannels={finn_inst.get_nodeattr('NumChannels')} vs CHANNELS={attrs['CHANNELS'].i}")
             report_lines.append(f"    PE: PE={finn_inst.get_nodeattr('PE')} vs PE={attrs['PE'].i}")
             report_lines.append(f"    Bias: ActVal={finn_inst.get_nodeattr('ActVal')} vs BIAS={attrs['BIAS'].i}")
@@ -230,7 +229,7 @@ def generate_and_compare_rtl(finn_model, brainsmith_model, test_name, output_sub
                     wrapper_src = finn_codegen_dir / wrapper_candidates[0]
                     wrapper_dst = test_output_dir / "finn_wrapper.v"
                     shutil.copy2(wrapper_src, wrapper_dst)
-                    report_lines.append(f"  Wrapper copied to: finn_wrapper.v")
+                    report_lines.append("  Wrapper copied to: finn_wrapper.v")
             else:
                 report_lines.append("  ⚠️ No specialized Thresholding node found after SpecializeLayers")
                 results["finn"]["success"] = False
@@ -309,7 +308,7 @@ def generate_and_compare_rtl(finn_model, brainsmith_model, test_name, output_sub
                 wrapper_src = brainsmith_codegen_dir / wrapper_candidates[0]
                 wrapper_dst = test_output_dir / "brainsmith_wrapper.v"
                 shutil.copy2(wrapper_src, wrapper_dst)
-                report_lines.append(f"  Wrapper copied to: brainsmith_wrapper.v")
+                report_lines.append("  Wrapper copied to: brainsmith_wrapper.v")
         else:
             report_lines.append("  ⚠️ No specialized ThresholdingAxi node found after SpecializeLayers")
             results["brainsmith"]["success"] = False
@@ -331,10 +330,10 @@ def generate_and_compare_rtl(finn_model, brainsmith_model, test_name, output_sub
         finn_exts = {Path(f).suffix for f in finn_files}
         brainsmith_exts = {Path(f).suffix for f in brainsmith_files}
         
-        report_lines.append(f"\nFile Statistics:")
+        report_lines.append("\nFile Statistics:")
         report_lines.append(f"  FINN:       {len(finn_files)} files")
         report_lines.append(f"  Brainsmith: {len(brainsmith_files)} files")
-        report_lines.append(f"\nFile types:")
+        report_lines.append("\nFile types:")
         report_lines.append(f"  FINN:       {sorted(finn_exts)}")
         report_lines.append(f"  Brainsmith: {sorted(brainsmith_exts)}")
         
@@ -344,7 +343,7 @@ def generate_and_compare_rtl(finn_model, brainsmith_model, test_name, output_sub
         finn_has_sv = any(".sv" in f for f in finn_files)
         brainsmith_has_sv = any(".sv" in f for f in brainsmith_files)
         
-        report_lines.append(f"\nKey Files:")
+        report_lines.append("\nKey Files:")
         report_lines.append(f"  Has Verilog wrapper: FINN={finn_has_wrapper}, Brainsmith={brainsmith_has_wrapper}")
         report_lines.append(f"  Has SystemVerilog:   FINN={finn_has_sv}, Brainsmith={brainsmith_has_sv}")
         
@@ -388,11 +387,11 @@ def run_comprehensive_test(test_name, channels, input_dt, output_dt, bias=0):
         finn_model = model.transform(InferThresholdingLayer())
         finn_nodes = finn_model.get_nodes_by_op_type("Thresholding")
         if not finn_nodes:
-            print(f"  ⚠️ FINN InferThresholdingLayer did not create Thresholding node")
+            print("  ⚠️ FINN InferThresholdingLayer did not create Thresholding node")
             finn_model = None
     except Exception as e:
         print(f"  ⚠️ FINN InferThresholdingLayer failed: {e}")
-        print(f"      (This is expected for some configurations)")
+        print("      (This is expected for some configurations)")
         finn_model = None
 
     # Apply Brainsmith transform
@@ -400,7 +399,7 @@ def run_comprehensive_test(test_name, channels, input_dt, output_dt, bias=0):
         brainsmith_model = model.transform(InferThresholdingAxi())
         brainsmith_nodes = brainsmith_model.get_nodes_by_op_type("ThresholdingAxi")
         if not brainsmith_nodes:
-            print(f"  ✗ InferThresholdingAxi did not create ThresholdingAxi node")
+            print("  ✗ InferThresholdingAxi did not create ThresholdingAxi node")
             return False
     except Exception as e:
         print(f"  ✗ InferThresholdingAxi failed: {e}")

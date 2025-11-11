@@ -4,10 +4,10 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from brainsmith.dse.design_space import GlobalDesignSpace
@@ -45,7 +45,7 @@ class OutputType(Enum):
     RTL = "rtl"
     BITFILE = "bitfile"
 
-    def to_finn_products(self) -> List[str]:
+    def to_finn_products(self) -> list[str]:
         """Convert to FINN output_products configuration."""
         return {
             OutputType.ESTIMATES: ["estimates"],
@@ -53,7 +53,7 @@ class OutputType(Enum):
             OutputType.BITFILE: ["bitfile"]
         }[self]
 
-    def to_finn_outputs(self) -> List[str]:
+    def to_finn_outputs(self) -> list[str]:
         """Convert to FINN generate_outputs configuration."""
         return {
             OutputType.ESTIMATES: ["estimate_reports"],
@@ -65,7 +65,7 @@ class OutputType(Enum):
         }[self]
 
     @classmethod
-    def from_finn_product(cls, product: str) -> 'OutputType':
+    def from_finn_product(cls, product: str) -> OutputType:
         """Get OutputType from FINN product string.
 
         Args:
@@ -110,9 +110,9 @@ class SegmentResult:
     """
     segment_id: str
     status: SegmentStatus
-    output_model: Optional[Path] = None
-    output_dir: Optional[Path] = None
-    error: Optional[str] = None
+    output_model: Path | None = None
+    output_dir: Path | None = None
+    error: str | None = None
     execution_time: float = 0
     cached: bool = False
 
@@ -127,12 +127,12 @@ class TreeExecutionResult:
         design_space: Original design space (if available)
         dse_tree: Execution tree structure (if available)
     """
-    segment_results: Dict[str, SegmentResult]
+    segment_results: dict[str, SegmentResult]
     total_time: float
-    design_space: Optional[GlobalDesignSpace] = None
-    dse_tree: Optional[DSETree] = None
+    design_space: GlobalDesignSpace | None = None
+    dse_tree: DSETree | None = None
 
-    def compute_stats(self) -> Dict[str, int]:
+    def compute_stats(self) -> dict[str, int]:
         """Compute execution statistics.
 
         Returns:

@@ -22,15 +22,14 @@ Phase 2/3 (Future):
 """
 
 import logging
-import os
-import numpy as np
 from dataclasses import dataclass
 from math import ceil
-from typing import Optional
-from qonnx.core.datatype import DataType
 
+import numpy as np
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import numpy_to_hls_code
+from qonnx.core.datatype import DataType
+
 from brainsmith.kernels.elementwise_binary.elementwise_binary import ElementwiseBinaryOp
 from brainsmith.registry import backend
 
@@ -277,7 +276,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         else:
             raise ValueError(f"Unknown input_pattern: {input_pattern}")
 
-    def _get_buffer_declaration(self, input_name: str, pe: int) -> Optional[BufferDeclaration]:
+    def _get_buffer_declaration(self, input_name: str, pe: int) -> BufferDeclaration | None:
         """Generate buffer array declaration for an input.
 
         Args:
@@ -430,12 +429,12 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
                     lhs_parameters, lhs_dtype, "lhs", False, False
                 )
 
-                param_code_sections.append(f"// LHS parameter tensor\n")
+                param_code_sections.append("// LHS parameter tensor\n")
                 param_code_sections.append(lhs_code)
 
                 # Add HLS pragmas for parameter storage and partitioning
                 self.code_gen_dict["$PRAGMAS$"].append(
-                    f"#pragma HLS BIND_STORAGE variable=lhs type=ROM_2P impl=distributed"
+                    "#pragma HLS BIND_STORAGE variable=lhs type=ROM_2P impl=distributed"
                 )
                 self.code_gen_dict["$PRAGMAS$"].append(
                     f"#pragma HLS ARRAY_PARTITION variable=lhs complete dim={len(lhs_shape)}"
@@ -470,12 +469,12 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
                 rhs_parameters, rhs_dtype, "rhs", False, False
             )
 
-            param_code_sections.append(f"// RHS parameter tensor\n")
+            param_code_sections.append("// RHS parameter tensor\n")
             param_code_sections.append(rhs_code)
 
             # Add HLS pragmas for parameter storage and partitioning
             self.code_gen_dict["$PRAGMAS$"].append(
-                f"#pragma HLS BIND_STORAGE variable=rhs type=ROM_2P impl=distributed"
+                "#pragma HLS BIND_STORAGE variable=rhs type=ROM_2P impl=distributed"
             )
             self.code_gen_dict["$PRAGMAS$"].append(
                 f"#pragma HLS ARRAY_PARTITION variable=rhs complete dim={len(rhs_shape)}"

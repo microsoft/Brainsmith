@@ -35,11 +35,11 @@ Example Usage:
     ...                                inputs=[dynamic, static], ...)
 """
 
-from typing import List, Optional, Tuple
-from onnx import NodeProto, helper
-from qonnx.core.modelwrapper import ModelWrapper
-import numpy as np
 import logging
+
+import numpy as np
+from onnx import helper
+from qonnx.core.modelwrapper import ModelWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +55,9 @@ except ImportError:
 # ============================================================================
 
 def find_static_dynamic_pair(
-    inputs: List[str],
+    inputs: list[str],
     model: ModelWrapper
-) -> Optional[Tuple[str, str]]:
+) -> tuple[str, str] | None:
     """Find (dynamic, static) pair from commutative binary op inputs.
 
     For operations like Add, Mul where input order doesn't affect semantics,
@@ -108,9 +108,9 @@ def find_static_dynamic_pair(
 
 
 def find_dynamic_inputs(
-    inputs: List[str],
+    inputs: list[str],
     model: ModelWrapper
-) -> List[str]:
+) -> list[str]:
     """Find all dynamic (non-initializer) inputs.
 
     Used for operations that expect all-dynamic inputs (e.g., AddStreams).
@@ -131,9 +131,9 @@ def find_dynamic_inputs(
 
 
 def find_static_inputs(
-    inputs: List[str],
+    inputs: list[str],
     model: ModelWrapper
-) -> List[str]:
+) -> list[str]:
     """Find all static (initializer) inputs.
 
     Args:
@@ -152,9 +152,9 @@ def find_static_inputs(
 
 
 def find_dynamic_dynamic_pair(
-    inputs: List[str],
+    inputs: list[str],
     model: ModelWrapper
-) -> Optional[Tuple[str, str]]:
+) -> tuple[str, str] | None:
     """Find (lhs, rhs) pair from both-dynamic binary op inputs.
 
     For operations like Add, Mul where both inputs are streaming/dynamic,
@@ -200,7 +200,7 @@ def find_dynamic_dynamic_pair(
 # ============================================================================
 
 def check_all_integer_types(
-    tensors: List[str],
+    tensors: list[str],
     model: ModelWrapper
 ) -> bool:
     """Check if all tensors have integer datatypes.
@@ -223,7 +223,7 @@ def check_all_integer_types(
 
 
 def check_shapes_equal(
-    tensors: List[str],
+    tensors: list[str],
     model: ModelWrapper
 ) -> bool:
     """Check if all tensors have identical shapes.

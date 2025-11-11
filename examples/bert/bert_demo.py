@@ -19,32 +19,29 @@ import tempfile
 import warnings
 from pathlib import Path
 
-import numpy as np
-import onnx
-import torch
-
-# Import brainsmith early to set up paths
-import brainsmith
-from brainsmith.settings import get_config
-# Note: Config export to environment (FINN_ROOT, etc.) happens automatically
-
-from brevitas.graph.calibrate import calibration_mode
-from brevitas.graph.quantize import layerwise_quantize
-from brevitas.quant import Int8ActPerTensorFloat, Int8WeightPerTensorFloat, Uint8ActPerTensorFloat
-from brevitas_examples.llm.llm_quant.prepare_for_quantize import replace_sdpa_with_quantizable_layers
-from onnxsim import simplify
-from qonnx.core.datatype import DataType
-from qonnx.util.basic import gen_finn_dt_tensor
-from qonnx.util.cleanup import cleanup
-from torch import nn
-from transformers import BertConfig, BertModel
-from transformers.utils.fx import symbolic_trace
 import brevitas.nn as qnn
 import brevitas.onnx as bo
 
 # Import local custom steps to register them for use in blueprint YAML.
 # These steps are referenced in bert_demo.yaml: remove_head, remove_tail, generate_reference_io
-import custom_steps
+import onnx
+import torch
+
+# Note: Config export to environment (FINN_ROOT, etc.) happens automatically
+from brevitas.graph.calibrate import calibration_mode
+from brevitas.graph.quantize import layerwise_quantize
+from brevitas.quant import Int8ActPerTensorFloat, Int8WeightPerTensorFloat, Uint8ActPerTensorFloat
+from brevitas_examples.llm.llm_quant.prepare_for_quantize import (
+    replace_sdpa_with_quantizable_layers,
+)
+from onnxsim import simplify
+from qonnx.util.cleanup import cleanup
+from torch import nn
+from transformers import BertConfig, BertModel
+from transformers.utils.fx import symbolic_trace
+
+# Import brainsmith early to set up paths
+from brainsmith.settings import get_config
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -227,7 +224,7 @@ def run_brainsmith_dse(model, args):
     # Just check if we succeeded
     stats = results.compute_stats()
     if stats['successful'] == 0:
-        raise RuntimeError(f"No successful builds")
+        raise RuntimeError("No successful builds")
     
     # The new execution tree handles output automatically
     final_model_dst = os.path.join(args.output_dir, "output.onnx")
@@ -241,7 +238,7 @@ def run_brainsmith_dse(model, args):
     # Handle shell metadata (matches old hw_compiler.py)
     handover_file = os.path.join(args.output_dir, "stitched_ip", "shell_handover.json")
     if os.path.exists(handover_file):
-        with open(handover_file, "r") as fp:
+        with open(handover_file) as fp:
             handover = json.load(fp)
         handover["num_layers"] = args.num_hidden_layers
         with open(handover_file, "w") as fp:

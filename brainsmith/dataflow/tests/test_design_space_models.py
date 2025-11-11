@@ -14,8 +14,6 @@ from brainsmith.dataflow.dse_models import (
     InterfaceDesignSpace,
     KernelDesignSpace,
 )
-from brainsmith.dataflow.types import ShapeHierarchy
-
 
 # =============================================================================
 # Test InterfaceDesignSpace

@@ -8,10 +8,7 @@ from typing import TYPE_CHECKING
 import click
 
 # Import settings and dependencies lazily inside function to keep --help fast
-from ...utils import (
-    console, error_exit, success, warning,
-    progress_spinner, confirm_or_abort
-)
+from ...utils import confirm_or_abort, console, error_exit, progress_spinner, success, warning
 
 if TYPE_CHECKING:
     from brainsmith._internal.io.dependencies import BoardManager
@@ -97,8 +94,8 @@ def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool
         error_exit("Cannot use --force and --remove together")
 
     # Import settings and dependencies only when command executes (not for --help)
+    from brainsmith._internal.io.dependencies import BoardManager, DependencyManager
     from brainsmith.settings import get_config
-    from brainsmith._internal.io.dependencies import DependencyManager, BoardManager
 
     config = get_config()
     deps_mgr = DependencyManager()

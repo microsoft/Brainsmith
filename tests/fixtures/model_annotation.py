@@ -50,7 +50,6 @@ Supported DataTypes:
 
 import re
 import warnings
-from typing import Dict, Optional
 
 import numpy as np
 import onnx.helper as oh
@@ -61,7 +60,6 @@ from qonnx.custom_op.general.floatquant import compute_max_val
 
 from .constants import ANNOTATION_WARNING_STACKLEVEL, QUANT_FULL_RANGE, QUANT_ROUNDING_MODE
 
-
 # ============================================================================
 # Direct Annotation (v2.3 Standard)
 # ============================================================================
@@ -69,7 +67,7 @@ from .constants import ANNOTATION_WARNING_STACKLEVEL, QUANT_FULL_RANGE, QUANT_RO
 
 def annotate_model_datatypes(
     model: ModelWrapper,
-    tensor_datatypes: Dict[str, DataType],
+    tensor_datatypes: dict[str, DataType],
     warn_unsupported: bool = True,
 ) -> ModelWrapper:
     """Set QONNX DataType annotations directly on tensors (no Quant nodes).
@@ -110,8 +108,8 @@ def annotate_model_datatypes(
 
 def annotate_inputs_and_outputs(
     model: ModelWrapper,
-    input_datatypes: Dict[str, DataType],
-    output_datatype: Optional[DataType] = None,
+    input_datatypes: dict[str, DataType],
+    output_datatype: DataType | None = None,
     warn_unsupported: bool = True,
 ) -> ModelWrapper:
     """Annotate model inputs and optionally outputs with DataTypes.
@@ -187,7 +185,7 @@ def _check_datatype_support(dtype: DataType) -> None:
 
 
 def insert_input_quant_nodes(
-    model: ModelWrapper, input_datatypes: Dict[str, DataType]
+    model: ModelWrapper, input_datatypes: dict[str, DataType]
 ) -> ModelWrapper:
     """Insert IntQuant/FloatQuant/BipolarQuant nodes before model inputs.
 

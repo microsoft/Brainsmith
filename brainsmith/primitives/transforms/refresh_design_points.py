@@ -12,10 +12,10 @@ This transform serves two purposes:
 2. Can replace InferShapes and InferDataTypes for Brainsmith nodes
 """
 
-from typing import Optional, List, Tuple
+
 from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.transformation.base import Transformation
 from qonnx.custom_op.registry import getCustomOp
+from qonnx.transformation.base import Transformation
 from qonnx.transformation.general import ApplyConfig
 
 from brainsmith.dataflow import KernelOp
@@ -31,7 +31,7 @@ class RefreshKernelDesignPoints(Transformation):
     - As a replacement for InferShapes/InferDataTypes for Brainsmith ops
     """
     
-    def __init__(self, node_types: Optional[List[str]] = None):
+    def __init__(self, node_types: list[str] | None = None):
         """Initialize transform.
         
         Args:
@@ -41,7 +41,7 @@ class RefreshKernelDesignPoints(Transformation):
         super().__init__()
         self.node_types = node_types
 
-    def apply(self, model: ModelWrapper) -> Tuple[ModelWrapper, bool]:
+    def apply(self, model: ModelWrapper) -> tuple[ModelWrapper, bool]:
         """Apply the transform to refresh kernel models.
 
         Returns:
@@ -108,7 +108,7 @@ class RefreshKernelDesignPoints(Transformation):
                     # Update datatype
                     model.set_tensor_datatype(tensor_name, out.datatype)
                     
-        except Exception as e:
+        except Exception:
             # Log but don't fail - some ops may not have full info yet
             pass
 
@@ -120,7 +120,7 @@ class InferBrainsmithTypes(Transformation):
     updates datatypes, similar to qonnx.transformation.infer_datatypes.
     """
 
-    def apply(self, model: ModelWrapper) -> Tuple[ModelWrapper, bool]:
+    def apply(self, model: ModelWrapper) -> tuple[ModelWrapper, bool]:
         """Apply datatype inference."""
         # First refresh all kernel instances
         model, _ = RefreshKernelDesignPoints().apply(model)
@@ -155,7 +155,7 @@ class InferBrainsmithShapes(Transformation):
     updates shapes, similar to qonnx.transformation.infer_shapes.
     """
 
-    def apply(self, model: ModelWrapper) -> Tuple[ModelWrapper, bool]:
+    def apply(self, model: ModelWrapper) -> tuple[ModelWrapper, bool]:
         """Apply shape inference."""
         # First refresh all kernel instances
         model, _ = RefreshKernelDesignPoints().apply(model)
@@ -192,8 +192,8 @@ def make_brainsmith_cleanup_pipeline():
     2. Refreshes all kernel instances
     3. Cleans up the graph
     """
-    from qonnx.transformation.general import RemoveUnusedTensors, RemoveStaticGraphInputs
     from qonnx.transformation.fold_constants import FoldConstants
+    from qonnx.transformation.general import RemoveStaticGraphInputs, RemoveUnusedTensors
 
     return [
         ApplyConfig(),           # Apply any pending config changes

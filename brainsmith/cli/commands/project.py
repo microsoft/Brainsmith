@@ -10,22 +10,18 @@ from textwrap import dedent
 from typing import TYPE_CHECKING
 
 import click
-import yaml
-from rich.table import Table
-from rich.panel import Panel
-from rich.console import Console as RichConsole
 
 logger = logging.getLogger(__name__)
 
 from ..context import ApplicationContext
-from ..utils import console, success
-from ..formatters import ConfigFormatter
 from ..exceptions import ConfigurationError
+from ..formatters import ConfigFormatter
 from ..messages import CONFIG_EDIT_HINT
+from ..utils import console, success
 
 # Lazy import settings - deferred until command actually runs
 if TYPE_CHECKING:
-    from brainsmith.settings import SystemConfig
+    pass
 
 
 def _generate_config_template(defaults) -> str:
@@ -213,7 +209,7 @@ def allow_direnv(ctx: ApplicationContext) -> None:
             rcfile_content = rcfile.read_text()
             if hook_line not in rcfile_content:
                 console.print(f"[yellow]⚠️  direnv hook not found in {rcfile}[/yellow]")
-                console.print(f"[yellow]   Add this line and restart your shell:[/yellow]")
+                console.print("[yellow]   Add this line and restart your shell:[/yellow]")
                 console.print(f"[yellow]   {hook_line}[/yellow]")
                 console.print()
         except (OSError, PermissionError):

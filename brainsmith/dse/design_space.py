@@ -9,8 +9,6 @@ from the blueprint, ready for tree construction.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Type, Union
-from brainsmith.dse._constants import SKIP_INDICATOR
 
 
 @dataclass
@@ -26,13 +24,13 @@ class GlobalDesignSpace:
     Validates size on initialization and provides kernel summary formatting.
     """
     model_path: str
-    steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
+    steps: list[str | list[str | None]]  # Direct steps with variations
 
     # Kernel backends: [(kernel_name, [Backend classes])]
     # Currently all registered backends are included automatically.
     # TODO: Future - support backend filtering in blueprint YAML
     #   Example: {'LayerNorm': ['hls']} → only HLS backends
-    kernel_backends: List[Tuple[str, List[Type]]]
+    kernel_backends: list[tuple[str, list[type]]]
 
     max_combinations: int = 100000  # Maximum allowed design space combinations
     

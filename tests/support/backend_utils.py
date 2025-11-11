@@ -7,12 +7,12 @@ and hardware simulation.
 Pattern validated by: tests/spike_backend_specialization.py
 """
 
-from typing import Tuple, List, Type
+
+from finn.util.basic import getHWCustomOp
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
 from brainsmith.registry import get_component_metadata
-from finn.util.basic import getHWCustomOp
-from qonnx.core.modelwrapper import ModelWrapper
 
 
 class MinimalBackendConfig:
@@ -22,7 +22,7 @@ class MinimalBackendConfig:
     - cfg.kernel_selections: List[Tuple[str, List[str]]]
     - cfg._resolve_fpga_part(): Returns fpgapart string
     """
-    def __init__(self, fpgapart: str, kernel_selections: List[Tuple[str, List[str]]]):
+    def __init__(self, fpgapart: str, kernel_selections: list[tuple[str, list[str]]]):
         self.fpgapart = fpgapart
         self.kernel_selections = kernel_selections
 
@@ -35,8 +35,8 @@ def specialize_to_backend(
     op,  # HWCustomOp (avoid import to prevent circular deps)
     model: ModelWrapper,
     fpgapart: str,
-    backend_variants: List[Type]
-) -> Tuple:
+    backend_variants: list[type]
+) -> tuple:
     """Specialize base kernel to backend variant with code generation capability.
 
     This function transforms a base HWCustomOp kernel (e.g., ElementwiseBinaryOp) into

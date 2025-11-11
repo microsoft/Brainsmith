@@ -14,15 +14,14 @@ system into KernelOp, ensuring:
 """
 
 import time
-import pytest
-from typing import Optional
 from unittest.mock import MagicMock, patch
-from onnx import helper, TensorProto
 
-from qonnx.core.modelwrapper import ModelWrapper
+import pytest
+from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
-import brainsmith.dataflow as df
+from qonnx.core.modelwrapper import ModelWrapper
 
+import brainsmith.dataflow as df
 
 # Test fixture: Simple kernel schema for testing (matches 3D tensor [1, 1, 768])
 TEST_SCHEMA = df.KernelSchema(

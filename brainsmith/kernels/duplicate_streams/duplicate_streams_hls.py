@@ -10,6 +10,7 @@
 """DuplicateStreams HLS backend."""
 
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
+
 from brainsmith.kernels.duplicate_streams.duplicate_streams import DuplicateStreams
 from brainsmith.registry import backend
 

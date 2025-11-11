@@ -7,21 +7,19 @@
 
 """Basic types for kernel modeling"""
 
-from typing import Tuple, Union, List, Dict, Any, Callable, Optional, TYPE_CHECKING
-from enum import Enum
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
 import functools
-
+from collections.abc import Callable
+from enum import Enum
+from typing import TYPE_CHECKING, Any, Union
 
 # Type aliases
-Shape = Tuple[int, ...]
+Shape = tuple[int, ...]
 """Immutable tensor shape (e.g., (1, 784))"""
 
 ShapeExpr = Union[int, str]
 """Single dimension expression: 784 or 'N'"""
 
-ShapeSpec = List[ShapeExpr]
+ShapeSpec = list[ShapeExpr]
 """Complete shape specification: [1, 784] or ['N', 768]"""
 
 # Sentinel for "copy full dimension" in tiling specs
@@ -111,9 +109,9 @@ class Direction(Enum):
 DimSpec = Union[
     int,                                               # Literal (1 only)
     str,                                               # Parameter name
-    Tuple[str, int],                                   # Derive from interface (context hierarchy)
-    Tuple[str, int, 'ShapeHierarchy'],                # Derive with explicit hierarchy
-    Callable[[Dict[str, Any], Callable, Any, Optional[str]], int],  # Custom computation (unified signature)
+    tuple[str, int],                                   # Derive from interface (context hierarchy)
+    tuple[str, int, 'ShapeHierarchy'],                # Derive with explicit hierarchy
+    Callable[[dict[str, Any], Callable, Any, str | None], int],  # Custom computation (unified signature)
     type(FULL_DIM),                                    # Copy full dimension
 ]
 
@@ -130,7 +128,7 @@ if TYPE_CHECKING:
     DatatypeSpec = Union[
         BaseDataType,                                               # Fixed datatype
         str,                                                        # Interface name (derive from)
-        Callable[[Dict, Callable, Any, str], BaseDataType],        # Custom computation
+        Callable[[dict, Callable, Any, str], BaseDataType],        # Custom computation
         type(lambda: None),                                         # Sentinel type (VALUE_OPTIMIZED)
     ]
 

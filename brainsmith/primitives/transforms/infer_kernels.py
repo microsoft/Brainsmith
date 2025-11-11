@@ -31,12 +31,10 @@ Example usage:
     model = model.transform(InferKernels())  # ValueError!
 """
 
-import inspect
 import logging
-from typing import List, Optional, Type
 
-from qonnx.transformation.base import Transformation
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.transformation.base import Transformation
 
 from .infer_kernel import InferKernel
 
@@ -79,7 +77,7 @@ class InferKernels(Transformation):
         - Auto-discovery disabled: explicit list required for clarity
     """
 
-    def __init__(self, kernel_classes: List[Type]):
+    def __init__(self, kernel_classes: list[type]):
         """Initialize transform with kernel classes.
 
         Args:
@@ -108,8 +106,8 @@ class InferKernels(Transformation):
         Returns:
             Tuple of (transformed_model, graph_modified_flag)
         """
-        from brainsmith.registry import get_kernel_infer
         from brainsmith.dataflow import KernelOp
+        from brainsmith.registry import get_kernel_infer
 
         graph_modified = False
 

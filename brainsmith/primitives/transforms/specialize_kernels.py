@@ -14,13 +14,14 @@ Architecture:
 """
 
 import logging
-import numpy as np
 import warnings
+
+import numpy as np
+from finn.util.basic import get_dsp_block, getHWCustomOp, is_versal
 from onnx import helper
 from qonnx.transformation.base import Transformation
 
-from finn.util.basic import getHWCustomOp, get_dsp_block, is_versal
-from brainsmith.registry import get_domain_for_backend, get_component_metadata
+from brainsmith.registry import get_component_metadata, get_domain_for_backend
 
 logger = logging.getLogger(__name__)
 

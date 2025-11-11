@@ -14,13 +14,13 @@ Provides functionality to:
 Protocol definitions (signal names, requirements) are defined as constants in this module.
 """
 
-import re
 import logging
-from typing import Dict, Set, List, Tuple, Optional
+import re
 
-from brainsmith.dataflow.types import Direction, ProtocolType, InterfaceType
+from brainsmith.dataflow.types import Direction, ProtocolType
 from brainsmith.tools.kernel_integrator.metadata import InterfaceMetadata
-from .types import Port, PortGroup
+
+from .types import Port
 
 # --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md
@@ -105,7 +105,7 @@ class ProtocolScanner:
         }
         
     @staticmethod
-    def _generate_interface_regex(suffixes: Dict[str, Dict]) -> Dict[str, re.Pattern]:
+    def _generate_interface_regex(suffixes: dict[str, dict]) -> dict[str, re.Pattern]:
         """
         Generates regex patterns for matching interface signals and maps them to canonical suffixes.
 
@@ -129,7 +129,7 @@ class ProtocolScanner:
             regex_map[canonical_suffix] = pattern
         return regex_map
     
-    def scan(self, ports: List[Port]) -> Tuple[Dict[ProtocolType, Dict[str, InterfaceMetadata]], List[Port]]:
+    def scan(self, ports: list[Port]) -> tuple[dict[ProtocolType, dict[str, InterfaceMetadata]], list[Port]]:
         """Classify raw `Port` objects into protocol interface candidate groups.
 
         Performs pattern matching of each port name against the compiled regex map for
@@ -155,8 +155,8 @@ class ProtocolScanner:
             ValueError: If one or more ports cannot be classified into a known protocol.
         """
         # Buckets for each protocol type
-        interfaces_by_protocol: Dict[ProtocolType, Dict[str, InterfaceMetadata]] = {protocol: {} for protocol in self.suffixes}
-        unassigned_ports: List[Port] = []
+        interfaces_by_protocol: dict[ProtocolType, dict[str, InterfaceMetadata]] = {protocol: {} for protocol in self.suffixes}
+        unassigned_ports: list[Port] = []
 
         for port in ports:
             port_assigned = False

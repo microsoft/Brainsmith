@@ -1,15 +1,15 @@
 """Command-line interface for kernel integrator."""
 
 import argparse
+import logging
 import sys
 import time
-import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Optional
 
-from .rtl_parser.parser import RTLParser
 from .generator import KernelGenerator
 from .metadata import KernelMetadata
+from .rtl_parser.parser import RTLParser
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -147,9 +147,9 @@ def generate_kernel_files(
     rtl_file: Path,
     output_dir: Path,
     kernel_metadata: Optional['KernelMetadata'] = None,
-    artifacts: Optional[List[str]] = None,
+    artifacts: list[str] | None = None,
     strict: bool = True
-) -> Tuple[List[Path], float]:
+) -> tuple[list[Path], float]:
     """
     Generate kernel files from RTL.
     
@@ -193,7 +193,7 @@ def generate_kernel_files(
     return generated_files, elapsed_ms
 
 
-def format_file_info(files: List[Path]) -> str:
+def format_file_info(files: list[Path]) -> str:
     """Format file information for display."""
     lines = []
     for path in files:
@@ -274,7 +274,7 @@ def validate_only(rtl_file: Path, strict: bool = True) -> int:
         return 1
 
 
-def parse_artifacts_list(artifacts_str: str) -> List[str]:
+def parse_artifacts_list(artifacts_str: str) -> list[str]:
     """Parse comma-separated artifacts list and validate."""
     if not artifacts_str:
         return []

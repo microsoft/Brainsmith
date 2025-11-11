@@ -9,7 +9,7 @@ import numpy as np
 
 PIPELINE_LENGTH = 6
 
-class RooflineModel():
+class RooflineModel:
     def __init__(self):
         # Set model parameters
         self.reset_pipeline()

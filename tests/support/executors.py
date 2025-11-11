@@ -29,20 +29,15 @@ Usage:
 
 import os
 import tempfile
-import shutil
-import pytest
-import numpy as np
-from typing import Dict, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-from qonnx.core.modelwrapper import ModelWrapper
+import numpy as np
+import pytest
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from brainsmith.dataflow.kernel_op import KernelOp
+from qonnx.core.modelwrapper import ModelWrapper
 
 # Import test constants
-from tests.support.constants import (
-    PARITY_DEFAULT_FPGA_PART_HLS,
-    PARITY_DEFAULT_CLOCK_PERIOD_NS
-)
+from tests.support.constants import PARITY_DEFAULT_CLOCK_PERIOD_NS, PARITY_DEFAULT_FPGA_PART_HLS
 
 
 @runtime_checkable
@@ -59,8 +54,8 @@ class Executor(Protocol):
         self,
         op: HWCustomOp,
         model: ModelWrapper,
-        inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
+        inputs: dict[str, np.ndarray]
+    ) -> dict[str, np.ndarray]:
         """Execute backend and return outputs.
 
         Args:
@@ -89,8 +84,8 @@ class PythonExecutor:
         self,
         op: HWCustomOp,
         model: ModelWrapper,
-        inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
+        inputs: dict[str, np.ndarray]
+    ) -> dict[str, np.ndarray]:
         """Execute operator via QONNX execution (includes Quant nodes).
 
         Args:
@@ -162,8 +157,8 @@ class CppSimExecutor:
         self,
         op: HWCustomOp,
         model: ModelWrapper,
-        inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
+        inputs: dict[str, np.ndarray]
+    ) -> dict[str, np.ndarray]:
         """Execute operator via cppsim.
 
         Args:
@@ -296,8 +291,8 @@ class RTLSimExecutor:
         self,
         op: HWCustomOp,
         model: ModelWrapper,
-        inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
+        inputs: dict[str, np.ndarray]
+    ) -> dict[str, np.ndarray]:
         """Execute operator via rtlsim.
 
         Args:
@@ -325,10 +320,10 @@ class RTLSimExecutor:
 
         # Verify backend type
         try:
-            from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
             from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
+            from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
 
-            if not isinstance(op, (RTLBackend, HLSBackend)):
+            if not isinstance(op, RTLBackend | HLSBackend):
                 pytest.skip(
                     f"{op.__class__.__name__} is neither RTL nor HLS backend. "
                     f"rtlsim execution requires RTLBackend or HLSBackend inheritance."
@@ -359,8 +354,8 @@ class RTLSimExecutor:
             # Use FINN's transformation-based approach (like FINN's own tests)
             # This is the recommended way instead of calling methods directly
             # Note: PrepareIP will create code_gen_dir_ipgen automatically
-            from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
             from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
+            from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
             from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
             from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 
@@ -441,7 +436,7 @@ class RTLSimExecutor:
 
 # Convenience factory
 
-def make_executors() -> Dict[str, Executor]:
+def make_executors() -> dict[str, Executor]:
     """Create standard set of executors for common test patterns.
 
     Returns:

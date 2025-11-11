@@ -11,7 +11,7 @@ runtime expects environment to be sourced via shell scripts before Python starts
 import os
 import platform
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .schema import SystemConfig
@@ -40,7 +40,7 @@ class EnvironmentExporter:
         """Initialize with system configuration."""
         self.config = config
 
-    def to_external_dict(self) -> Dict[str, str]:
+    def to_external_dict(self) -> dict[str, str]:
         """Generate dict of external tool environment variables.
 
         Returns variables for external tools (FINN, Xilinx, etc.).
@@ -91,7 +91,7 @@ class EnvironmentExporter:
 
         return env
 
-    def to_all_dict(self) -> Dict[str, str]:
+    def to_all_dict(self) -> dict[str, str]:
         """Generate dict of all environment variables.
 
         Includes both external tool variables and internal BSMITH_* variables.
@@ -111,7 +111,7 @@ class EnvironmentExporter:
     def to_env_dict(
         self,
         include_internal: bool = True
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """Generate complete environment for shell script generation.
 
         Includes PATH, LD_LIBRARY_PATH, and all configuration variables.

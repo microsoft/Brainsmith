@@ -8,13 +8,13 @@ from pathlib import Path
 
 import click
 
-from .context import ApplicationContext
-from .utils import console
 from .constants import (
     CLI_NAME_BRAINSMITH,
     CLI_NAME_SMITH,
     ExitCode,
 )
+from .context import ApplicationContext
+from .utils import console
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ def _version_callback(ctx, param, value):
     if not value:
         return
     import importlib.metadata
+
     from .messages import PACKAGE_NAME
     version = importlib.metadata.version(PACKAGE_NAME)
     console.print(f"[bold]{CLI_NAME_BRAINSMITH}[/bold], version {version}")
@@ -97,7 +98,7 @@ def _create_smith_subcommand() -> click.Command:
 
 def create_cli(name: str, include_admin: bool = True) -> click.Group:
     # Import command maps from single source of truth
-    from brainsmith.cli.commands import OPERATIONAL_COMMAND_MAP, ADMIN_COMMAND_MAP
+    from brainsmith.cli.commands import ADMIN_COMMAND_MAP, OPERATIONAL_COMMAND_MAP
 
     lazy_commands = {}
     if name == CLI_NAME_SMITH:

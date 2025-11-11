@@ -5,12 +5,12 @@
 
 """Insert DuplicateStreams layers for tensor fanout."""
 
-from onnx import helper, TensorProto
+from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.general import SortGraph
-from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.infer_shapes import InferShapes
 
 
 class InsertDuplicateStreams(Transformation):

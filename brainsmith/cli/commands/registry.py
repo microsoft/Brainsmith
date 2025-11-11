@@ -3,9 +3,10 @@
 
 """Component discovery and management commands."""
 
+from collections import defaultdict
+
 import click
 from rich.table import Table
-from collections import defaultdict
 
 # Import registry functions lazily inside function to keep --help fast
 from ..context import ApplicationContext
@@ -52,8 +53,10 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     # Import registry functions only when command executes (not for --help)
     from brainsmith.registry import (
         discover_components,
-        list_steps, list_kernels, list_backends,
-        get_all_component_metadata
+        get_all_component_metadata,
+        list_backends,
+        list_kernels,
+        list_steps,
     )
 
     # Trigger discovery (with rebuild if requested)
@@ -164,7 +167,7 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     # Validate components if requested (after showing tables)
     validation_errors = {}
     if rebuild:
-        from brainsmith.registry import get_kernel, get_backend, get_step
+        from brainsmith.registry import get_backend, get_kernel, get_step
 
         with progress_spinner("Validating components...", transient=False, no_progress=ctx.no_progress) as task:
             validation_errors.update(_validate_components(all_kernels, get_kernel))
@@ -195,7 +198,7 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
 
         # Kernels by source
         if all_kernels:
-            console.print(f"\n[bold cyan]KERNELS[/bold cyan]")
+            console.print("\n[bold cyan]KERNELS[/bold cyan]")
             all_metadata = get_all_component_metadata()
             for source in sorted(kernels_by_source.keys()):
                 console.print(f"\n  [green]{source}:[/green]")
@@ -219,7 +222,7 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
 
         # Backends by source
         if all_backends:
-            console.print(f"\n[bold cyan]BACKENDS[/bold cyan]")
+            console.print("\n[bold cyan]BACKENDS[/bold cyan]")
             all_metadata = get_all_component_metadata()
             for source in sorted(backends_by_source.keys()):
                 console.print(f"\n  [green]{source}:[/green]")

@@ -9,8 +9,8 @@
 
 """Set pumped compute attribute for hardware operations."""
 
-from qonnx.transformation.base import Transformation
 import qonnx.custom_op.registry as registry
+from qonnx.transformation.base import Transformation
 
 
 class SetPumpedCompute(Transformation):

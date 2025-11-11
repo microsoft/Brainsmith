@@ -6,14 +6,14 @@ information at a higher abstraction level than raw RTL.
 """
 
 import re
+from collections.abc import Iterator, MutableMapping
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Iterator, Tuple, Any
-from collections.abc import MutableMapping
+from typing import Any
 
-from brainsmith.dataflow.types import Direction, InterfaceType
 from brainsmith.dataflow.constraint_types import DatatypeConstraintGroup
+from brainsmith.dataflow.types import Direction, InterfaceType
 
-from .rtl_parser.types import Port, Parameter
+from .rtl_parser.types import Parameter, Port
 
 
 @dataclass
@@ -24,22 +24,22 @@ class DataflowMetadata:
     to both AXI-Stream and AXI-Lite interfaces when used for data transfer.
     """
     is_weight: bool = False
-    bdim_params: List[Parameter] = field(default_factory=list)
-    sdim_params: List[Parameter] = field(default_factory=list)
-    bdim_shape: Optional[List] = None
-    sdim_shape: Optional[List] = None
-    datatype_constraints: List[DatatypeConstraintGroup] = field(default_factory=list)
-    relationships: Dict[str, str] = field(default_factory=dict)
+    bdim_params: list[Parameter] = field(default_factory=list)
+    sdim_params: list[Parameter] = field(default_factory=list)
+    bdim_shape: list | None = None
+    sdim_shape: list | None = None
+    datatype_constraints: list[DatatypeConstraintGroup] = field(default_factory=list)
+    relationships: dict[str, str] = field(default_factory=dict)
     
     def has_shape_params(self) -> bool:
         """Check if interface has BDIM or SDIM parameters."""
         return bool(self.bdim_shape or self.sdim_shape)
     
-    def get_shape_params(self) -> List[Parameter]:
+    def get_shape_params(self) -> list[Parameter]:
         """Get all shape-related parameters."""
         return self.bdim_params + self.sdim_params
     
-    def get_all_params(self) -> List[Parameter]:
+    def get_all_params(self) -> list[Parameter]:
         """Get all parameters (shape params) in consistent order."""
         return self.bdim_params + self.sdim_params
 
@@ -51,13 +51,13 @@ class DatatypeParameters:
     Each property is optional and can hold at most one Parameter.
     This ensures no duplicate properties and provides structured access.
     """
-    width: Optional[Parameter] = None
-    signed: Optional[Parameter] = None
-    bias: Optional[Parameter] = None
-    format: Optional[Parameter] = None
-    fractional_width: Optional[Parameter] = None
-    exponent_width: Optional[Parameter] = None
-    mantissa_width: Optional[Parameter] = None
+    width: Parameter | None = None
+    signed: Parameter | None = None
+    bias: Parameter | None = None
+    format: Parameter | None = None
+    fractional_width: Parameter | None = None
+    exponent_width: Parameter | None = None
+    mantissa_width: Parameter | None = None
     
     def has_any(self) -> bool:
         """Check if any datatype parameters are set."""
@@ -76,8 +76,8 @@ class DatatypeParameters:
 class InterfaceMetadata(MutableMapping[str, Port]):
     """Base metadata for all interfaces."""
     name: str
-    ports: Dict[str, Port]
-    compiler_name: Optional[str] = None  # Standardized name for compiler export
+    ports: dict[str, Port]
+    compiler_name: str | None = None  # Standardized name for compiler export
 
     def add_port(self, port: Port):
         """Add a port to the interface."""
@@ -94,10 +94,10 @@ class InterfaceMetadata(MutableMapping[str, Port]):
     def add(self, suffix: str, port: Port) -> None:
         self.ports[suffix] = port
 
-    def get_port(self, suffix: str) -> Optional[Port]:
+    def get_port(self, suffix: str) -> Port | None:
         return self.ports.get(suffix)
     
-    def _get_signal(self, suffix: str) -> Optional[Port]:
+    def _get_signal(self, suffix: str) -> Port | None:
         """Get signal by suffix (case-insensitive)."""
         return self.ports.get(suffix.upper())
     
@@ -116,8 +116,8 @@ class AXIStreamMetadata(InterfaceMetadata):
     """Metadata for a AXI-Stream interface."""
     # interface_type is determined by direction: INPUT or OUTPUT
     direction: Direction = field(default=Direction.INPUT)  # Will be set during parsing
-    dtype_params: Optional[DatatypeParameters] = None
-    dataflow: Optional[DataflowMetadata] = None
+    dtype_params: DatatypeParameters | None = None
+    dataflow: DataflowMetadata | None = None
     
     @property
     def interface_type(self) -> InterfaceType:
@@ -133,53 +133,53 @@ class AXIStreamMetadata(InterfaceMetadata):
         return self.dataflow.is_weight if self.dataflow else False
     
     @property
-    def bdim_params(self) -> List[Parameter]:
+    def bdim_params(self) -> list[Parameter]:
         """Get block dimension parameters."""
         return self.dataflow.bdim_params if self.dataflow else []
     
     @property
-    def sdim_params(self) -> List[Parameter]:
+    def sdim_params(self) -> list[Parameter]:
         """Get stream dimension parameters."""
         return self.dataflow.sdim_params if self.dataflow else []
     
     @property
-    def bdim_shape(self) -> Optional[List]:
+    def bdim_shape(self) -> list | None:
         """Get block dimension shape expression."""
         return self.dataflow.bdim_shape if self.dataflow else None
     
     @property
-    def sdim_shape(self) -> Optional[List]:
+    def sdim_shape(self) -> list | None:
         """Get stream dimension shape expression."""
         return self.dataflow.sdim_shape if self.dataflow else None
     
     @property
-    def datatype_constraints(self) -> List[DatatypeConstraintGroup]:
+    def datatype_constraints(self) -> list[DatatypeConstraintGroup]:
         """Get datatype constraints."""
         return self.dataflow.datatype_constraints if self.dataflow else []
     
     @property
-    def relationships(self) -> Dict[str, str]:
+    def relationships(self) -> dict[str, str]:
         """Get relationships."""
         return self.dataflow.relationships if self.dataflow else {}
     
     # Signal role properties
     @property
-    def tdata(self) -> Optional[Port]:
+    def tdata(self) -> Port | None:
         """Get TDATA signal port."""
         return self._get_signal("TDATA")
     
     @property
-    def tvalid(self) -> Optional[Port]:
+    def tvalid(self) -> Port | None:
         """Get TVALID signal port."""
         return self._get_signal("TVALID")
     
     @property
-    def tready(self) -> Optional[Port]:
+    def tready(self) -> Port | None:
         """Get TREADY signal port."""
         return self._get_signal("TREADY")
     
     @property
-    def tlast(self) -> Optional[Port]:
+    def tlast(self) -> Port | None:
         """Get TLAST signal port."""
         return self._get_signal("TLAST")
     
@@ -194,7 +194,7 @@ class AXIStreamMetadata(InterfaceMetadata):
         """Check if interface has BDIM or SDIM parameters."""
         return self.dataflow.has_shape_params() if self.dataflow else False
     
-    def get_all_params(self) -> List[Parameter]:
+    def get_all_params(self) -> list[Parameter]:
         """Get all parameters for this interface in consistent order."""
         params = []
         
@@ -233,11 +233,11 @@ class AXILiteMetadata(InterfaceMetadata):
     has_read: bool = True   # Default to true, can be overridden
 
     # Owned RTL Parameters
-    enable_param: Optional[Parameter] = None
-    data_width_param: Optional[Parameter] = None
-    addr_width_param: Optional[Parameter] = None
-    dtype_params: Optional[DatatypeParameters] = None
-    dataflow: Optional[DataflowMetadata] = None
+    enable_param: Parameter | None = None
+    data_width_param: Parameter | None = None
+    addr_width_param: Parameter | None = None
+    dtype_params: DatatypeParameters | None = None
+    dataflow: DataflowMetadata | None = None
     
     @property
     def interface_type(self) -> InterfaceType:
@@ -253,32 +253,32 @@ class AXILiteMetadata(InterfaceMetadata):
         return self.dataflow.is_weight if self.dataflow else False
     
     @property
-    def bdim_params(self) -> List[Parameter]:
+    def bdim_params(self) -> list[Parameter]:
         """Get block dimension parameters."""
         return self.dataflow.bdim_params if self.dataflow else []
     
     @property
-    def sdim_params(self) -> List[Parameter]:
+    def sdim_params(self) -> list[Parameter]:
         """Get stream dimension parameters."""
         return self.dataflow.sdim_params if self.dataflow else []
     
     @property
-    def bdim_shape(self) -> Optional[List]:
+    def bdim_shape(self) -> list | None:
         """Get block dimension shape expression."""
         return self.dataflow.bdim_shape if self.dataflow else None
     
     @property
-    def sdim_shape(self) -> Optional[List]:
+    def sdim_shape(self) -> list | None:
         """Get stream dimension shape expression."""
         return self.dataflow.sdim_shape if self.dataflow else None
     
     @property
-    def datatype_constraints(self) -> List[DatatypeConstraintGroup]:
+    def datatype_constraints(self) -> list[DatatypeConstraintGroup]:
         """Get datatype constraints."""
         return self.dataflow.datatype_constraints if self.dataflow else []
     
     @property
-    def relationships(self) -> Dict[str, str]:
+    def relationships(self) -> dict[str, str]:
         """Get relationships."""
         return self.dataflow.relationships if self.dataflow else {}
     
@@ -294,101 +294,101 @@ class AXILiteMetadata(InterfaceMetadata):
     
     # Write Address Channel
     @property
-    def awaddr(self) -> Optional[Port]:
+    def awaddr(self) -> Port | None:
         """Get AWADDR signal port."""
         return self._get_signal("AWADDR")
     
     @property
-    def awprot(self) -> Optional[Port]:
+    def awprot(self) -> Port | None:
         """Get AWPROT signal port."""
         return self._get_signal("AWPROT")
     
     @property
-    def awvalid(self) -> Optional[Port]:
+    def awvalid(self) -> Port | None:
         """Get AWVALID signal port."""
         return self._get_signal("AWVALID")
     
     @property
-    def awready(self) -> Optional[Port]:
+    def awready(self) -> Port | None:
         """Get AWREADY signal port."""
         return self._get_signal("AWREADY")
     
     # Write Data Channel
     @property
-    def wdata(self) -> Optional[Port]:
+    def wdata(self) -> Port | None:
         """Get WDATA signal port."""
         return self._get_signal("WDATA")
     
     @property
-    def wstrb(self) -> Optional[Port]:
+    def wstrb(self) -> Port | None:
         """Get WSTRB signal port."""
         return self._get_signal("WSTRB")
     
     @property
-    def wvalid(self) -> Optional[Port]:
+    def wvalid(self) -> Port | None:
         """Get WVALID signal port."""
         return self._get_signal("WVALID")
     
     @property
-    def wready(self) -> Optional[Port]:
+    def wready(self) -> Port | None:
         """Get WREADY signal port."""
         return self._get_signal("WREADY")
     
     # Write Response Channel
     @property
-    def bresp(self) -> Optional[Port]:
+    def bresp(self) -> Port | None:
         """Get BRESP signal port."""
         return self._get_signal("BRESP")
     
     @property
-    def bvalid(self) -> Optional[Port]:
+    def bvalid(self) -> Port | None:
         """Get BVALID signal port."""
         return self._get_signal("BVALID")
     
     @property
-    def bready(self) -> Optional[Port]:
+    def bready(self) -> Port | None:
         """Get BREADY signal port."""
         return self._get_signal("BREADY")
     
     # Read Address Channel
     @property
-    def araddr(self) -> Optional[Port]:
+    def araddr(self) -> Port | None:
         """Get ARADDR signal port."""
         return self._get_signal("ARADDR")
     
     @property
-    def arprot(self) -> Optional[Port]:
+    def arprot(self) -> Port | None:
         """Get ARPROT signal port."""
         return self._get_signal("ARPROT")
     
     @property
-    def arvalid(self) -> Optional[Port]:
+    def arvalid(self) -> Port | None:
         """Get ARVALID signal port."""
         return self._get_signal("ARVALID")
     
     @property
-    def arready(self) -> Optional[Port]:
+    def arready(self) -> Port | None:
         """Get ARREADY signal port."""
         return self._get_signal("ARREADY")
     
     # Read Data Channel
     @property
-    def rdata(self) -> Optional[Port]:
+    def rdata(self) -> Port | None:
         """Get RDATA signal port."""
         return self._get_signal("RDATA")
     
     @property
-    def rresp(self) -> Optional[Port]:
+    def rresp(self) -> Port | None:
         """Get RRESP signal port."""
         return self._get_signal("RRESP")
     
     @property
-    def rvalid(self) -> Optional[Port]:
+    def rvalid(self) -> Port | None:
         """Get RVALID signal port."""
         return self._get_signal("RVALID")
     
     @property
-    def rready(self) -> Optional[Port]:
+    def rready(self) -> Port | None:
         """Get RREADY signal port."""
         return self._get_signal("RREADY")
     
@@ -400,7 +400,7 @@ class AXILiteMetadata(InterfaceMetadata):
                    self.addr_width_param or 
                    (self.dtype_params and self.dtype_params.has_any()))
     
-    def get_all_params(self) -> List[Parameter]:
+    def get_all_params(self) -> list[Parameter]:
         """Get all parameters for this interface in consistent order."""
         params = []
         
@@ -438,17 +438,17 @@ class ControlMetadata(InterfaceMetadata):
     
     # Signal role properties
     @property
-    def clk(self) -> Optional[Port]:
+    def clk(self) -> Port | None:
         """Get CLK signal port."""
         return self._get_signal("CLK")
     
     @property
-    def rst_n(self) -> Optional[Port]:
+    def rst_n(self) -> Port | None:
         """Get RST_N signal port."""
         return self._get_signal("RST_N")
     
     @property
-    def clk2x(self) -> Optional[Port]:
+    def clk2x(self) -> Port | None:
         """Get CLK2X signal port."""
         return self._get_signal("CLK2X")
 
@@ -466,13 +466,13 @@ class KernelMetadata:
     # Interface metadata (required)
     control: ControlMetadata
     # Optional fields with defaults
-    parameters: List[Parameter] = field(default_factory=list)
-    linked_parameters: List[Parameter] = field(default_factory=list)
-    inputs: List[AXIStreamMetadata] = field(default_factory=list)
-    outputs: List[AXIStreamMetadata] = field(default_factory=list)
-    config: List[AXILiteMetadata] = field(default_factory=list)
+    parameters: list[Parameter] = field(default_factory=list)
+    linked_parameters: list[Parameter] = field(default_factory=list)
+    inputs: list[AXIStreamMetadata] = field(default_factory=list)
+    outputs: list[AXIStreamMetadata] = field(default_factory=list)
+    config: list[AXILiteMetadata] = field(default_factory=list)
     # Additional RTL files to include (source file is always first)
-    included_rtl_files: List[str] = field(default_factory=list)
+    included_rtl_files: list[str] = field(default_factory=list)
 
     # Simple transformations as properties
     @property
@@ -487,7 +487,7 @@ class KernelMetadata:
     
     # Navigation helpers
     @property
-    def stream_interfaces(self) -> List[AXIStreamMetadata]:
+    def stream_interfaces(self) -> list[AXIStreamMetadata]:
         """Get all AXI-Stream interfaces (inputs + outputs)."""
         return self.inputs + self.outputs
     
@@ -526,7 +526,7 @@ class KernelMetadata:
         return any(iface.enable_param for iface in self.config)
     
     @property
-    def interfaces(self) -> List[InterfaceMetadata]:
+    def interfaces(self) -> list[InterfaceMetadata]:
         """Get all interfaces in a single list."""
         interfaces = []
         interfaces.append(self.control)
@@ -536,7 +536,7 @@ class KernelMetadata:
         return interfaces
     
     # Collection methods
-    def get_all_bdim_params(self) -> List[str]:
+    def get_all_bdim_params(self) -> list[str]:
         """Get all unique BDIM parameter names from all interfaces."""
         params = []
         seen = set()
@@ -548,7 +548,7 @@ class KernelMetadata:
                         seen.add(param)
         return params
     
-    def get_all_sdim_params(self) -> List[str]:
+    def get_all_sdim_params(self) -> list[str]:
         """Get all unique SDIM parameter names from all interfaces."""
         params = []
         seen = set()
@@ -560,7 +560,7 @@ class KernelMetadata:
                         seen.add(param)
         return params
     
-    def get_nodeattr_types(self) -> Dict[str, Tuple[str, bool, Any]]:
+    def get_nodeattr_types(self) -> dict[str, tuple[str, bool, Any]]:
         """Build complete nodeattr types dictionary for FINN.
         
         Returns:

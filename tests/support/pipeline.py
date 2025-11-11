@@ -26,24 +26,24 @@ Usage:
     )
 """
 
-from typing import Callable, Optional, Tuple, Dict
+from collections.abc import Callable
 
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
 import qonnx.core.data_layout as DataLayout
-from qonnx.transformation.base import Transformation
-from qonnx.transformation.infer_shapes import InferShapes
-from qonnx.transformation.infer_datatypes import InferDataTypes
-from finn.util.basic import getHWCustomOp
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from finn.transformation.fpgadataflow.minimize_accumulator_width import MinimizeAccumulatorWidth
 from finn.transformation.fpgadataflow.minimize_weight_bit_width import MinimizeWeightBitWidth
+from finn.util.basic import getHWCustomOp
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.transformation.base import Transformation
+from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.infer_shapes import InferShapes
 
 
 def annotate_model_with_qonnx(
     model: ModelWrapper,
-    annotations: Dict[str, DataType],
-    layouts: Optional[Dict[str, DataLayout]] = None
+    annotations: dict[str, DataType],
+    layouts: dict[str, DataLayout] | None = None
 ) -> ModelWrapper:
     """Add QONNX DataType and layout annotations to pure ONNX model.
 
@@ -116,13 +116,13 @@ class PipelineRunner:
 
     def run(
         self,
-        model_factory: Callable[[], Tuple[ModelWrapper, Optional[str]]],
+        model_factory: Callable[[], tuple[ModelWrapper, str | None]],
         transform: Transformation,
-        configure_fn: Optional[Callable[[HWCustomOp, ModelWrapper], None]] = None,
-        init_fn: Optional[Callable[[HWCustomOp, ModelWrapper], None]] = None,
-        qonnx_annotations: Optional[Dict[str, DataType]] = None,
-        qonnx_layouts: Optional[Dict[str, DataLayout]] = None
-    ) -> Tuple[HWCustomOp, ModelWrapper]:
+        configure_fn: Callable[[HWCustomOp, ModelWrapper], None] | None = None,
+        init_fn: Callable[[HWCustomOp, ModelWrapper], None] | None = None,
+        qonnx_annotations: dict[str, DataType] | None = None,
+        qonnx_layouts: dict[str, DataLayout] | None = None
+    ) -> tuple[HWCustomOp, ModelWrapper]:
         """Run ONNX → Hardware transformation pipeline.
 
         Standard pipeline sequence:
@@ -230,8 +230,8 @@ class PipelineRunner:
 # Convenience factory for common test patterns
 
 def make_manual_pipeline_runner(
-    configure_fn: Optional[Callable[[HWCustomOp, ModelWrapper], None]] = None
-) -> Callable[[Callable[[], Tuple[ModelWrapper, Optional[str]]], Transformation], Tuple[HWCustomOp, ModelWrapper]]:
+    configure_fn: Callable[[HWCustomOp, ModelWrapper], None] | None = None
+) -> Callable[[Callable[[], tuple[ModelWrapper, str | None]], Transformation], tuple[HWCustomOp, ModelWrapper]]:
     """Create a pipeline runner bound with manual (FINN) configuration.
 
     This is a convenience factory for the common pattern of running manual
@@ -258,8 +258,8 @@ def make_manual_pipeline_runner(
 
 
 def make_auto_pipeline_runner(
-    configure_fn: Optional[Callable[[HWCustomOp, ModelWrapper], None]] = None
-) -> Callable[[Callable[[], Tuple[ModelWrapper, Optional[str]]], Transformation], Tuple[HWCustomOp, ModelWrapper]]:
+    configure_fn: Callable[[HWCustomOp, ModelWrapper], None] | None = None
+) -> Callable[[Callable[[], tuple[ModelWrapper, str | None]], Transformation], tuple[HWCustomOp, ModelWrapper]]:
     """Create a pipeline runner bound with auto (Brainsmith) configuration.
 
     This is a convenience factory for the common pattern of running auto

@@ -8,14 +8,13 @@ Handles parsing of kernel specifications and backend resolution.
 """
 
 import logging
-from typing import List, Tuple, Type, Union
 
-from brainsmith.registry import list_backends_for_kernel, get_backend
+from brainsmith.registry import get_backend, list_backends_for_kernel
 
 logger = logging.getLogger(__name__)
 
 
-def parse_kernels(kernels_data: List[Union[str, dict]]) -> List[Tuple[str, List[Type]]]:
+def parse_kernels(kernels_data: list[str | dict]) -> list[tuple[str, list[type]]]:
     """Parse kernels section with optional backend specification.
 
     Supports two formats:
@@ -95,7 +94,7 @@ def parse_kernels(kernels_data: List[Union[str, dict]]) -> List[Tuple[str, List[
     return kernel_backends
 
 
-def _resolve_all_backends(kernel_name: str) -> List[Type]:
+def _resolve_all_backends(kernel_name: str) -> list[type]:
     """Get all registered backends for a kernel.
 
     Args:
@@ -121,7 +120,7 @@ def _resolve_all_backends(kernel_name: str) -> List[Type]:
         ) from e
 
     # Sort backends: RTL first, then HLS, then others
-    def backend_sort_key(backend_class: Type) -> tuple:
+    def backend_sort_key(backend_class: type) -> tuple:
         """Sort key: (priority, class_name) where lower priority comes first."""
         class_name = backend_class.__name__.lower()
         if class_name.endswith('_rtl'):
@@ -137,7 +136,7 @@ def _resolve_all_backends(kernel_name: str) -> List[Type]:
     return backend_classes
 
 
-def _resolve_specified_backends(kernel_name: str, backend_spec: List[str]) -> List[Type]:
+def _resolve_specified_backends(kernel_name: str, backend_spec: list[str]) -> list[type]:
     """Resolve explicitly specified backends for a kernel.
 
     Accepts both class names (e.g., 'MVAU_rtl') and full registry names
@@ -182,7 +181,7 @@ def _resolve_specified_backends(kernel_name: str, backend_spec: List[str]) -> Li
     return backend_classes
 
 
-def _resolve_backend_name(kernel_name: str, backend_name: str) -> Type:
+def _resolve_backend_name(kernel_name: str, backend_name: str) -> type:
     """Resolve a backend name to its class.
 
     Supports two formats:
@@ -241,7 +240,7 @@ def _resolve_backend_name(kernel_name: str, backend_name: str) -> Type:
     return backend_class
 
 
-def _validate_backend_kernel_match(kernel_name: str, backend_name: str, backend_class: Type) -> None:
+def _validate_backend_kernel_match(kernel_name: str, backend_name: str, backend_class: type) -> None:
     """Validate that a backend implements the expected kernel.
 
     Args:

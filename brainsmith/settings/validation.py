@@ -9,11 +9,12 @@ Separates validation logic from UI/CLI concerns.
 """
 
 from __future__ import annotations
+
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .schema import SystemConfig
@@ -132,7 +133,7 @@ def warn_if_environment_not_sourced(marker_var: str = "BSMITH_DIR") -> bool:
     return True
 
 
-def get_environment_info() -> dict[str, Optional[str]]:
+def get_environment_info() -> dict[str, str | None]:
     """Get diagnostic information about current environment state.
 
     Useful for debugging environment-related issues.

@@ -11,7 +11,7 @@ Population: Lazy (built on first access)
 Storage: In-memory dictionaries
 """
 
-from typing import Callable, Dict, Tuple
+from collections.abc import Callable
 
 import numpy as np
 from qonnx.core.modelwrapper import ModelWrapper
@@ -26,11 +26,11 @@ class ModelCache:
 
     def __init__(self):
         # Cache dictionaries
-        self._stage1_models: Dict[str, ModelWrapper] = {}
-        self._stage2_models: Dict[str, Tuple] = {}
-        self._stage3_models: Dict[Tuple[str, str], Tuple] = {}
-        self._golden_outputs: Dict[str, Dict[str, np.ndarray]] = {}
-        self._test_inputs: Dict[str, Dict[str, np.ndarray]] = {}
+        self._stage1_models: dict[str, ModelWrapper] = {}
+        self._stage2_models: dict[str, tuple] = {}
+        self._stage3_models: dict[tuple[str, str], tuple] = {}
+        self._golden_outputs: dict[str, dict[str, np.ndarray]] = {}
+        self._test_inputs: dict[str, dict[str, np.ndarray]] = {}
 
         # Statistics (for debugging)
         self.stats = {
@@ -65,7 +65,7 @@ class ModelCache:
         self._stage1_models[test_id] = model
         return model
 
-    def get_stage2_model(self, test_id: str, builder: Callable[[], Tuple]) -> Tuple:
+    def get_stage2_model(self, test_id: str, builder: Callable[[], tuple]) -> tuple:
         """Get or build Stage 2 Kernel model.
 
         Args:
@@ -85,8 +85,8 @@ class ModelCache:
         return op, model
 
     def get_stage3_model(
-        self, test_id: str, fpgapart: str, builder: Callable[[], Tuple]
-    ) -> Tuple:
+        self, test_id: str, fpgapart: str, builder: Callable[[], tuple]
+    ) -> tuple:
         """Get or build Stage 3 Backend model.
 
         Args:
@@ -109,8 +109,8 @@ class ModelCache:
         return op, model
 
     def get_golden_outputs(
-        self, test_id: str, builder: Callable[[], Dict[str, np.ndarray]]
-    ) -> Dict[str, np.ndarray]:
+        self, test_id: str, builder: Callable[[], dict[str, np.ndarray]]
+    ) -> dict[str, np.ndarray]:
         """Get or compute golden reference outputs.
 
         Args:
@@ -130,8 +130,8 @@ class ModelCache:
         return golden
 
     def get_test_inputs(
-        self, test_id: str, builder: Callable[[], Dict[str, np.ndarray]]
-    ) -> Dict[str, np.ndarray]:
+        self, test_id: str, builder: Callable[[], dict[str, np.ndarray]]
+    ) -> dict[str, np.ndarray]:
         """Get or generate test inputs.
 
         Args:

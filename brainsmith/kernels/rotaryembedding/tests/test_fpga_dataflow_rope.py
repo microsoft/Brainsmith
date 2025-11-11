@@ -27,49 +27,35 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import pytest
-
-import numpy as np
 import os
-import onnx
-import numpy as np
-
-import onnx.helper as helper
-import onnx.numpy_helper as numpy_helper
-
-from onnx import TensorProto, helper
-from qonnx.core.datatype import DataType
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.custom_op.registry import getCustomOp
-from qonnx.transformation.general import GiveUniqueNodeNames
-from qonnx.transformation.general import ApplyConfig
-from qonnx.transformation.infer_shapes import InferShapes
-from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 
 import finn.core.onnx_exec as oxe
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
-from finnbrainsmith.custom_op.fpgadataflow.rotaryembedding import get_rope_onnx_filename
+import finn.transformation.streamline.absorb as absorb
+import numpy as np
+import onnx
+import onnx.helper as helper
+import pytest
 from finn.analysis.fpgadataflow.exp_cycles_per_layer import exp_cycles_per_layer
-from finn.transformation.fpgadataflow.compile_cppsim import CompileCppSim
+from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 from finn.transformation.fpgadataflow.hlssynth_ip import HLSSynthIP
-from finn.transformation.fpgadataflow.prepare_cppsim import PrepareCppSim
 from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
-from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
-from finn.transformation.streamline.round_thresholds import RoundAndClipThresholds
-from finn.util.basic import pynq_part_map
-
-import finn.transformation.streamline.absorb as absorb
-from finn.transformation.fpgadataflow.create_dataflow_partition import (
-    CreateDataflowPartition,
-)
 from finn.transformation.qonnx.quant_act_to_multithreshold import (
     default_filter_function_generator,
 )
-
+from finn.util.basic import pynq_part_map
+from finnbrainsmith.custom_op.fpgadataflow.rotaryembedding import get_rope_onnx_filename
+from onnx import TensorProto, helper
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.custom_op.registry import getCustomOp
+from qonnx.transformation.general import ApplyConfig, GiveUniqueNodeNames
+from qonnx.transformation.infer_shapes import InferShapes
+from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 
 test_pynq_board = os.getenv("PYNQ_BOARD", default="Pynq-Z1")
 test_fpga_part = pynq_part_map[test_pynq_board]

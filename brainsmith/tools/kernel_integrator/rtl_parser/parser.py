@@ -11,17 +11,15 @@ SystemVerilog files and extract module interfaces, parameters, and pragmas.
 """
 
 import logging
-from typing import Optional, List, Tuple
 from pathlib import Path
-from tree_sitter import Node, Tree
 
 from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
-from .types import ParsedModule, PragmaType, Parameter, Port
-from .pragmas import Pragma
+
 from .ast_parser import ASTParser, SyntaxError
 from .kernel_builder import KernelBuilder
 from .module_extractor import ModuleExtractor
 from .parameter_linker import ParameterLinker
+from .types import ParsedModule
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -144,7 +142,7 @@ class RTLParser:
                     f"at line {pragma.line_number}: {e}"
                 )
         
-        logger.info(f"Pragma application complete.")
+        logger.info("Pragma application complete.")
     
     def _format_for_compiler_export(self, kernel: KernelMetadata) -> None:
         """Format kernel metadata for compiler export.
@@ -255,7 +253,7 @@ class RTLParser:
             file_path_str = str(file_path_obj)
             
             # Read file content
-            with open(file_path_str, 'r', encoding='utf-8') as f:
+            with open(file_path_str, encoding='utf-8') as f:
                 systemverilog_code = f.read()
             
             # Delegate to core parse method
@@ -277,10 +275,10 @@ class RTLParser:
             
             return kernel_metadata
             
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             logger.error(f"File not found: {file_path}")
             raise
-        except (UnicodeDecodeError, IOError) as e:
+        except (OSError, UnicodeDecodeError) as e:
             logger.error(f"Failed to read file {file_path}: {e}")
             raise ParserError(f"Failed to read file {file_path}: {e}")
         except (SyntaxError, ParserError):

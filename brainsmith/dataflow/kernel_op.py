@@ -32,18 +32,18 @@ on demand. The overhead is minimal (~1ms) and only occurs when design_space is N
 import logging
 import math
 from abc import ABC, abstractmethod
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Any, Union
 
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
+from onnx import NodeProto
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
-from onnx import NodeProto
 
-from .schemas import KernelSchema
-from .dse_models import KernelDesignSpace, KernelDesignPoint
 from .builder import BuildContext, DesignSpaceBuilder
-from .transformation import TransformationResult
+from .dse_models import KernelDesignPoint, KernelDesignSpace
 from .ordered_parameter import OrderedParameter
+from .schemas import KernelSchema
+from .transformation import TransformationResult
 
 logger = logging.getLogger(__name__)
 
@@ -80,11 +80,11 @@ class KernelOp(HWCustomOp, ABC):
 
         # Design space caching for DSE performance
         # Design points are regenerated on each access to ensure consistency with nodeattrs
-        self._design_space: Optional['KernelDesignSpace'] = None  # Cached, call invalidate() to rebuild
+        self._design_space: "KernelDesignSpace" | None = None  # Cached, call invalidate() to rebuild
 
     @classmethod
     @abstractmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> KernelSchema:
         """Build kernel schema from ONNX node.
 
         Polymorphic method that handles both static and dynamic schemas:
@@ -375,7 +375,7 @@ class KernelOp(HWCustomOp, ABC):
         # Delegate to existing lazy initialization
         self._ensure_ready(model_w)
 
-    def get_valid_ranges(self, model_w: ModelWrapper) -> Dict[str, Union['OrderedParameter', FrozenSet]]:
+    def get_valid_ranges(self, model_w: ModelWrapper) -> dict[str, Union['OrderedParameter', frozenset]]:
         """Valid parameter values for DSE (tiling + resource).
 
         Returns:
@@ -413,22 +413,22 @@ class KernelOp(HWCustomOp, ABC):
         return DataType[self.get_nodeattr(f"output{ind}Datatype")]
 
     # FINN API compatibility - delegate to design_point
-    def get_normal_input_shape(self, ind=0) -> Tuple[int, ...]:
+    def get_normal_input_shape(self, ind=0) -> tuple[int, ...]:
         """Return normal (unfolded) input shape as immutable tuple (FINN convention)."""
         return self.design_point.input_list[ind].tensor_shape
 
-    def get_normal_output_shape(self, ind=0) -> Tuple[int, ...]:
+    def get_normal_output_shape(self, ind=0) -> tuple[int, ...]:
         """Return normal (unfolded) output shape as immutable tuple (FINN convention)."""
         return self.design_point.output_list[ind].tensor_shape
 
-    def get_folded_input_shape(self, ind=0) -> Tuple[int, ...]:
+    def get_folded_input_shape(self, ind=0) -> tuple[int, ...]:
         tensor_shape = self.design_point.input_list[ind].tensor_shape
         stream_shape = self.design_point.input_list[ind].stream_shape
         fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
         flattened_stream = math.prod(stream_shape)
         return tuple(fold_factors + [flattened_stream])
 
-    def get_folded_output_shape(self, ind=0) -> Tuple[int, ...]:
+    def get_folded_output_shape(self, ind=0) -> tuple[int, ...]:
         tensor_shape = self.design_point.output_list[ind].tensor_shape
         stream_shape = self.design_point.output_list[ind].stream_shape
         fold_factors = [t // s for t, s in zip(tensor_shape, stream_shape)]
@@ -565,6 +565,6 @@ class KernelOp(HWCustomOp, ABC):
 
         # Sync config → nodeattrs (bypass set_nodeattr to avoid invalidation)
         for dim_name, value in point.config.items():
-            super(KernelOp, self).set_nodeattr(dim_name, value)
+            super().set_nodeattr(dim_name, value)
 
         # Design point will regenerate from nodeattrs on next access

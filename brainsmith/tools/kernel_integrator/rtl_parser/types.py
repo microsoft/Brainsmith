@@ -5,12 +5,11 @@ This module contains types specific to RTL parsing, including
 SystemVerilog constructs and validation results.
 """
 
-from collections.abc import MutableMapping
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Iterator, TYPE_CHECKING
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
-from brainsmith.dataflow.types import Direction, ProtocolType, InterfaceType
+from brainsmith.dataflow.types import Direction
 
 if TYPE_CHECKING:
     from .pragmas import Pragma
@@ -43,10 +42,10 @@ class Port:
     name: str
     direction: Direction
     width: str = "1"  # Default to single bit
-    description: Optional[str] = None
+    description: str | None = None
     
     # Legacy compatibility
-    array_bounds: Optional[List[int]] = field(default=None, init=False)
+    array_bounds: list[int] | None = field(default=None, init=False)
 
     def __post_init__(self):
         """Validate port attributes, converting string direction to Enum if needed."""
@@ -55,7 +54,7 @@ class Port:
             self.direction = Direction(self.direction.lower())
     
     @property
-    def total_width(self) -> Optional[int]:
+    def total_width(self) -> int | None:
         """Calculate total width if parseable as integer.
         
         Returns:
@@ -69,7 +68,7 @@ class Port:
             return None
 
 
-PortGroup = Dict[str, Port]  # Alias for easier type hints
+PortGroup = dict[str, Port]  # Alias for easier type hints
 
 
 @dataclass
@@ -91,14 +90,14 @@ class Parameter:
     """
     # Identity
     name: str
-    rtl_type: Optional[str] = None  # SystemVerilog type
+    rtl_type: str | None = None  # SystemVerilog type
     
     # Values
-    default_value: Optional[str] = None  # Raw string value from RTL
-    kernel_value: Optional[str] = None  # For ALIAS names or DERIVED expressions
+    default_value: str | None = None  # Raw string value from RTL
+    kernel_value: str | None = None  # For ALIAS names or DERIVED expressions
     
     # Metadata
-    line_number: Optional[int] = None
+    line_number: int | None = None
     
     @property
     def nodeattr_name(self) -> str:
@@ -119,11 +118,11 @@ class Parameter:
         return f"${self.name.upper()}$"
     
     @property
-    def resolved_default(self) -> Optional[Any]:
+    def resolved_default(self) -> Any | None:
         """Get resolved default value (parsed from RTL)."""
         return self._parse_value(self.default_value)
     
-    def _parse_value(self, value: Optional[str]) -> Optional[Any]:
+    def _parse_value(self, value: str | None) -> Any | None:
         """Parse RTL string value to Python type."""
         if not value:
             return None
@@ -140,7 +139,7 @@ class Parameter:
         except (ValueError, TypeError):
             return value  # Return as string if not parseable
     
-    def get_numeric_value(self) -> Optional[int]:
+    def get_numeric_value(self) -> int | None:
         """Legacy method - try to parse parameter value as integer.
         
         Returns:
@@ -197,30 +196,30 @@ class ParsedModule:
     Contains all information extracted from a SystemVerilog module.
     """
     name: str
-    ports: List[Port]
-    parameters: List[Parameter]
-    pragmas: List['Pragma']
+    ports: list[Port]
+    parameters: list[Parameter]
+    pragmas: list['Pragma']
     file_path: str = "<string>"
     line_number: int = 0
     
-    def get_port(self, name: str) -> Optional[Port]:
+    def get_port(self, name: str) -> Port | None:
         """Get a port by name."""
         for port in self.ports:
             if port.name == name:
                 return port
         return None
     
-    def get_parameter(self, name: str) -> Optional[Parameter]:
+    def get_parameter(self, name: str) -> Parameter | None:
         """Get a parameter by name."""
         for param in self.parameters:
             if param.name == name:
                 return param
         return None
     
-    def get_input_ports(self) -> List[Port]:
+    def get_input_ports(self) -> list[Port]:
         """Get all input ports."""
         return [p for p in self.ports if p.direction == Direction.INPUT]
     
-    def get_output_ports(self) -> List[Port]:
+    def get_output_ports(self) -> list[Port]:
         """Get all output ports."""
         return [p for p in self.ports if p.direction == Direction.OUTPUT]

@@ -10,13 +10,13 @@ This module contains pragmas that modify parameter handling including
 aliases and derived parameters.
 """
 
-from dataclasses import dataclass
-from typing import Dict, List
 import logging
+from dataclasses import dataclass
 
-from .base import Pragma, PragmaError
 from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
-from ..types import PragmaType, Parameter
+
+from ..types import Parameter
+from .base import Pragma, PragmaError
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class AliasPragma(Pragma):
     def __post_init__(self):
         super().__post_init__()
     
-    def _parse_inputs(self) -> Dict:
+    def _parse_inputs(self) -> dict:
         """Parse ALIAS pragma: @brainsmith ALIAS <rtl_param> <nodeattr_name>"""
         logger.debug(f"Parsing ALIAS pragma: {self.inputs} at line {self.inputs.get('line_number', 'unknown')}")
         
@@ -61,7 +61,7 @@ class AliasPragma(Pragma):
         
         return {"rtl_param": rtl_param, "nodeattr_name": nodeattr_name}
         
-    def validate_against_parameters(self, all_parameters: List[Parameter]) -> None:
+    def validate_against_parameters(self, all_parameters: list[Parameter]) -> None:
         """
         Validate that the nodeattr_name doesn't conflict with existing parameters.
         
@@ -128,7 +128,7 @@ class DerivedParameterPragma(Pragma):
     def __post_init__(self):
         super().__post_init__()
 
-    def _parse_inputs(self) -> Dict:
+    def _parse_inputs(self) -> dict:
         """Parse DERIVED_PARAMETER pragma: @brainsmith DERIVED_PARAMETER <rtl_param> <python_expression>"""
         logger.debug(f"Parsing DERIVED_PARAMETER pragma: {self.inputs} at line {self.inputs.get('line_number', 'unknown')}")
         
@@ -183,7 +183,7 @@ class AxiLiteParamPragma(Pragma):
     def __post_init__(self):
         super().__post_init__()
     
-    def _parse_inputs(self) -> Dict:
+    def _parse_inputs(self) -> dict:
         """Parse AXILITE_PARAM pragma: @brainsmith axilite_param <param_name> <interface_name> <property>"""
         logger.debug(f"Parsing AXILITE_PARAM pragma: {self.inputs} at line {self.inputs.get('line_number', 'unknown')}")
         

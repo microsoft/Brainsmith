@@ -26,14 +26,15 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import numpy as np
+import os
 import warnings
+
+import numpy as np
 import onnx
 import onnxruntime as ort
-import os
+from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 
-from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
 def get_rope_onnx_filename(theta_base, batch_size, num_attention_heads, seq_len, head_size):
     return f"rope_rt{theta_base}_b{batch_size}_nh{num_attention_heads}_s{seq_len}_hs{head_size}.onnx"

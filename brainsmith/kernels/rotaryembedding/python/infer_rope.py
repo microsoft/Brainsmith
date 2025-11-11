@@ -1,18 +1,8 @@
-import numpy as np
-import qonnx.core.data_layout as DataLayout
-import warnings
-from onnx import TensorProto, helper
-from qonnx.core.datatype import DataType
-from qonnx.custom_op.registry import getCustomOp
+from onnx import helper
 from qonnx.transformation.base import Transformation
-from qonnx.transformation.general import SortGraph
-from qonnx.transformation.infer_datatypes import InferDataTypes
-from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.remove import RemoveUnusedNodes
 from qonnx.util.basic import get_by_name
-from qonnx.util.onnx import nchw_to_nhwc
-from finnbrainsmith.transformation.shuffle_helpers import shuffle_perfect_loopnest_coeffs
-from finnbrainsmith.transformation.shuffle_helpers import innerloop_moves
+
 
 class InferRoPE(Transformation):
     """Convert any Rotary Position Embedding (RoPE) node

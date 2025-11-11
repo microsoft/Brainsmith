@@ -10,14 +10,14 @@ Arete Approach: No mocking. Real config loading, real environment variables.
 """
 
 import os
-import pytest
 import tempfile
 from pathlib import Path
 from unittest import mock
 
-from brainsmith.settings.schema import LoggingConfig
-from brainsmith.settings.loader import load_config
+import pytest
 
+from brainsmith.settings.loader import load_config
+from brainsmith.settings.schema import LoggingConfig
 
 # ============================================================================
 # Test Helpers

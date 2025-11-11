@@ -10,11 +10,12 @@ This module provides the base classes and common functionality for all
 pragma types in the RTL parser.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional
 import logging
+from dataclasses import dataclass, field
+from typing import Any
 
-from brainsmith.tools.kernel_integrator.metadata import KernelMetadata, InterfaceMetadata
+from brainsmith.tools.kernel_integrator.metadata import InterfaceMetadata, KernelMetadata
+
 from ..types import PragmaType
 
 logger = logging.getLogger(__name__)
@@ -40,9 +41,9 @@ class Pragma:
         line_number: Source line number for debugging (1-based)
     """
     type: PragmaType
-    inputs: Dict[str, Any]
-    parsed_data: Dict = field(init=False)  # Stores the result of _parse_inputs
-    line_number: Optional[int] = None
+    inputs: dict[str, Any]
+    parsed_data: dict = field(init=False)  # Stores the result of _parse_inputs
+    line_number: int | None = None
     
     def __post_init__(self):
         """Initialize parsed_data by calling _parse_inputs and extract line_number."""
@@ -51,7 +52,7 @@ class Pragma:
             self.line_number = self.inputs['line_number']
         self.parsed_data = self._parse_inputs()
 
-    def _parse_inputs(self) -> Dict:
+    def _parse_inputs(self) -> dict:
         """
         Abstract method to parse pragma inputs.
         Subclasses must implement this method.
@@ -88,7 +89,7 @@ class InterfacePragma(Pragma):
     apply_to_kernel directly and can use the provided utilities as needed.
     """
     
-    def find_interface(self, kernel: KernelMetadata, interface_name: str) -> Optional[InterfaceMetadata]:
+    def find_interface(self, kernel: KernelMetadata, interface_name: str) -> InterfaceMetadata | None:
         """Find an interface by name across all interface types in the kernel.
         
         Args:

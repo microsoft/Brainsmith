@@ -3,17 +3,17 @@
 
 """Tests for SpecializeKernels transform."""
 
-import pytest
 import numpy as np
+import pytest
 import qonnx.core.data_layout as DataLayout
+from finn.util.basic import getHWCustomOp
 from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 
-from finn.util.basic import getHWCustomOp
-from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
 from brainsmith.primitives.transforms.infer_kernels import InferKernels
+from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
 
 
 def make_channelwise_model():

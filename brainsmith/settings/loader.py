@@ -6,10 +6,11 @@
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any
 from unittest.mock import patch
-from rich.console import Console
+
 from pydantic import ValidationError
+from rich.console import Console
 
 from .schema import SystemConfig
 
@@ -25,7 +26,7 @@ def _is_path_field(key: str) -> bool:
     return key.endswith(('_dir', '_path', '_file', '_root', '_cache'))
 
 
-def _resolve_cli_paths(cli_overrides: Dict[str, Any]) -> Dict[str, Any]:
+def _resolve_cli_paths(cli_overrides: dict[str, Any]) -> dict[str, Any]:
     """Resolve relative paths in CLI overrides to CWD.
 
     Simple rule: CLI paths resolve relative to where you ran the command.
@@ -43,7 +44,7 @@ def _resolve_cli_paths(cli_overrides: Dict[str, Any]) -> Dict[str, Any]:
     cwd = Path.cwd()
 
     for key, value in cli_overrides.items():
-        if _is_path_field(key) and value is not None and isinstance(value, (str, Path)):
+        if _is_path_field(key) and value is not None and isinstance(value, str | Path):
             path = Path(value)
             result[key] = str((cwd / path).resolve()) if not path.is_absolute() else str(value)
         else:
@@ -53,7 +54,7 @@ def _resolve_cli_paths(cli_overrides: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def load_config(
-    project_file: Optional[Path] = None,
+    project_file: Path | None = None,
     **cli_overrides
 ) -> SystemConfig:
     """Load configuration with hierarchical priority.

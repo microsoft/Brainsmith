@@ -13,17 +13,28 @@ This module handles:
 """
 
 import logging
-from typing import Optional, List, Tuple, Dict, Callable, Any
+from collections.abc import Callable
+from typing import Any
+
 from tree_sitter import Node, Tree
 
-from .types import Direction, Port, Parameter, PragmaType, ParsedModule
-from .pragmas import (
-    Pragma, PragmaError, InterfacePragma,
-    TopModulePragma, DatatypeConstraintPragma, WeightPragma, DatatypePragma,
-    AliasPragma, DerivedParameterPragma, AxiLiteParamPragma, BDimPragma, SDimPragma,
-    RelationshipPragma, IncludeRTLPragma
-)
 from .ast_parser import ASTParser
+from .pragmas import (
+    AliasPragma,
+    AxiLiteParamPragma,
+    BDimPragma,
+    DatatypeConstraintPragma,
+    DatatypePragma,
+    DerivedParameterPragma,
+    IncludeRTLPragma,
+    Pragma,
+    PragmaError,
+    RelationshipPragma,
+    SDimPragma,
+    TopModulePragma,
+    WeightPragma,
+)
+from .types import Direction, Parameter, ParsedModule, Port, PragmaType
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +61,7 @@ class ModuleExtractor:
         self.debug = debug
         
         # Map PragmaType to the corresponding Pragma subclass constructor
-        self.pragma_constructors: Dict[PragmaType, Callable[..., Pragma]] = {
+        self.pragma_constructors: dict[PragmaType, Callable[..., Pragma]] = {
             PragmaType.TOP_MODULE: TopModulePragma,
             PragmaType.DATATYPE_CONSTRAINT: DatatypeConstraintPragma,
             PragmaType.BDIM: BDimPragma,
@@ -130,7 +141,7 @@ class ModuleExtractor:
             line_number=line_number
         )
     
-    def extract_module_header(self, module_node: Node) -> Tuple[Optional[str], Optional[List[Node]], Optional[List[Node]]]:
+    def extract_module_header(self, module_node: Node) -> tuple[str | None, list[Node] | None, list[Node] | None]:
         """Extract name, parameter nodes, and port nodes from a module_declaration node.
         
         Args:
@@ -144,9 +155,9 @@ class ModuleExtractor:
             logger.error("Invalid node passed to extract_module_header. Expected 'module_declaration'.")
             return None, None, None
         
-        module_name: Optional[str] = None
-        param_nodes: Optional[List[Node]] = []
-        port_nodes: Optional[List[Node]] = []
+        module_name: str | None = None
+        param_nodes: list[Node] | None = []
+        port_nodes: list[Node] | None = []
         
         # Find the header node first
         header_node = self.ast_parser.find_child(module_node, ["module_ansi_header", "module_nonansi_header"])
@@ -197,7 +208,7 @@ class ModuleExtractor:
         
         return module_name, param_nodes, port_nodes
     
-    def extract_module_name(self, module_node: Node) -> Optional[str]:
+    def extract_module_name(self, module_node: Node) -> str | None:
         """Extract just the module name from a module_declaration node.
         
         Args:
@@ -209,7 +220,7 @@ class ModuleExtractor:
         name, _, _ = self.extract_module_header(module_node)
         return name
     
-    def extract_parameters(self, module_node: Node) -> List[Parameter]:
+    def extract_parameters(self, module_node: Node) -> list[Parameter]:
         """Extract all parameters from a module_declaration node.
         
         Args:
@@ -232,7 +243,7 @@ class ModuleExtractor:
         logger.debug(f"Extracted {len(parameters)} parameters.")
         return parameters
     
-    def extract_ports(self, module_node: Node) -> List[Port]:
+    def extract_ports(self, module_node: Node) -> list[Port]:
         """Extract all ports from a module_declaration node.
         
         Args:
@@ -255,7 +266,7 @@ class ModuleExtractor:
         logger.debug(f"Successfully parsed {len(ports)} individual port objects.")
         return ports
     
-    def parse_parameter_declaration(self, node: Node) -> Optional[Parameter]:
+    def parse_parameter_declaration(self, node: Node) -> Parameter | None:
         """Parse a parameter declaration node into a Parameter object.
         
         Skips localparam declarations.
@@ -266,9 +277,9 @@ class ModuleExtractor:
         Returns:
             Parameter object or None if localparam or parsing fails.
         """
-        param_name: Optional[str] = None
+        param_name: str | None = None
         param_type: str = "parameter"  # Default type
-        default_value: Optional[str] = None
+        default_value: str | None = None
         
         # Check if the node itself is local_parameter_declaration or parameter_port_declaration
         param_decl_node = self.ast_parser.find_child(node, ["parameter_declaration", "local_parameter_declaration"])
@@ -403,7 +414,7 @@ class ModuleExtractor:
             logger.error(f"Failed to extract parameter details from node: {param_decl_node.text.decode()}")
             return None
     
-    def parse_port_declaration(self, node: Node) -> List[Port]:
+    def parse_port_declaration(self, node: Node) -> list[Port]:
         """Parse an 'ansi_port_declaration' node into a list of Port objects.
         
         Args:
@@ -568,7 +579,7 @@ class ModuleExtractor:
         
         return parsed_ports
     
-    def _extract_direction(self, node: Node) -> Optional[Direction]:
+    def _extract_direction(self, node: Node) -> Direction | None:
         """Extract the port direction from AST nodes.
         
         Args:
@@ -648,7 +659,7 @@ class ModuleExtractor:
             logger.debug(f"Using fallback cleaned text: '{cleaned_width_text}'")
             return cleaned_width_text if cleaned_width_text else "1"
     
-    def _find_identifiers_recursive(self, node: Node) -> List[str]:
+    def _find_identifiers_recursive(self, node: Node) -> list[str]:
         """Recursively find all identifier texts under a node.
         
         Args:
@@ -682,7 +693,7 @@ class ModuleExtractor:
         # Return unique identifiers preserving order
         return list(dict.fromkeys(identifiers))
     
-    def select_target_module(self, module_nodes: List[Node], pragmas: List[Pragma], 
+    def select_target_module(self, module_nodes: list[Node], pragmas: list[Pragma], 
                            source_name: str) -> Node:
         """Select the target module based on pragmas.
         
@@ -762,7 +773,7 @@ class ModuleExtractor:
         else:
             raise ValueError("Internal error: Inconsistent module node state.")
     
-    def extract_pragmas(self, root_node: Node) -> List[Pragma]:
+    def extract_pragmas(self, root_node: Node) -> list[Pragma]:
         """Extracts all valid @brainsmith pragmas from an AST by walking comment nodes.
 
         Uses pragma validation to parse and validate comments found during the AST traversal.
@@ -798,7 +809,7 @@ class ModuleExtractor:
         logger.info(f"<<< Finished pragma extraction. Found {comments_found_count} comment nodes and {len(pragmas)} valid pragmas.")
         return pragmas
     
-    def _validate_pragma(self, node: Node, line_number: int) -> Optional[Pragma]:
+    def _validate_pragma(self, node: Node, line_number: int) -> Pragma | None:
         """Parses a comment AST node to find and validate a @brainsmith pragma.
 
         Checks for the '@brainsmith' prefix, extracts the type and inputs,
@@ -834,7 +845,7 @@ class ModuleExtractor:
                 'named': {}
             }
 
-        pragma_enum_type: Optional[PragmaType] = None
+        pragma_enum_type: PragmaType | None = None
         pragma_type_lower = pragma_type_str.lower()
         for member in PragmaType:
             if member.value == pragma_type_lower:
@@ -863,7 +874,7 @@ class ModuleExtractor:
             logger.error(f"Unexpected error instantiating pragma {pragma_enum_type.name} at line {line_number}: {e}")
             return None
     
-    def _parse_pragma_arguments(self, text: str) -> Dict[str, Any]:
+    def _parse_pragma_arguments(self, text: str) -> dict[str, Any]:
         """
         Parse pragma arguments into structured format.
         

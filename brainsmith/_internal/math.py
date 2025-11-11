@@ -1,9 +1,8 @@
 """Mathematical utilities for brainsmith."""
 
-from typing import Set
 
 
-def divisors(n: int) -> Set[int]:
+def divisors(n: int) -> set[int]:
     """Return all divisors of n.
 
     Uses sqrt optimization: only check up to sqrt(n), add both i and n/i.

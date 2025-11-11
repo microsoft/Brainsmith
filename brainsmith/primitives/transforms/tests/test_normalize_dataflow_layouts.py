@@ -6,12 +6,10 @@
 """Tests for NormalizeDataflowLayouts transformation."""
 
 import pytest
-import numpy as np
-from onnx import helper, TensorProto
-
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
 import qonnx.core.data_layout as DataLayout
+from onnx import TensorProto, helper
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.primitives.transforms.normalize_dataflow_layouts import NormalizeDataflowLayouts
 

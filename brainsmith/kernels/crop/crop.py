@@ -28,26 +28,25 @@ Hardware Mapping:
     Crop edges: north/south (height), east/west (width)
 """
 
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 from onnx import NodeProto, helper
-from typing import Optional, Dict, Any, Callable
-
 from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
 from qonnx.util.basic import get_by_name
 
-from brainsmith.dataflow import KernelOp, FULL_DIM
+import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_DIM, KernelOp
 from brainsmith.dataflow.spec_helpers import derive_dim
 from brainsmith.dataflow.types import ShapeHierarchy
-import brainsmith.dataflow as df
 from brainsmith.registry import kernel
-
 
 # =============================================================================
 # Helper Functions for Custom Dimension Computation
 # =============================================================================
 
-def _compute_output_height(interfaces: Dict[str, Any], param_getter: Callable, model: Any, tensor_name: str) -> int:
+def _compute_output_height(interfaces: dict[str, Any], param_getter: Callable, model: Any, tensor_name: str) -> int:
     """Compute cropped height from input and crop parameters.
 
     Output height = input height - crop_north - crop_south
@@ -79,7 +78,7 @@ def _compute_output_height(interfaces: Dict[str, Any], param_getter: Callable, m
     return output_h
 
 
-def _compute_output_width(interfaces: Dict[str, Any], param_getter: Callable, model: Any, tensor_name: str) -> int:
+def _compute_output_width(interfaces: dict[str, Any], param_getter: Callable, model: Any, tensor_name: str) -> int:
     """Compute cropped width from input and crop parameters.
 
     Output width = input width - crop_east - crop_west
@@ -111,7 +110,7 @@ def _compute_output_width(interfaces: Dict[str, Any], param_getter: Callable, mo
     return output_w
 
 
-def _validate_crop_bounds(ctx) -> Optional[str]:
+def _validate_crop_bounds(ctx) -> str | None:
     """Validate crop bounds are within input dimensions.
 
     Checks:
@@ -268,7 +267,7 @@ class Crop(KernelOp):
     # ================================================================
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         """Build Crop schema (constant for all instances)."""
         return CROP_SCHEMA
 

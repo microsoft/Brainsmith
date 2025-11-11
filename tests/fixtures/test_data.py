@@ -44,7 +44,6 @@ Supported Formats:
 """
 
 import re
-from typing import Optional, Tuple
 
 import numpy as np
 from onnx import TensorProto
@@ -52,14 +51,13 @@ from qonnx.core.datatype import ArbPrecFloatType, DataType
 from qonnx.custom_op.general.floatquant import compute_max_val, float_quant
 from qonnx.util.basic import gen_finn_dt_tensor
 
-
 # ============================================================================
 # QONNX DataType Generation (Kernel Testing)
 # ============================================================================
 
 
 def generate_test_data(
-    datatype: DataType, shape: tuple, seed: Optional[int] = None
+    datatype: DataType, shape: tuple, seed: int | None = None
 ) -> np.ndarray:
     """Generate test data for any QONNX DataType, including FP8.
 
@@ -159,9 +157,9 @@ def _generate_arbprec_float(datatype: ArbPrecFloatType, shape: tuple) -> np.ndar
 
 def generate_onnx_test_data(
     tensor_type: int,
-    shape: Tuple[int, ...],
-    seed: Optional[int] = None,
-    value_range: Optional[Tuple[float, float]] = None,
+    shape: tuple[int, ...],
+    seed: int | None = None,
+    value_range: tuple[float, float] | None = None,
 ) -> np.ndarray:
     """Generate test data for ONNX TensorProto types.
 

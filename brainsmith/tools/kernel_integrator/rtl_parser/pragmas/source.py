@@ -9,13 +9,13 @@ This module contains pragmas that manage RTL source files and module selection:
 - IncludeRTLPragma: Specifies additional RTL source files to include
 """
 
-from dataclasses import dataclass
-from typing import Dict, Any
 import logging
+from dataclasses import dataclass
+from typing import Any
+
+from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
 
 from .base import Pragma, PragmaError
-from ..types import PragmaType
-from brainsmith.tools.kernel_integrator.metadata import KernelMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class TopModulePragma(Pragma):
         # Ensure base class __post_init__ is called
         super().__post_init__()
 
-    def _parse_inputs(self) -> Dict:
+    def _parse_inputs(self) -> dict:
         """Handles TOP_MODULE pragma: @brainsmith top_module <module_name>"""
         logger.debug(f"Parsing TOP_MODULE pragma: {self.inputs} at line {self.line_number}")
         
@@ -49,7 +49,7 @@ class TopModulePragma(Pragma):
         # TOP_MODULE is handled during parsing to select the correct module
         # By the time we have KernelMetadata, the module has already been selected
         # This is a no-op but included for completeness
-        logger.debug(f"TOP_MODULE pragma already processed during module selection")
+        logger.debug("TOP_MODULE pragma already processed during module selection")
 
 
 class IncludeRTLPragma(Pragma):
@@ -71,7 +71,7 @@ class IncludeRTLPragma(Pragma):
     Path resolution follows this precedence order.
     """
     
-    def _parse_inputs(self) -> Dict[str, Any]:
+    def _parse_inputs(self) -> dict[str, Any]:
         """Parse the RTL file path from pragma arguments.
         
         Returns:

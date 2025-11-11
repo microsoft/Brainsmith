@@ -8,20 +8,21 @@
 ############################################################################
 
 import math
-import numpy as np
 import os
 import shutil
-from qonnx.core.datatype import DataType
-from qonnx.util.basic import roundup_to_integer_multiple
 
+import numpy as np
 from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
-from brainsmith.kernels.thresholding.thresholding import Thresholding
 from finn.util.basic import get_memutil_alternatives, mem_primitives_versal
 from finn.util.data_packing import (
     npy_to_rtlsim_input,
     pack_innermost_dim_as_hex_string,
     rtlsim_output_to_npy,
 )
+from qonnx.core.datatype import DataType
+from qonnx.util.basic import roundup_to_integer_multiple
+
+from brainsmith.kernels.thresholding.thresholding import Thresholding
 from brainsmith.registry import backend
 
 
@@ -321,7 +322,7 @@ class Thresholding_rtl(Thresholding, RTLBackend):
         rtlsrc = os.environ["FINN_ROOT"] + "/finn-rtllib/thresholding/hdl"
         template_path = rtlsrc + "/thresholding_template_wrapper.v"
 
-        with open(template_path, "r") as f:
+        with open(template_path) as f:
             template_wrapper = f.read()
 
         # Replace template variables
