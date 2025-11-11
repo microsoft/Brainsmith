@@ -129,9 +129,9 @@ def bert_streamlining_step(model, cfg):
 
     model = apply_transforms(model, ['AbsorbSignBiasIntoMultiThreshold'])
     AbsorbAddIntoMultiThreshold = get_transform('AbsorbAddIntoMultiThreshold')
-    model.transform(AbsorbAddIntoMultiThreshold(cfg.preserve_thresh_shape))
+    model = model.transform(AbsorbAddIntoMultiThreshold(cfg.preserve_thresh_shape))
     AbsorbMulIntoMultiThreshold = get_transform('AbsorbMulIntoMultiThreshold')
-    model.transform(AbsorbMulIntoMultiThreshold(cfg.preserve_thresh_shape))
+    model = model.transform(AbsorbMulIntoMultiThreshold(cfg.preserve_thresh_shape))
     model = apply_transforms(model, ['RoundAndClipThresholds'])
 
     # Apply transform with parameter
@@ -142,10 +142,10 @@ def bert_streamlining_step(model, cfg):
         'MoveScalarMulPastMatMul',
         'MoveScalarLinearPastInvariants'
     ])
-    model.transform(AbsorbAddIntoMultiThreshold(cfg.preserve_thresh_shape))
-    model.transform(AbsorbMulIntoMultiThreshold(cfg.preserve_thresh_shape))
+    model = model.transform(AbsorbAddIntoMultiThreshold(cfg.preserve_thresh_shape))
+    model = model.transform(AbsorbMulIntoMultiThreshold(cfg.preserve_thresh_shape))
     model = apply_transforms(model, ['RoundAndClipThresholds'])
-    
+
     CollapseRepeatedOp = get_transform('CollapseRepeatedOp')
     model = model.transform(CollapseRepeatedOp("Mul", lambda x, y: y * x))
 
