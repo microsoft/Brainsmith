@@ -80,7 +80,7 @@ class Softmax(KernelOp):
         However, the global normalize_dataflow_layouts preprocessing pass ensures
         inputs are in NHWC layout for consistency with other dataflow kernels.
         """
-        schema = cls.build_schema(node, model)
+        cls.build_schema(node, model)
 
         # Create HW node
         hw_node = helper.make_node(

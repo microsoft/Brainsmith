@@ -227,7 +227,7 @@ class TestInsertDuplicateStreams:
         # Create graph with 2 fanout tensors
         inp = helper.make_tensor_value_info("inp", TensorProto.FLOAT, [1, 64, 64, 128])
         out1 = helper.make_tensor_value_info("out1", TensorProto.FLOAT, [1, 64, 64, 128])
-        out2 = helper.make_tensor_value_info("out2", TensorProto.FLOAT, [1, 64, 64, 128])
+        helper.make_tensor_value_info("out2", TensorProto.FLOAT, [1, 64, 64, 128])
         out3 = helper.make_tensor_value_info("out3", TensorProto.FLOAT, [1, 64, 64, 128])
         out4 = helper.make_tensor_value_info("out4", TensorProto.FLOAT, [1, 64, 64, 128])
 

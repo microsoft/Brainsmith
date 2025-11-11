@@ -25,7 +25,7 @@ Key classes:
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 from .types import FULL_DIM, FULL_SHAPE
 
@@ -36,10 +36,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Type aliases for better clarity
-TilingSpec = Union[
-    Sequence[int | str | type(FULL_DIM) | Callable],  # List of DimSpecs
-    type(FULL_SHAPE),                                      # Bare sentinel (rank-agnostic)
-]
+TilingSpec = (
+    Sequence[int | str | type(FULL_DIM) | Callable]  # List of DimSpecs
+    | type(FULL_SHAPE)  # Bare sentinel (rank-agnostic)
+)
 
 
 # ============================================================================

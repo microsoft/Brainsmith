@@ -97,7 +97,7 @@ class TestBlueprintInheritance:
     def test_single_level_inheritance(self, tmp_path, simple_onnx_model):
         """Test single level blueprint inheritance."""
         # Create parent blueprint
-        parent_path = create_inheritance_parent(
+        create_inheritance_parent(
             tmp_path,
             name="parent",
             steps=["custom:test_step", "custom:test_step1"],
@@ -130,7 +130,7 @@ class TestBlueprintInheritance:
     def test_multi_level_inheritance(self, tmp_path, simple_onnx_model):
         """Test multi-level inheritance chain (grandparent → parent → child)."""
         # Create grandparent
-        gp_path = create_inheritance_grandparent(
+        create_inheritance_grandparent(
             tmp_path,
             name="grandparent",
             clock_ns=10.0,
@@ -139,7 +139,7 @@ class TestBlueprintInheritance:
         )
 
         # Create parent extending grandparent
-        parent_path = create_extends_blueprint(
+        create_extends_blueprint(
             tmp_path,
             name="parent",
             extends="grandparent.yaml",
@@ -169,7 +169,7 @@ class TestBlueprintInheritance:
     def test_inheritance_with_step_lists(self, tmp_path, simple_onnx_model):
         """Test inheritance behavior when overriding step lists."""
         # Parent has steps list
-        parent_path = create_inheritance_parent(
+        create_inheritance_parent(
             tmp_path,
             name="parent",
             steps=["custom:test_step", "custom:test_step1", "custom:test_step2"]
@@ -198,7 +198,7 @@ class TestStepOperations:
     @pytest.mark.fast
     def test_insert_after(self, tmp_path, simple_onnx_model):
         """Test insert_after step operation."""
-        base_path = create_base_steps_blueprint(tmp_path)
+        create_base_steps_blueprint(tmp_path)
         after_path = create_step_insert_after_blueprint(tmp_path)
 
         design_space, _ = parse_blueprint(
@@ -213,7 +213,7 @@ class TestStepOperations:
     @pytest.mark.fast
     def test_insert_at_start(self, tmp_path, simple_onnx_model):
         """Test insert_at_start step operation."""
-        base_path = create_base_steps_blueprint(tmp_path)
+        create_base_steps_blueprint(tmp_path)
         start_path = create_step_insert_start_blueprint(tmp_path)
 
         design_space, _ = parse_blueprint(
@@ -228,7 +228,7 @@ class TestStepOperations:
     @pytest.mark.fast
     def test_insert_at_end(self, tmp_path, simple_onnx_model):
         """Test insert_at_end step operation."""
-        base_path = create_base_steps_blueprint(tmp_path)
+        create_base_steps_blueprint(tmp_path)
         end_path = create_step_insert_end_blueprint(tmp_path)
 
         design_space, _ = parse_blueprint(
@@ -243,7 +243,7 @@ class TestStepOperations:
     @pytest.mark.fast
     def test_replace_step(self, tmp_path, simple_onnx_model):
         """Test replace step operation."""
-        base_path = create_base_steps_blueprint(tmp_path)
+        create_base_steps_blueprint(tmp_path)
         replace_path = create_step_replace_blueprint(tmp_path)
 
         design_space, _ = parse_blueprint(
@@ -258,7 +258,7 @@ class TestStepOperations:
     @pytest.mark.fast
     def test_remove_step(self, tmp_path, simple_onnx_model):
         """Test remove step operation."""
-        base_path = create_base_steps_blueprint(tmp_path)
+        create_base_steps_blueprint(tmp_path)
         remove_path = create_step_remove_blueprint(tmp_path)
 
         design_space, _ = parse_blueprint(

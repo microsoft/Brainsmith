@@ -49,7 +49,7 @@ from finn.transformation.qonnx.quant_act_to_multithreshold import (
 )
 from finn.util.basic import pynq_part_map
 from finnbrainsmith.custom_op.fpgadataflow.rotaryembedding import get_rope_onnx_filename
-from onnx import TensorProto, helper
+from onnx import TensorProto
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.custom_op.registry import getCustomOp
@@ -373,6 +373,6 @@ def test_fpgadataflow_rope(seq_len, head_size, num_heads, idt, wdt, simd, impl_s
     model.save("rope_model-after-specialization.onnx")
     node = model.get_nodes_by_op_type(op_type)[0]
     inst = getCustomOp(node)
-    cycles_rtlsim = inst.get_nodeattr("cycles_rtlsim")
+    inst.get_nodeattr("cycles_rtlsim")
     exp_cycles_dict = model.analysis(exp_cycles_per_layer)
-    exp_cycles = exp_cycles_dict[node.name]
+    exp_cycles_dict[node.name]

@@ -218,7 +218,7 @@ def check_all_integer_types(
             if not dt.is_integer():
                 return False
         return True
-    except:
+    except Exception:
         return False
 
 
@@ -238,7 +238,7 @@ def check_shapes_equal(
     try:
         shapes = [tuple(model.get_tensor_shape(t)) for t in tensors]
         return all(s == shapes[0] for s in shapes)
-    except:
+    except Exception:
         return False
 
 
@@ -295,7 +295,7 @@ def check_parameter_shape_matches_channels(
 
         # Valid: scalar (broadcast) or per-channel match
         return num_params == 1 or num_params == num_channels
-    except:
+    except Exception:
         return False
 
 

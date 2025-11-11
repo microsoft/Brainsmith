@@ -116,7 +116,7 @@ def test_infer_kernel_statistics():
     # Create model with two Add nodes
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64])
     in1 = helper.make_tensor_value_info("in1", TensorProto.FLOAT, [1, 64])
-    mid = helper.make_tensor_value_info("mid", TensorProto.FLOAT, [1, 64])
+    helper.make_tensor_value_info("mid", TensorProto.FLOAT, [1, 64])
     out = helper.make_tensor_value_info("out", TensorProto.FLOAT, [1, 64])
 
     add1 = helper.make_node("Add", ["in0", "in1"], ["mid"], name="Add_1")

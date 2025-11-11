@@ -565,7 +565,7 @@ def make_multithreshold_model(
     # Create input/output tensor infos
     inp = helper.make_tensor_value_info("inp", TensorProto.FLOAT, shape)
     thresh_shape = [channels, num_thresholds]
-    thresh = helper.make_tensor_value_info("thresh", TensorProto.FLOAT, thresh_shape)
+    helper.make_tensor_value_info("thresh", TensorProto.FLOAT, thresh_shape)
     outp = helper.make_tensor_value_info("outp", TensorProto.FLOAT, shape)
 
     # Create MultiThreshold node with attributes
@@ -971,7 +971,7 @@ def make_duplicate_streams_model(
         )
 
         # Intermediate tensor that fans out
-        tensor_x = helper.make_tensor_value_info("tensor_x", TensorProto.FLOAT, shape)
+        helper.make_tensor_value_info("tensor_x", TensorProto.FLOAT, shape)
 
         # Create Conv node (producer)
         conv = helper.make_node("Conv", [input_name, "weight"], ["tensor_x"], name="Conv_0")

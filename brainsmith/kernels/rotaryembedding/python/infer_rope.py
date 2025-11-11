@@ -22,19 +22,19 @@ class InferRoPE(Transformation):
             if node.op_type == "RotaryEmbedding" and node.domain == "com.microsoft":
                 # Get inputs/output
                 act_in = node.input[0]
-                pos_ids = node.input[1]
+                node.input[1]
                 cos = node.input[2]
                 sin = node.input[3]
                 act_out = node.output[0]
                 # Get attributes
 
                 # Interleaved Selects between adjacent and non-adjacent pairs of sin/cos
-                interleaved = get_by_name(node.attribute, "interleaved").i
+                get_by_name(node.attribute, "interleaved").i
                 # Are are sequences padded to the same length
                 # packed_batch = get_by_name(node.attribute, "is_packed_batching").i
                 num_heads = get_by_name(node.attribute, "num_heads").i
-                rot_dim = get_by_name(node.attribute, "rotary_embedding_dim").i
-                scale = get_by_name(node.attribute, "scale").f
+                get_by_name(node.attribute, "rotary_embedding_dim").i
+                get_by_name(node.attribute, "scale").f
 
                 # Get custom attributes (not in Op by default)
                 #rope_theta = get_by_name(node).get_nodeattr("RopeTheta")

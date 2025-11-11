@@ -65,7 +65,7 @@ def _format_not_found_error(
             from brainsmith.settings import get_config
             source_priority = get_config().source_priority
             msg += f"\nCurrent source priority: {source_priority}\n"
-        except:
+        except Exception:
             pass
 
         msg += f"\n→ Try: get_{type_str}('{similar[0]}')  # Use fully-qualified name\n"

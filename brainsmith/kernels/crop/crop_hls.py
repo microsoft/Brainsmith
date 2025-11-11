@@ -196,7 +196,7 @@ class Crop_hls(Crop, HLSBackend):
         oshape_str = str(oshape).replace("(", "{").replace(")", "}")
 
         # Use uppercase SIMD for KernelOp
-        simd = self.get_nodeattr("SIMD")
+        self.get_nodeattr("SIMD")
 
 
         self.code_gen_dict["$DOCOMPUTE$"] = [

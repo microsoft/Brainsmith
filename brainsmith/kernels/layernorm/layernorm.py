@@ -87,7 +87,7 @@ class LayerNorm(KernelOp):
         Returns:
             TransformationResult with LayerNorm node
         """
-        schema = cls.build_schema(node, model)
+        cls.build_schema(node, model)
 
         # Extract epsilon from FuncLayerNorm
         epsilon_attr = get_by_name(node.attribute, "epsilon")

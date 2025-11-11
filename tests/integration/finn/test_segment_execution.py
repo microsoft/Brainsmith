@@ -70,7 +70,7 @@ class TestSegmentExecution:
         # Verify output ONNX model exists
         for seg_id, seg_result in result.segment_results.items():
             if seg_result.status == SegmentStatus.COMPLETED:
-                output_model = seg_result.output_dir / "final_model.onnx"
+                seg_result.output_dir / "final_model.onnx"
                 # Note: FINN may use different naming, check for any .onnx file
                 onnx_files = list(seg_result.output_dir.glob("*.onnx"))
                 assert len(onnx_files) > 0, f"Segment {seg_id} should produce ONNX output"
@@ -159,7 +159,7 @@ design_space:
         tree = build_tree(design_space, config)
 
         output_dir = test_workspace / "sharing"
-        result = execute_tree(
+        execute_tree(
             tree=tree,
             model_path=str(quantized_onnx_model),
             config=config,

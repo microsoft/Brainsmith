@@ -314,8 +314,7 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
         for f in sourcefiles:
             cmd += ["add_files -norecurse %s" % (f)]
         cmd += [
-            "create_bd_cell -type module -reference %s %s"
-            % (self.get_nodeattr("gen_top_module"), self.onnx_node.name)
+            "create_bd_cell -type module -reference {} {}".format(self.get_nodeattr("gen_top_module"), self.onnx_node.name)
         ]
         return cmd
 

@@ -4,7 +4,6 @@
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
-from __future__ import annotations
 
 """Kernel design space builder - constructs immutable models from schemas and context (two-phase).
 
@@ -22,6 +21,8 @@ The builder follows a two-phase flow:
 1. build(): Build KernelDesignSpace (tensor shapes, block shapes, datatypes, valid ranges)
 2. design_space.configure(params): Build KernelDesignPoint (stream shapes for specific params)
 """
+
+from __future__ import annotations
 
 import logging
 from collections.abc import Callable

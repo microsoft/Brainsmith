@@ -30,7 +30,7 @@ from brainsmith.primitives.transforms.temp_shuffle_fixer import TempShuffleFixer
 logger = logging.getLogger(__name__)
 
 # Import decorator for registration
-from brainsmith.registry import step
+from brainsmith.registry import step  # noqa: E402
 
 # === Conversion Steps ===
 

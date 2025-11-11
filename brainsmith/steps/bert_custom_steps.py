@@ -40,7 +40,7 @@ from brainsmith.primitives.transforms.extract_shell_integration_metadata import 
 logger = logging.getLogger(__name__)
 
 # Import decorator for registration
-from brainsmith.registry import step
+from brainsmith.registry import step  # noqa: E402
 
 # === Pre-Processing ===
 

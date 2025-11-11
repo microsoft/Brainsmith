@@ -39,7 +39,7 @@ def dfc(
     MODEL: Path to ONNX model file
     BLUEPRINT: Path to Blueprint YAML file defining the dataflow architecture
     """
-    config = ctx.get_effective_config()
+    ctx.get_effective_config()
 
     console.print("[bold blue]Brainsmith DFC[/bold blue] - Dataflow Core Creation")
     console.print(f"Model: {model}")

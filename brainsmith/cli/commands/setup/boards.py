@@ -128,7 +128,7 @@ def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool
 
         confirm_or_abort("\nAre you sure you want to remove these repositories?", skip=yes)
 
-        with progress_spinner("Removing board repositories...", no_progress=ctx.no_progress) as task:
+        with progress_spinner("Removing board repositories...", no_progress=ctx.no_progress):
             # remove() raises exception on failure, returns None on success
             failed = []
             for repo_name in repos_to_remove:
@@ -162,7 +162,7 @@ def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool
                   if repos_to_download
                   else "Downloading board definition files...")
 
-    with progress_spinner(description, no_progress=ctx.no_progress) as task:
+    with progress_spinner(description, no_progress=ctx.no_progress):
         try:
             if repos_to_download:
                 # Download specific boards (install() raises exception on failure)

@@ -657,7 +657,7 @@ class ElementwiseBinaryOp(KernelOp):
         rhs_shape = self.design_point.inputs["rhs"].tensor_shape
 
         try:
-            output_shape = np.broadcast_shapes(lhs_shape, rhs_shape)
+            np.broadcast_shapes(lhs_shape, rhs_shape)
         except ValueError as e:
             raise ValueError(
                 f"{self.onnx_node.name}: Input shapes not broadcastable.\n"

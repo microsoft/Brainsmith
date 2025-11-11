@@ -169,7 +169,7 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     if rebuild:
         from brainsmith.registry import get_backend, get_kernel, get_step
 
-        with progress_spinner("Validating components...", transient=False, no_progress=ctx.no_progress) as task:
+        with progress_spinner("Validating components...", transient=False, no_progress=ctx.no_progress):
             validation_errors.update(_validate_components(all_kernels, get_kernel))
             validation_errors.update(_validate_components(all_backends, get_backend))
             validation_errors.update(_validate_components(all_steps, get_step))

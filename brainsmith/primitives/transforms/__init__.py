@@ -15,11 +15,6 @@ from .expand_norms import ExpandNorms
 from .extract_shell_integration_metadata import ExtractShellIntegrationMetadata
 from .infer_kernel import InferKernel
 from .infer_kernels import InferKernels
-from .set_pumped_compute import SetPumpedCompute
-from .temp_shuffle_fixer import TempShuffleFixer
-
-# Backward compatibility alias
-InferKernelList = InferKernels
 from .insert_duplicate_streams import InsertDuplicateStreams
 from .insert_infrastructure_kernels import InsertInfrastructureKernels
 from .normalize_dataflow_layouts import NormalizeDataflowLayouts
@@ -31,7 +26,12 @@ from .parallelization import (
     set_parallelization,
 )
 from .refresh_design_points import RefreshKernelDesignPoints
+from .set_pumped_compute import SetPumpedCompute
 from .specialize_kernels import SpecializeKernels
+from .temp_shuffle_fixer import TempShuffleFixer
+
+# Backward compatibility alias
+InferKernelList = InferKernels
 
 __all__ = [
     "ExpandNorms",

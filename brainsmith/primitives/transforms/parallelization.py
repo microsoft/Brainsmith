@@ -35,7 +35,7 @@ import inspect
 import json
 import warnings
 from collections.abc import Callable
-from typing import Any, Protocol, Union
+from typing import Any, Protocol
 
 import finn.custom_op.fpgadataflow.hls.elementwise_binary_hls as elementwise_binary_hls
 from finn.analysis.fpgadataflow.dataflow_performance import dataflow_performance
@@ -69,7 +69,7 @@ class KernelOpProtocol(Protocol):
     def design_space(self) -> Any: ...
 
 
-NodeInstance = Union[HWCustomOp, KernelOpProtocol]
+NodeInstance = HWCustomOp | KernelOpProtocol
 
 
 # ============================================================================

@@ -24,7 +24,10 @@ Verbosity levels:
 import logging
 import re
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from brainsmith.settings.schema import LoggingConfig
 
 
 def setup_logging(

@@ -49,7 +49,7 @@ def remove_head_step(model, cfg):
     """Remove all nodes up to the first LayerNormalization node and rewire input."""
 
     assert len(model.graph.input) == 1, "Error the graph has more inputs than expected"
-    tensor_to_node = {output: node for node in model.graph.node for output in node.output}
+    {output: node for node in model.graph.node for output in node.output}
 
     to_remove = []
 

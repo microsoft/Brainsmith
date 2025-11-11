@@ -104,8 +104,8 @@ def make_multi_stage_nchw_model():
     """
     # Create tensors
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64, 224, 224])
-    relu1_out = helper.make_tensor_value_info("relu1_out", TensorProto.FLOAT, [1, 64, 224, 224])
-    relu2_out = helper.make_tensor_value_info("relu2_out", TensorProto.FLOAT, [1, 64, 224, 224])
+    helper.make_tensor_value_info("relu1_out", TensorProto.FLOAT, [1, 64, 224, 224])
+    helper.make_tensor_value_info("relu2_out", TensorProto.FLOAT, [1, 64, 224, 224])
     out = helper.make_tensor_value_info("out", TensorProto.FLOAT, [1, 64, 224, 224])
 
     # Create nodes

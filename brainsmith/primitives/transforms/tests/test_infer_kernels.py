@@ -24,7 +24,7 @@ def make_mixed_model():
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64])
     in1 = helper.make_tensor_value_info("in1", TensorProto.FLOAT, [1, 64])
     weights = helper.make_tensor_value_info("weights", TensorProto.FLOAT, [64, 32])
-    mid = helper.make_tensor_value_info("mid", TensorProto.FLOAT, [1, 64])
+    helper.make_tensor_value_info("mid", TensorProto.FLOAT, [1, 64])
     out = helper.make_tensor_value_info("out", TensorProto.FLOAT, [1, 32])
 
     # Create nodes

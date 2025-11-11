@@ -39,7 +39,7 @@ def cppsim(ctx, force: bool, remove: bool, yes: bool) -> None:
 
         confirm_or_abort("\nAre you sure you want to remove these dependencies?", skip=yes)
 
-        with progress_spinner("Removing C++ simulation dependencies...", no_progress=ctx.no_progress) as task:
+        with progress_spinner("Removing C++ simulation dependencies...", no_progress=ctx.no_progress):
             results = deps_mgr.remove_group("cppsim")
             # remove_group returns Dict[str, Optional[Exception]] where None = success
             failed = [k for k, v in results.items() if v is not None]
@@ -56,7 +56,7 @@ def cppsim(ctx, force: bool, remove: bool, yes: bool) -> None:
         warning("C++ simulation dependencies already installed (use --force to reinstall)")
         return
 
-    with progress_spinner("Setting up C++ simulation dependencies...", no_progress=ctx.no_progress) as task:
+    with progress_spinner("Setting up C++ simulation dependencies...", no_progress=ctx.no_progress):
         try:
             results = deps_mgr.install_group("cppsim", force=force)
             # install_group returns Dict[str, Optional[Exception]] where None = success

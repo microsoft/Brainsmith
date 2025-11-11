@@ -98,7 +98,7 @@ def is_initialized() -> bool:
     return _components_discovered
 
 
-from ._lookup import (
+from ._lookup import (  # noqa: E402
     get_all_component_metadata,
     # Lookup - Backends
     get_backend,

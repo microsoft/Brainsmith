@@ -86,7 +86,7 @@ def kernel(
             else:
                 raise CLIError(f"Failed to parse RTL: {result.stderr}")
         else:
-            with progress_spinner(action, no_progress=ctx.no_progress) as task:
+            with progress_spinner(action, no_progress=ctx.no_progress):
                 result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode == 0:

@@ -58,7 +58,7 @@ class RefreshKernelDesignPoints(Transformation):
             # Try to get custom op instance
             try:
                 inst = getCustomOp(node, model=model.model)
-            except:
+            except Exception:
                 # Not a custom op or failed to instantiate
                 continue
 
@@ -141,8 +141,8 @@ class InferBrainsmithTypes(Transformation):
                             if old_dtype != new_dtype:
                                 model.set_tensor_datatype(node.output[i], new_dtype)
                                 graph_modified = True
-                                
-            except:
+
+            except Exception:
                 continue
                 
         return (model, graph_modified)
@@ -176,8 +176,8 @@ class InferBrainsmithShapes(Transformation):
                             if old_shape != new_shape:
                                 model.set_tensor_shape(node.output[i], new_shape)
                                 graph_modified = True
-                                
-            except:
+
+            except Exception:
                 continue
                 
         return (model, graph_modified)

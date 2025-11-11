@@ -289,7 +289,6 @@ def test_set_nodeattr_invalidates_configured_only():
     # Build both models
     kernel_op.get_design_point(model_w)
     invariant_before = kernel_op._design_space
-    configured_before = kernel_op._configuration
 
     # Change param
     kernel_op.set_nodeattr("SIMD", 2)
@@ -644,8 +643,6 @@ def test_build_after_invalidation_rebuilds():
 
     # Build
     kernel_op.infer_node_datatype(model_w)
-    ds1 = kernel_op.design_space
-    km1 = kernel_op.design_point
 
     # Invalidate
     kernel_op.invalidate()

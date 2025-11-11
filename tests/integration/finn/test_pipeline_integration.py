@@ -66,7 +66,7 @@ class TestPipelineIntegration:
                 # Check for estimate-related artifacts
                 seg_dir = seg_result.output_dir
                 # FINN may produce estimate_report.json or similar
-                json_files = list(seg_dir.glob("**/estimate*.json")) + list(seg_dir.glob("**/*report*.json"))
+                list(seg_dir.glob("**/estimate*.json")) + list(seg_dir.glob("**/*report*.json"))
                 # Note: This is lenient - FINN output format may vary
                 # Main goal is to verify execution completed and produced outputs
                 assert seg_dir.exists(), f"Segment {seg_id} output directory should exist"
@@ -126,7 +126,7 @@ class TestPipelineIntegration:
                 valid_models = []
                 for onnx_file in onnx_files:
                     try:
-                        model = onnx.load(str(onnx_file))
+                        onnx.load(str(onnx_file))
                         valid_models.append(onnx_file)
                     except Exception:
                         # Some files might be partial/intermediate

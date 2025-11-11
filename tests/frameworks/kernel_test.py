@@ -14,6 +14,7 @@ Framework handles: DataType annotations, test data generation, golden reference,
 backend specialization, and validation.
 """
 
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -23,6 +24,9 @@ from qonnx.core.modelwrapper import ModelWrapper
 from brainsmith.primitives.transforms.infer_kernels import InferKernels
 from tests.frameworks.kernel_test_base import KernelTestBase
 from tests.support.pipeline import PipelineRunner
+
+if TYPE_CHECKING:
+    from tests.frameworks.test_config import KernelTestConfig
 
 
 class KernelTest(KernelTestBase):

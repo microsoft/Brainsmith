@@ -187,19 +187,19 @@ class RooflineModel:
 
     # Profile compute & memory for SLMs in the "Prompt Processing" phase
     def profile_slm_pp(self, model=None):
-        if model != None:
+        if model is not None:
             self.update_model(model)
         return self.profile_slm(self.seq_len, self.seq_len, False)
 
     # Profile compute & memory for SLMs in the "Token Generation" phase
     def profile_slm_tg(self, model=None):
-        if model != None:
+        if model is not None:
             self.update_model(model)
         return self.profile_slm(1, self.seq_len+self.out_len, True)
 
     # Profile compute & memory for BERT
     def profile_bert(self, model=None):
-        if model != None:
+        if model is not None:
             self.update_model(model)
         self.profile_qkv(self.seq_len, self.hidden_dim, self.q_heads, self.kv_heads, self.kv_heads, self.head_size)
         self.profile_mha_score(self.seq_len, self.hidden_dim, self.seq_len, self.q_heads, self.kv_heads, self.kv_heads, self.head_size, False)

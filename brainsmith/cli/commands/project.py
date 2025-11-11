@@ -13,11 +13,11 @@ import click
 
 logger = logging.getLogger(__name__)
 
-from ..context import ApplicationContext
-from ..exceptions import ConfigurationError
-from ..formatters import ConfigFormatter
-from ..messages import CONFIG_EDIT_HINT
-from ..utils import console, success
+from ..context import ApplicationContext  # noqa: E402
+from ..exceptions import ConfigurationError  # noqa: E402
+from ..formatters import ConfigFormatter  # noqa: E402
+from ..messages import CONFIG_EDIT_HINT  # noqa: E402
+from ..utils import console, success  # noqa: E402
 
 # Lazy import settings - deferred until command actually runs
 if TYPE_CHECKING:

@@ -46,8 +46,8 @@ from brainsmith.settings import get_config
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from brainsmith import explore_design_space
-from brainsmith.dse.types import SegmentStatus
+from brainsmith import explore_design_space  # noqa: E402
+from brainsmith.dse.types import SegmentStatus  # noqa: E402
 
 warnings.simplefilter("ignore")
 
@@ -302,7 +302,7 @@ def main():
         
         # Step 2: Create dataflow core accelerator
         print("\nStep 2: Creating dataflow core accelerator...")
-        result = run_brainsmith_dse(model, args)
+        run_brainsmith_dse(model, args)
         
         print("\n" + "=" * 70)
         print("BUILD COMPLETED SUCCESSFULLY")

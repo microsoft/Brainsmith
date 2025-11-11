@@ -37,7 +37,7 @@ class InferThresholdingAxi(Transformation):
                 thl_threshold = node.input[1]
                 thl_output = node.output[0]
                 thl_in_shape = model.get_tensor_shape(thl_input)
-                thl_thres_shape = model.get_tensor_shape(thl_threshold)
+                model.get_tensor_shape(thl_threshold)
                 idt = model.get_tensor_datatype(thl_input)
                 tdt = model.get_tensor_datatype(thl_threshold)
 

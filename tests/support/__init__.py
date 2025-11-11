@@ -43,7 +43,7 @@ from .assertions import (
 )
 
 # Constants (export all)
-from .constants import *
+from .constants import *  # noqa: F403
 
 # Test data generation
 from .context import make_execution_context

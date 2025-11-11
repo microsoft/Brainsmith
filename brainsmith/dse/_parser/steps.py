@@ -11,7 +11,7 @@ and step manipulation operations (before, after, replace, etc.).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 from brainsmith.dse._constants import SKIP_INDICATOR
 from brainsmith.registry import has_step
@@ -20,7 +20,7 @@ from brainsmith.registry import has_step
 SKIP_VALUES = frozenset([None, "~", ""])
 
 # Type definitions
-StepSpec = Union[str, list[str | None]]
+StepSpec = str | list[str | None]
 
 
 @dataclass

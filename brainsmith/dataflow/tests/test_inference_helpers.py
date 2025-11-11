@@ -525,7 +525,7 @@ class TestLiftScalarToRank1:
         lifted = lift_scalar_to_rank1("scalar", model)
 
         # After lift
-        assert lifted == True
+        assert lifted is True
         assert model.get_tensor_shape("scalar") == [1]
         init_after = model.get_initializer("scalar")
         assert init_after.shape == (1,)
@@ -558,7 +558,7 @@ class TestLiftScalarToRank1:
         lifted = lift_scalar_to_rank1("scalar_shape", model_w)
 
         # After lift
-        assert lifted == True
+        assert lifted is True
         assert model_w.get_tensor_shape("scalar_shape") == [1]
         assert model_w.get_initializer("scalar_shape") is None  # Still no initializer
 
@@ -572,7 +572,7 @@ class TestLiftScalarToRank1:
         # Lift should return False (no-op)
         lifted = lift_scalar_to_rank1("tensor", model)
 
-        assert lifted == False
+        assert lifted is False
         assert model.get_tensor_shape("tensor") == [1]  # Unchanged
 
     def test_lift_higher_rank(self):
@@ -585,7 +585,7 @@ class TestLiftScalarToRank1:
         # Lift should return False (no-op)
         lifted = lift_scalar_to_rank1("tensor", model)
 
-        assert lifted == False
+        assert lifted is False
         assert model.get_tensor_shape("tensor") == [4]  # Unchanged
 
     def test_lift_preserves_onnx_semantics(self):
@@ -632,7 +632,7 @@ class TestLiftScalarToRank1:
         lifted2 = lift_scalar_to_rank1("s2", model_w)
 
         # Both should be lifted
-        assert lifted1 == True
-        assert lifted2 == True
+        assert lifted1 is True
+        assert lifted2 is True
         assert model_w.get_tensor_shape("s1") == [1]
         assert model_w.get_tensor_shape("s2") == [1]

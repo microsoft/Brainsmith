@@ -57,7 +57,7 @@ def create_multi_kernel_model():
     require proper shape inference and may have additional complexity.
     """
     input_tensor = helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 1, 768])
-    intermediate = helper.make_tensor_value_info("intermediate", TensorProto.FLOAT, [1, 1, 768])
+    helper.make_tensor_value_info("intermediate", TensorProto.FLOAT, [1, 1, 768])
     output_tensor = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, 1, 768])
 
     node1 = helper.make_node(

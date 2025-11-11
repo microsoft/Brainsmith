@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from brainsmith._internal.finn.adapter import FINNAdapter
 from brainsmith.dse._builder import DSETreeBuilder
@@ -20,6 +21,10 @@ from brainsmith.dse._parser import parse_blueprint
 from brainsmith.dse.runner import SegmentRunner
 from brainsmith.dse.tree import DSETree
 from brainsmith.dse.types import TreeExecutionResult
+
+if TYPE_CHECKING:
+    from brainsmith.dse.config import DSEConfig
+    from brainsmith.dse.design_space import GlobalDesignSpace
 
 logger = logging.getLogger(__name__)
 

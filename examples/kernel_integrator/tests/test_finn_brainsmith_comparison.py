@@ -30,7 +30,7 @@ from qonnx.util.basic import qonnx_make_model
 
 # Import from the manually implemented infer transform
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from infer_thresholding_axi import InferThresholdingAxi
+from infer_thresholding_axi import InferThresholdingAxi  # noqa: E402
 
 # Add kernel directory to path for later dynamic import
 sys.path.insert(0, str(Path(__file__).parent.parent / "kernel"))

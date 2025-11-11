@@ -10,13 +10,13 @@
 import functools
 from collections.abc import Callable
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 # Type aliases
 Shape = tuple[int, ...]
 """Immutable tensor shape (e.g., (1, 784))"""
 
-ShapeExpr = Union[int, str]
+ShapeExpr = int | str
 """Single dimension expression: 784 or 'N'"""
 
 ShapeSpec = list[ShapeExpr]
@@ -106,14 +106,14 @@ class Direction(Enum):
 # Note: For rank-agnostic specs, use FULL_SHAPE (not a DimSpec, but a TilingSpec alternative)
 #       block_tiling=FULL_SHAPE expands to [FULL_DIM, FULL_DIM, ...] matching tensor rank
 # Example: block_tiling=[1, 1, ("input", -1)] means dims [1, 1, <last BLOCK dim of input>]
-DimSpec = Union[
-    int,                                               # Literal (1 only)
-    str,                                               # Parameter name
-    tuple[str, int],                                   # Derive from interface (context hierarchy)
-    tuple[str, int, 'ShapeHierarchy'],                # Derive with explicit hierarchy
-    Callable[[dict[str, Any], Callable, Any, str | None], int],  # Custom computation (unified signature)
-    type(FULL_DIM),                                    # Copy full dimension
-]
+DimSpec = (
+    int  # Literal (1 only)
+    | str  # Parameter name
+    | tuple[str, int]  # Derive from interface (context hierarchy)
+    | tuple[str, int, 'ShapeHierarchy']  # Derive with explicit hierarchy
+    | Callable[[dict[str, Any], Callable, Any, str | None], int]  # Custom computation (unified signature)
+    | type(FULL_DIM)  # Copy full dimension
+)
 
 # NEW: Datatype specification (union type replaces ABC hierarchy)
 # Supported formats:
@@ -125,12 +125,12 @@ DimSpec = Union[
 if TYPE_CHECKING:
     from qonnx.core.datatype import BaseDataType
 
-    DatatypeSpec = Union[
-        BaseDataType,                                               # Fixed datatype
-        str,                                                        # Interface name (derive from)
-        Callable[[dict, Callable, Any, str], BaseDataType],        # Custom computation
-        type(lambda: None),                                         # Sentinel type (VALUE_OPTIMIZED)
-    ]
+    DatatypeSpec = (
+        BaseDataType  # Fixed datatype
+        | str  # Interface name (derive from)
+        | Callable[[dict, Callable, Any, str], BaseDataType]  # Custom computation
+        | type(lambda: None)  # Sentinel type (VALUE_OPTIMIZED)
+    )
 
 
 # Sentinel for value-optimized datatype derivation

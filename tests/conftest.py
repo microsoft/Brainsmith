@@ -16,14 +16,14 @@ ensure_environment_sourced()
 
 # Import test components - these register @step, @kernel, @backend decorators
 # Available for tests that need globally-registered test components
-from tests.fixtures.dse.blueprints import *
-from tests.fixtures.dse.design_spaces import *
+from tests.fixtures.dse.blueprints import *  # noqa: F403
+from tests.fixtures.dse.design_spaces import *  # noqa: F403
 
 # Import kernel test helpers for easy access in all kernel tests
 # Use these for unit testing kernels (schema, inference, transformation)
 # For parity testing (comparing implementations), use tests/parity/ParityTestBase
 # Phase 4: Fixture imports for global availability
-from tests.fixtures.models import *
+from tests.fixtures.models import *  # noqa: F403
 
 
 def pytest_addoption(parser):

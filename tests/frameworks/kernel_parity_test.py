@@ -17,6 +17,7 @@ Primary implementation uses inherited defaults from KernelTestBase.
 """
 
 from abc import abstractmethod
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -31,6 +32,9 @@ from tests.support.assertions import (
     assert_widths_match,
 )
 from tests.support.backend_utils import specialize_to_backend
+
+if TYPE_CHECKING:
+    from tests.frameworks.test_config import KernelTestConfig
 
 
 class KernelParityTest(KernelTestBase):

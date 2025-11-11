@@ -142,7 +142,7 @@ class RotaryEmbedding(HWCustomOp):
         node = self.onnx_node
         idt = model.get_tensor_datatype(node.input[0])
         if idt != self.get_input_datatype():
-            warn_str = "inputDataType changing for %s: %s -> %s " % (
+            warn_str = "inputDataType changing for {}: {} -> {} ".format(
                 node.name,
                 str(self.get_input_datatype().name),
                 str(idt.name),
