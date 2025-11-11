@@ -285,6 +285,13 @@ def main(argv=None) -> int:
     # Setup logging
     setup_logging(args.verbose)
 
+    # Display deprecation warning
+    print(
+        "\033[93mWarning: The Kernel Integrator is currently deprecated in favor of the "
+        "KernelOp system and will be updated for compatibility in a future release.\033[0m",
+        file=sys.stderr,
+    )
+
     # Validate input file
     if not args.rtl_file.exists():
         print(f"✗ Error: RTL file not found: {args.rtl_file}", file=sys.stderr)

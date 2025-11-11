@@ -55,6 +55,10 @@ def kernel(
 ) -> None:
     """RTL_FILE: Path to SystemVerilog RTL source file (.sv) with embedded pragmas"""
     console.print("[bold blue]Brainsmith Kernel Integrator[/bold blue]")
+    console.print(
+        "[yellow]Warning: The Kernel Integrator is currently deprecated in favor of the "
+        "KernelOp system and will be updated for compatibility in a future release.[/yellow]"
+    )
     console.print(f"RTL File: {rtl_file}")
 
     if output_dir is None:
