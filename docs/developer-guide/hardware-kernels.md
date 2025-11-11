@@ -42,6 +42,7 @@ Each kernel consists of:
 3. **Hardware** (`kernel.hpp` or `kernel.v`) - Actual RTL/HLS implementation with standard interfaces
 
 This separation enables:
+
 - Multiple backends for the same kernel (HLS vs RTL, vendor-specific optimizations)
 - Schema-driven automation (DSE parameter derivation, validation, interface generation)
 - Hardware expertise isolation (implement kernels without compiler knowledge)

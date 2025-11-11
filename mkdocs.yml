@@ -117,24 +117,18 @@ nav:
   - Getting Started: getting-started.md
   - Developer Guide:
     - Overview: developer-guide/index.md
-    - Hardware Kernels:
-      - developer-guide/hardware-kernels/index.md
-      - Tutorial: developer-guide/hardware-kernels/kernel-tutorial.md
-      - Architecture: developer-guide/hardware-kernels/kernel-architecture.md
-      - Schema Reference: developer-guide/hardware-kernels/kernel-schema-reference.md
-    - Design Space Exploration:
-      - developer-guide/design-space-exploration/index.md
-      - Blueprint Schema: developer-guide/design-space-exploration/blueprint-schema.md
-      - Workflows: developer-guide/design-space-exploration/workflows.md
-    - Multi-Layer Offload: developer-guide/multi-layer-offload.md
+    - Hardware Kernels: developer-guide/hardware-kernels.md
     - Component Registry: developer-guide/registry.md
+    - Blueprint Schema: developer-guide/blueprint-schema.md
+    - Dataflow Modeling: developer-guide/dataflow-modeling.md
+    - Multi-Layer Offload: developer-guide/multi-layer-offload.md
   - API Reference:
     - Overview: api/index.md
-    - Design Space Exploration: api/dse.md
-    - Component Registry: api/registry.md
-    - Dataflow Modeling: api/dataflow.md
-    - Settings: api/settings.md
     - CLI: api/cli.md
+    - Design Space Exploration: api/dse.md
+    - Dataflow Modeling: api/dataflow.md
+    - Component Registry: api/registry.md
+    - Settings: api/settings.md
   - Tutorials (Coming Soon): tutorials/index.md
 
 extra_css:

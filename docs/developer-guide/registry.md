@@ -71,6 +71,7 @@ brainsmith.plugins =
 ## API Patterns
 
 All components follow `get_*/has_*/list_*` pattern:
+
 - **get** - Load component (imports module): `get_step()`, `get_kernel()`, `get_backend()`
 - **has** - Check existence (no import): `has_step()`, `has_kernel()`
 - **list** - Enumerate: `list_steps()`, `list_kernels()`, `list_backends()`
@@ -95,7 +96,3 @@ for src in ['brainsmith', 'finn', 'project']:
 ```
 
 **Component introspection:** Use `get_component_metadata(name, type)` to inspect without loading.
-
----
-
-**See also**: [Component Registry API](../api/registry.md), [Settings API](../api/settings.md), [Hardware Kernels Guide](hardware-kernels.md)

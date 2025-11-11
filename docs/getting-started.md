@@ -385,6 +385,7 @@ finn_config:
 **Build logs:** Check `<output_dir>/brainsmith.log` for detailed error messages and transformation steps.
 
 **Resources:**
+
 - [GitHub Issues](https://github.com/microsoft/brainsmith/issues) - Report bugs or search existing issues
 - [GitHub Discussions](https://github.com/microsoft/brainsmith/discussions) - Ask questions and share experiences
 
