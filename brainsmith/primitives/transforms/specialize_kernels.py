@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 # Constraint Checking Functions (ported from FINN)
 # ============================================================================
 
+
 def _dwc_rtl_possible(node, model=None):
     """Check if StreamingDataWidthConverter can use RTL variant.
 
@@ -121,6 +122,7 @@ def _vvu_rtl_possible(node, fpgapart, model=None):
 # SpecializeKernels Transform
 # ============================================================================
 
+
 class SpecializeKernels(Transformation):
     """Specialize hardware kernel nodes to backend implementations.
 
@@ -197,7 +199,7 @@ class SpecializeKernels(Transformation):
         Returns:
             Dict[str, List[str]]: {short_kernel_name: [backend_name1, backend_name2, ...]}
         """
-        kernel_selections = getattr(self.cfg, 'kernel_selections', None)
+        kernel_selections = getattr(self.cfg, "kernel_selections", None)
 
         if not kernel_selections:
             return {}
@@ -206,7 +208,7 @@ class SpecializeKernels(Transformation):
         for kernel_name, backend_list in kernel_selections:
             # Strip source prefix to get short name for matching node.op_type
             # "source:KernelName" → "KernelName"
-            short_name = kernel_name.split(':', 1)[1] if ':' in kernel_name else kernel_name
+            short_name = kernel_name.split(":", 1)[1] if ":" in kernel_name else kernel_name
 
             # Ensure backend_list is a list (should always be list now)
             if not isinstance(backend_list, list):
@@ -218,12 +220,9 @@ class SpecializeKernels(Transformation):
 
     def _is_hw_node(self, node):
         """Check if node is a hardware layer (unspecialized)."""
-        return (
-            node.domain.endswith(".custom_op.fpgadataflow") or
-            (
-                node.domain.startswith("brainsmith.kernels") and
-                not (node.domain.endswith(".hls") or node.domain.endswith(".rtl"))
-            )
+        return node.domain.endswith(".custom_op.fpgadataflow") or (
+            node.domain.startswith("brainsmith.kernels")
+            and not (node.domain.endswith(".hls") or node.domain.endswith(".rtl"))
         )
 
     def _select_viable_backend(self, node, backend_list, model):
@@ -242,7 +241,7 @@ class SpecializeKernels(Transformation):
         for backend_name in backend_list:
             try:
                 # Get backend metadata
-                meta = get_component_metadata(backend_name, 'backend')
+                meta = get_component_metadata(backend_name, "backend")
                 language = meta.backend_language
 
                 # Check if backend is viable
@@ -306,12 +305,12 @@ class SpecializeKernels(Transformation):
             New ONNX node with specialized backend
         """
         # Get backend metadata
-        meta = get_component_metadata(backend_name, 'backend')
+        meta = get_component_metadata(backend_name, "backend")
         language = meta.backend_language
 
         # Extract backend class name from full name
         # E.g., 'brainsmith:LayerNorm_hls' → 'LayerNorm_hls'
-        backend_class_name = backend_name.split(':', 1)[1] if ':' in backend_name else backend_name
+        backend_class_name = backend_name.split(":", 1)[1] if ":" in backend_name else backend_name
 
         # Get domain for backend
         domain = get_domain_for_backend(backend_name)
@@ -331,8 +330,6 @@ class SpecializeKernels(Transformation):
                 new_node.attribute.append(attribute)
 
         # Set backend attribute
-        new_node.attribute.append(
-            helper.make_attribute("backend", language)
-        )
+        new_node.attribute.append(helper.make_attribute("backend", language))
 
         return new_node

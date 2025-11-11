@@ -26,6 +26,7 @@ StepSpec = str | list[str | None]
 @dataclass
 class StepOperation:
     """Represents a step manipulation operation"""
+
     op_type: Literal["after", "before", "replace", "remove", "at_start", "at_end"]
     target: StepSpec | None = None
     insert: StepSpec | None = None
@@ -50,8 +51,7 @@ class StepOperation:
 
 
 def parse_steps(
-    steps_data: list[Any],
-    parent_steps: list[str | list[str | None]] | None = None
+    steps_data: list[Any], parent_steps: list[str | list[str | None]] | None = None
 ) -> list[str | list[str | None]]:
     """Parse steps from design_space, preserving variations and supporting operations.
 
@@ -128,12 +128,16 @@ def _validate_nested_lists(spec: StepSpec | None) -> None:
                 _validate_spec(item)
 
 
-def _apply_remove(steps: list[StepSpec], op: StepOperation, target: StepSpec | None) -> list[StepSpec]:
+def _apply_remove(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply remove operation"""
     return [s for s in steps if not _step_matches(s, target)]
 
 
-def _apply_replace(steps: list[StepSpec], op: StepOperation, target: StepSpec | None) -> list[StepSpec]:
+def _apply_replace(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply replace operation"""
     new_steps = []
     for step in steps:
@@ -144,7 +148,9 @@ def _apply_replace(steps: list[StepSpec], op: StepOperation, target: StepSpec | 
     return new_steps
 
 
-def _apply_after(steps: list[StepSpec], op: StepOperation, target: StepSpec | None) -> list[StepSpec]:
+def _apply_after(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply after operation"""
     new_steps = []
     for step in steps:
@@ -154,7 +160,9 @@ def _apply_after(steps: list[StepSpec], op: StepOperation, target: StepSpec | No
     return new_steps
 
 
-def _apply_before(steps: list[StepSpec], op: StepOperation, target: StepSpec | None) -> list[StepSpec]:
+def _apply_before(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply before operation"""
     new_steps = []
     for step in steps:
@@ -164,7 +172,9 @@ def _apply_before(steps: list[StepSpec], op: StepOperation, target: StepSpec | N
     return new_steps
 
 
-def _apply_at_start(steps: list[StepSpec], op: StepOperation, target: StepSpec | None) -> list[StepSpec]:
+def _apply_at_start(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply at_start operation"""
     new_steps = []
     _insert_steps(new_steps, op.insert)
@@ -172,7 +182,9 @@ def _apply_at_start(steps: list[StepSpec], op: StepOperation, target: StepSpec |
     return new_steps
 
 
-def _apply_at_end(steps: list[StepSpec], op: StepOperation, target: StepSpec | None) -> list[StepSpec]:
+def _apply_at_end(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply at_end operation"""
     new_steps = steps.copy()
     _insert_steps(new_steps, op.insert)
@@ -281,9 +293,7 @@ def _validate_branch_types(options: list[str | None]) -> None:
                 "Use double brackets [[opt1, opt2]] for branch insertion."
             )
         if not isinstance(opt, str):
-            raise ValueError(
-                f"Branch option must be string, got {type(opt).__name__}"
-            )
+            raise ValueError(f"Branch option must be string, got {type(opt).__name__}")
 
 
 def _validate_branch_constraints(normalized: list[str]) -> None:
@@ -320,6 +330,7 @@ def _validate_step(step: str | None) -> str:
     if step in SKIP_VALUES:
         return SKIP_INDICATOR
     if not has_step(step):
-        raise ValueError(f"Step '{step}' not found. Use 'brainsmith list steps' to see available steps.")
+        raise ValueError(
+            f"Step '{step}' not found. Use 'brainsmith list steps' to see available steps."
+        )
     return step
-

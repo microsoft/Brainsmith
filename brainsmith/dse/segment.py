@@ -27,6 +27,7 @@ class DSESegment:
     steps from the last branch point (or root) to the next branch point
     (or leaf).
     """
+
     # Core identity
     steps: list[dict[str, Any]]  # Execution steps for this segment
     branch_choice: str | None = None
@@ -55,7 +56,7 @@ class DSESegment:
             node = node.parent
         path_parts.reverse()
         return "/".join(path_parts) if path_parts else "root"
-    
+
     @property
     def is_branch_point(self) -> bool:
         return len(self.children) > 1
@@ -63,18 +64,15 @@ class DSESegment:
     @property
     def is_leaf(self) -> bool:
         return len(self.children) == 0
-    
+
     def add_child(self, branch_id: str, steps: list[dict[str, Any]]) -> DSESegment:
         """Create a child segment for a branch."""
         child = DSESegment(
-            steps=steps,
-            branch_choice=branch_id,
-            parent=self,
-            finn_config=self.finn_config.copy()
+            steps=steps, branch_choice=branch_id, parent=self, finn_config=self.finn_config.copy()
         )
         self.children[branch_id] = child
         return child
-    
+
     def get_path(self) -> list[DSESegment]:
         """Get all segments from root to here."""
         path = []
@@ -84,7 +82,7 @@ class DSESegment:
             node = node.parent
         path.reverse()
         return path
-    
+
     def get_all_steps(self) -> list[dict[str, Any]]:
         """Get all steps from root to end of this segment."""
         steps = []

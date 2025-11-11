@@ -50,25 +50,25 @@ def setup():
 def setup_all(force: bool, remove: bool, yes: bool) -> None:
     """Install all dependencies (cppsim, xsim, boards)."""
     if remove:
-        show_panel(
-            "Brainsmith Complete Removal",
-            "This will remove all optional dependencies."
-        )
+        show_panel("Brainsmith Complete Removal", "This will remove all optional dependencies.")
     else:
-        show_panel(
-            "Brainsmith Complete Setup",
-            "This will install all optional dependencies."
-        )
+        show_panel("Brainsmith Complete Setup", "This will install all optional dependencies.")
 
     ctx = click.get_current_context()
 
-    console.print(f"\n[bold cyan]1. {'Removing' if remove else 'Setting up'} C++ Simulation[/bold cyan]")
+    console.print(
+        f"\n[bold cyan]1. {'Removing' if remove else 'Setting up'} C++ Simulation[/bold cyan]"
+    )
     ctx.invoke(cppsim, force=force, remove=remove, yes=yes)
 
-    console.print(f"\n[bold cyan]2. {'Removing' if remove else 'Setting up'} Xilinx Simulation[/bold cyan]")
+    console.print(
+        f"\n[bold cyan]2. {'Removing' if remove else 'Setting up'} Xilinx Simulation[/bold cyan]"
+    )
     ctx.invoke(xsim, force=force, remove=remove, yes=yes)
 
-    console.print(f"\n[bold cyan]3. {'Removing' if remove else 'Downloading'} Board Files[/bold cyan]")
+    console.print(
+        f"\n[bold cyan]3. {'Removing' if remove else 'Downloading'} Board Files[/bold cyan]"
+    )
     ctx.invoke(boards, force=force, remove=remove, repo=(), verbose=False, yes=yes)
 
     success(f"All {'removal' if remove else 'setup'} tasks completed!")
@@ -82,6 +82,7 @@ def check() -> None:
     Brainsmith dependencies and tools.
     """
     from brainsmith.settings import get_config  # Lazy import
+
     config = get_config()
     deps_mgr = DependencyManager()
 
@@ -95,7 +96,9 @@ def check() -> None:
     table.add_row("cnpy", cnpy_status, "deps/cnpy")
 
     hlslib_installed = _are_hlslib_headers_installed(deps_mgr)
-    hlslib_status = format_status("Installed" if hlslib_installed else "Not installed", hlslib_installed)
+    hlslib_status = format_status(
+        "Installed" if hlslib_installed else "Not installed", hlslib_installed
+    )
     table.add_row("finn-hlslib headers", hlslib_status, "deps/finn-hlslib")
 
     finnxsim_built = _is_finnxsim_built()
@@ -118,7 +121,11 @@ def check() -> None:
 
         vivado_path = str(config.vivado_path)
         status_text = f"Found ({', '.join(vivado_details)})" if vivado_details else "Found"
-        vivado_status = format_warning_status(status_text) if not is_sourced else format_status(status_text, True)
+        vivado_status = (
+            format_warning_status(status_text)
+            if not is_sourced
+            else format_status(status_text, True)
+        )
     else:
         vivado_status = format_status("Not found", False)
         vivado_path = "Not configured"
@@ -142,7 +149,11 @@ def check() -> None:
 
         hls_path = str(config.vitis_hls_path)
         status_text = f"Found ({', '.join(hls_details)})" if hls_details else "Found"
-        hls_status = format_warning_status(status_text) if not is_sourced else format_status(status_text, True)
+        hls_status = (
+            format_warning_status(status_text)
+            if not is_sourced
+            else format_status(status_text, True)
+        )
     else:
         hls_status = format_warning_status("Not found")
         hls_path = "Not configured"
@@ -152,7 +163,11 @@ def check() -> None:
     board_mgr = BoardManager(deps_mgr.deps_dir / "board-files")
     board_count = len(board_mgr.list_downloaded_repositories())
     board_status_text = f"{board_count} repositories" if board_count > 0 else "None"
-    board_status = format_status(board_status_text, True) if board_count > 0 else format_warning_status(board_status_text)
+    board_status = (
+        format_status(board_status_text, True)
+        if board_count > 0
+        else format_warning_status(board_status_text)
+    )
     table.add_row("Board files", board_status, "deps/board-files")
 
     console.print(table)

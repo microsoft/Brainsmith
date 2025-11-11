@@ -189,9 +189,7 @@ class KernelParityTest(KernelTestBase):
         return specialize_to_backend(op, model, fpgapart, backend_variants)
 
     @pytest.fixture(scope="function")
-    def stage1_model(
-        self, kernel_test_config: "KernelTestConfig", model_cache
-    ) -> ModelWrapper:
+    def stage1_model(self, kernel_test_config: "KernelTestConfig", model_cache) -> ModelWrapper:
         """Stage 1 model with QONNX annotations (shared by both kernels).
 
         Same as KernelTest.stage1_model - creates ONNX model before kernel inference.
@@ -308,9 +306,7 @@ class KernelParityTest(KernelTestBase):
             target_node = model.graph.node[0].name
 
             op, model = self.infer_kernel_reference(model, target_node)
-            self.configure_kernel_reference(
-                op, model, stage=2, config=kernel_test_config
-            )
+            self.configure_kernel_reference(op, model, stage=2, config=kernel_test_config)
 
             return op, model
 
@@ -334,9 +330,7 @@ class KernelParityTest(KernelTestBase):
 
         def builder():
             base_op, base_model = stage2_model
-            op, model = self.specialize_to_backend(
-                base_op, base_model, kernel_test_config
-            )
+            op, model = self.specialize_to_backend(base_op, base_model, kernel_test_config)
 
             # Configure backend
             self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
@@ -365,9 +359,7 @@ class KernelParityTest(KernelTestBase):
             op, model = self.specialize_to_backend_reference(
                 base_op, base_model, kernel_test_config
             )
-            self.configure_kernel_reference(
-                op, model, stage=3, config=kernel_test_config
-            )
+            self.configure_kernel_reference(op, model, stage=3, config=kernel_test_config)
             return op, model
 
         cache_key = f"{kernel_test_config.test_id}_reference"
@@ -375,13 +367,15 @@ class KernelParityTest(KernelTestBase):
 
     @pytest.mark.golden
     @pytest.mark.kernel_parity
-    def test_python_vs_golden(
-        self, kernel_test_config, stage2_model, test_inputs, golden_outputs
-    ):
+    def test_python_vs_golden(self, kernel_test_config, stage2_model, test_inputs, golden_outputs):
         """Test primary Python execution matches golden reference."""
         self._execute_and_validate_golden(
-            stage2_model, test_inputs, golden_outputs,
-            "python", "Primary Python execution", kernel_test_config
+            stage2_model,
+            test_inputs,
+            golden_outputs,
+            "python",
+            "Primary Python execution",
+            kernel_test_config,
         )
 
     @pytest.mark.golden
@@ -391,21 +385,27 @@ class KernelParityTest(KernelTestBase):
     ):
         """Test reference Python execution matches golden reference."""
         self._execute_and_validate_golden(
-            stage2_model_reference, test_inputs, golden_outputs,
-            "python", "Reference Python execution", kernel_test_config
+            stage2_model_reference,
+            test_inputs,
+            golden_outputs,
+            "python",
+            "Reference Python execution",
+            kernel_test_config,
         )
 
     @pytest.mark.golden
     @pytest.mark.cppsim
     @pytest.mark.slow
     @pytest.mark.kernel_parity
-    def test_cppsim_vs_golden(
-        self, kernel_test_config, stage3_model, test_inputs, golden_outputs
-    ):
+    def test_cppsim_vs_golden(self, kernel_test_config, stage3_model, test_inputs, golden_outputs):
         """Test primary cppsim execution matches golden reference."""
         self._execute_and_validate_golden(
-            stage3_model, test_inputs, golden_outputs,
-            "cppsim", "Primary HLS cppsim", kernel_test_config
+            stage3_model,
+            test_inputs,
+            golden_outputs,
+            "cppsim",
+            "Primary HLS cppsim",
+            kernel_test_config,
         )
 
     @pytest.mark.golden
@@ -417,21 +417,27 @@ class KernelParityTest(KernelTestBase):
     ):
         """Test reference cppsim execution matches golden reference."""
         self._execute_and_validate_golden(
-            stage3_model_reference, test_inputs, golden_outputs,
-            "cppsim", "Reference HLS cppsim", kernel_test_config
+            stage3_model_reference,
+            test_inputs,
+            golden_outputs,
+            "cppsim",
+            "Reference HLS cppsim",
+            kernel_test_config,
         )
 
     @pytest.mark.golden
     @pytest.mark.rtlsim
     @pytest.mark.slow
     @pytest.mark.kernel_parity
-    def test_rtlsim_vs_golden(
-        self, kernel_test_config, stage3_model, test_inputs, golden_outputs
-    ):
+    def test_rtlsim_vs_golden(self, kernel_test_config, stage3_model, test_inputs, golden_outputs):
         """Test primary rtlsim execution matches golden reference."""
         self._execute_and_validate_golden(
-            stage3_model, test_inputs, golden_outputs,
-            "rtlsim", "Primary RTL rtlsim", kernel_test_config
+            stage3_model,
+            test_inputs,
+            golden_outputs,
+            "rtlsim",
+            "Primary RTL rtlsim",
+            kernel_test_config,
         )
 
     @pytest.mark.golden
@@ -443,8 +449,12 @@ class KernelParityTest(KernelTestBase):
     ):
         """Test reference rtlsim execution matches golden reference."""
         self._execute_and_validate_golden(
-            stage3_model_reference, test_inputs, golden_outputs,
-            "rtlsim", "Reference RTL rtlsim", kernel_test_config
+            stage3_model_reference,
+            test_inputs,
+            golden_outputs,
+            "rtlsim",
+            "Reference RTL rtlsim",
+            kernel_test_config,
         )
 
     @pytest.mark.parity
@@ -510,7 +520,9 @@ class KernelParityTest(KernelTestBase):
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.kernel_parity
-    def test_stream_widths_padded_parity(self, kernel_test_config, stage2_model, stage2_model_reference):
+    def test_stream_widths_padded_parity(
+        self, kernel_test_config, stage2_model, stage2_model_reference
+    ):
         """Test padded stream widths match (AXI alignment)."""
         op, _ = stage2_model
         op_ref, _ = stage2_model_reference
@@ -520,8 +532,7 @@ class KernelParityTest(KernelTestBase):
             width = op.get_instream_width_padded(i)
             width_ref = op_ref.get_instream_width_padded(i)
             assert_values_match(
-                width, width_ref, f"Input {i} stream width",
-                lambda w: f"{w} bits (padded)"
+                width, width_ref, f"Input {i} stream width", lambda w: f"{w} bits (padded)"
             )
 
         # Output stream widths padded
@@ -529,8 +540,7 @@ class KernelParityTest(KernelTestBase):
             width = op.get_outstream_width_padded(i)
             width_ref = op_ref.get_outstream_width_padded(i)
             assert_values_match(
-                width, width_ref, f"Output {i} stream width",
-                lambda w: f"{w} bits (padded)"
+                width, width_ref, f"Output {i} stream width", lambda w: f"{w} bits (padded)"
             )
 
     @pytest.mark.parity
@@ -556,7 +566,9 @@ class KernelParityTest(KernelTestBase):
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.kernel_parity
-    def test_datatype_inference_parity(self, kernel_test_config, stage2_model, stage2_model_reference):
+    def test_datatype_inference_parity(
+        self, kernel_test_config, stage2_model, stage2_model_reference
+    ):
         """Test datatype inference produces matching results.
 
         Note: This test compares datatypes only, not tensor names.
@@ -589,10 +601,7 @@ class KernelParityTest(KernelTestBase):
             dt_ref = model_ref.get_tensor_datatype(input_name_ref)
 
             # Compare datatypes (names may differ)
-            assert_datatypes_match(
-                dt, dt_ref, i,
-                "After infer_node_datatype, input"
-            )
+            assert_datatypes_match(dt, dt_ref, i, "After infer_node_datatype, input")
 
         # Verify output datatypes (compare by position, not name)
         for i in range(self.get_num_outputs()):
@@ -604,15 +613,14 @@ class KernelParityTest(KernelTestBase):
             dt_ref = model_ref.get_tensor_datatype(output_name_ref)
 
             # Compare datatypes (names may differ)
-            assert_datatypes_match(
-                dt, dt_ref, i,
-                "After infer_node_datatype, output"
-            )
+            assert_datatypes_match(dt, dt_ref, i, "After infer_node_datatype, output")
 
     @pytest.mark.parity
     @pytest.mark.core
     @pytest.mark.kernel_parity
-    def test_make_shape_compatible_op_parity(self, kernel_test_config, stage2_model, stage2_model_reference):
+    def test_make_shape_compatible_op_parity(
+        self, kernel_test_config, stage2_model, stage2_model_reference
+    ):
         """Test shape-compatible ops preserve output structure.
 
         Note: make_shape_compatible_op() returns an ONNX NodeProto (per FINN API),
@@ -637,12 +645,12 @@ class KernelParityTest(KernelTestBase):
             output_name = compat_node.output[i] if i < len(compat_node.output) else None
             output_name_ref = compat_node_ref.output[i] if i < len(compat_node_ref.output) else None
 
-            assert output_name == op.onnx_node.output[i], (
-                f"Primary shape-compatible op output {i} name mismatch"
-            )
-            assert output_name_ref == op_ref.onnx_node.output[i], (
-                f"Reference shape-compatible op output {i} name mismatch"
-            )
+            assert (
+                output_name == op.onnx_node.output[i]
+            ), f"Primary shape-compatible op output {i} name mismatch"
+            assert (
+                output_name_ref == op_ref.onnx_node.output[i]
+            ), f"Reference shape-compatible op output {i} name mismatch"
 
     @pytest.mark.parity
     @pytest.mark.hw_estimation
@@ -660,7 +668,9 @@ class KernelParityTest(KernelTestBase):
     @pytest.mark.parity
     @pytest.mark.hw_estimation
     @pytest.mark.kernel_parity
-    def test_number_output_values_parity(self, kernel_test_config, stage2_model, stage2_model_reference):
+    def test_number_output_values_parity(
+        self, kernel_test_config, stage2_model, stage2_model_reference
+    ):
         """Test number of output values match (for FIFO sizing)."""
         op, _ = stage2_model
         op_ref, _ = stage2_model_reference
@@ -673,7 +683,9 @@ class KernelParityTest(KernelTestBase):
     @pytest.mark.parity
     @pytest.mark.hw_estimation
     @pytest.mark.kernel_parity
-    def test_resource_estimates_parity(self, kernel_test_config, stage2_model, stage2_model_reference):
+    def test_resource_estimates_parity(
+        self, kernel_test_config, stage2_model, stage2_model_reference
+    ):
         """Test resource estimates match between implementations."""
         op, _ = stage2_model
         op_ref, _ = stage2_model_reference
@@ -682,59 +694,70 @@ class KernelParityTest(KernelTestBase):
         if hasattr(op, "lut_estimation") and hasattr(op_ref, "lut_estimation"):
             luts = op.lut_estimation()
             luts_ref = op_ref.lut_estimation()
-            assert_values_match(luts, luts_ref, "LUT estimation",
-                              lambda count: f"{count:,} LUTs")
+            assert_values_match(luts, luts_ref, "LUT estimation", lambda count: f"{count:,} LUTs")
 
         # DSP estimation (requires fpgapart parameter per FINN API)
         if hasattr(op, "dsp_estimation") and hasattr(op_ref, "dsp_estimation"):
             # Use default fpgapart for estimation comparison
             from tests.support.constants import PARITY_DEFAULT_FPGA_PART_HLS
+
             fpgapart = PARITY_DEFAULT_FPGA_PART_HLS
             dsps = op.dsp_estimation(fpgapart)
             dsps_ref = op_ref.dsp_estimation(fpgapart)
-            assert_values_match(dsps, dsps_ref, "DSP estimation",
-                              lambda count: f"{count:,} DSPs")
+            assert_values_match(dsps, dsps_ref, "DSP estimation", lambda count: f"{count:,} DSPs")
 
         # BRAM estimation
         if hasattr(op, "bram_estimation") and hasattr(op_ref, "bram_estimation"):
             brams = op.bram_estimation()
             brams_ref = op_ref.bram_estimation()
-            assert_values_match(brams, brams_ref, "BRAM estimation",
-                              lambda count: f"{count:,} BRAMs")
+            assert_values_match(
+                brams, brams_ref, "BRAM estimation", lambda count: f"{count:,} BRAMs"
+            )
 
         # URAM estimation
         if hasattr(op, "uram_estimation") and hasattr(op_ref, "uram_estimation"):
             urams = op.uram_estimation()
             urams_ref = op_ref.uram_estimation()
-            assert_values_match(urams, urams_ref, "URAM estimation",
-                              lambda count: f"{count:,} URAMs")
+            assert_values_match(
+                urams, urams_ref, "URAM estimation", lambda count: f"{count:,} URAMs"
+            )
 
     @pytest.mark.parity
     @pytest.mark.hw_estimation
     @pytest.mark.kernel_parity
-    def test_efficiency_metrics_parity(self, kernel_test_config, stage2_model, stage2_model_reference):
+    def test_efficiency_metrics_parity(
+        self, kernel_test_config, stage2_model, stage2_model_reference
+    ):
         """Test BRAM/URAM efficiency estimates match."""
         op, _ = stage2_model
         op_ref, _ = stage2_model_reference
 
         # BRAM efficiency
-        if hasattr(op, "bram_efficiency_estimation") and hasattr(op_ref, "bram_efficiency_estimation"):
+        if hasattr(op, "bram_efficiency_estimation") and hasattr(
+            op_ref, "bram_efficiency_estimation"
+        ):
             eff = op.bram_efficiency_estimation()
             eff_ref = op_ref.bram_efficiency_estimation()
-            assert_values_match(eff, eff_ref, "BRAM efficiency",
-                              lambda e: f"{e:.4f} ({e*100:.2f}%)")
+            assert_values_match(
+                eff, eff_ref, "BRAM efficiency", lambda e: f"{e:.4f} ({e*100:.2f}%)"
+            )
 
         # URAM efficiency
-        if hasattr(op, "uram_efficiency_estimation") and hasattr(op_ref, "uram_efficiency_estimation"):
+        if hasattr(op, "uram_efficiency_estimation") and hasattr(
+            op_ref, "uram_efficiency_estimation"
+        ):
             eff = op.uram_efficiency_estimation()
             eff_ref = op_ref.uram_efficiency_estimation()
-            assert_values_match(eff, eff_ref, "URAM efficiency",
-                              lambda e: f"{e:.4f} ({e*100:.2f}%)")
+            assert_values_match(
+                eff, eff_ref, "URAM efficiency", lambda e: f"{e:.4f} ({e*100:.2f}%)"
+            )
 
     @pytest.mark.parity
     @pytest.mark.hw_estimation
     @pytest.mark.kernel_parity
-    def test_operation_counts_parity(self, kernel_test_config, stage2_model, stage2_model_reference):
+    def test_operation_counts_parity(
+        self, kernel_test_config, stage2_model, stage2_model_reference
+    ):
         """Test operation and parameter counts match."""
         op, _ = stage2_model
         op_ref, _ = stage2_model_reference

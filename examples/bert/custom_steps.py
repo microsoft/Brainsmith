@@ -77,7 +77,7 @@ def remove_head_step(model, cfg):
 
     # Reconnect input
     for con in consumers:
-        for i,ip in enumerate(con.input):
+        for i, ip in enumerate(con.input):
             if ip == LN_output:
                 con.input[i] = model.graph.input[0].name
 
@@ -104,15 +104,17 @@ def remove_tail_step(model, cfg):
     """Remove from global_out_1 all the way back to the first LayerNorm."""
     # Direct implementation from old custom_step_remove_tail
     out_names = [x.name for x in model.graph.output]
-    assert "global_out_1" in out_names, "Error: expected one of the outputs to be called global_out_1, we might need better pattern matching logic here"
+    assert (
+        "global_out_1" in out_names
+    ), "Error: expected one of the outputs to be called global_out_1, we might need better pattern matching logic here"
 
     to_remove = []
-    current_node = model.find_producer('global_out_1')
+    current_node = model.find_producer("global_out_1")
     _recurse_model_tail_removal(model, to_remove, current_node)
 
     for node in to_remove:
         model.graph.node.remove(node)
-    del model.graph.output[out_names.index('global_out_1')]
+    del model.graph.output[out_names.index("global_out_1")]
 
     return model
 
@@ -127,12 +129,12 @@ def generate_reference_io_step(model, cfg):
     input_m = model.graph.input[0]
     in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
     in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
-    np.save(cfg.output_dir+"/input.npy", in_tensor)
+    np.save(cfg.output_dir + "/input.npy", in_tensor)
 
-    input_t = { input_m.name : in_tensor}
+    input_t = {input_m.name: in_tensor}
     out_name = model.graph.output[0].name
 
     y_ref = oxe.execute_onnx(model, input_t, True)
-    np.save(cfg.output_dir+"/expected_output.npy", y_ref[out_name])
-    np.savez(cfg.output_dir+"/expected_context.npz", **y_ref)
+    np.save(cfg.output_dir + "/expected_output.npy", y_ref[out_name])
+    np.savez(cfg.output_dir + "/expected_context.npz", **y_ref)
     return model

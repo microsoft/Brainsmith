@@ -40,9 +40,7 @@ class KernelTest(KernelTestBase):
     """
 
     @pytest.fixture(scope="function")
-    def stage1_model(
-        self, kernel_test_config: "KernelTestConfig", model_cache
-    ) -> ModelWrapper:
+    def stage1_model(self, kernel_test_config: "KernelTestConfig", model_cache) -> ModelWrapper:
         """Stage 1 model with QONNX annotations (before kernel inference).
 
         This is the ONNX model WITH DataType annotations (NO Quant nodes),
@@ -153,9 +151,7 @@ class KernelTest(KernelTestBase):
 
             def configure_stage_2(op, m):
                 # Apply declarative configuration from fixture
-                self.auto_configure_from_fixture(
-                    op, m, stage=2, config=kernel_test_config
-                )
+                self.auto_configure_from_fixture(op, m, stage=2, config=kernel_test_config)
 
             # Create kernel inference transform from kernel op
             transform = InferKernels([self.get_kernel_op()])
@@ -205,9 +201,7 @@ class KernelTest(KernelTestBase):
             base_op, base_model = stage2_model
 
             # Stage 2 → Stage 3: Base Kernel → Backend
-            op, model = self.specialize_to_backend(
-                base_op, base_model, kernel_test_config
-            )
+            op, model = self.specialize_to_backend(base_op, base_model, kernel_test_config)
 
             # Apply declarative configuration from fixture
             self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
@@ -357,8 +351,12 @@ class KernelTest(KernelTestBase):
         """Test Python execution matches QONNX golden reference."""
         # Delegate to shared utility
         self._execute_and_validate_golden(
-            stage2_model, test_inputs, golden_outputs,
-            "python", "Python execution", kernel_test_config
+            stage2_model,
+            test_inputs,
+            golden_outputs,
+            "python",
+            "Python execution",
+            kernel_test_config,
         )
 
     @pytest.mark.pipeline
@@ -376,8 +374,12 @@ class KernelTest(KernelTestBase):
         """Test HLS C++ simulation matches QONNX golden reference."""
         # Delegate to shared utility
         self._execute_and_validate_golden(
-            stage3_model, test_inputs, golden_outputs,
-            "cppsim", "HLS simulation (cppsim)", kernel_test_config
+            stage3_model,
+            test_inputs,
+            golden_outputs,
+            "cppsim",
+            "HLS simulation (cppsim)",
+            kernel_test_config,
         )
 
     @pytest.mark.pipeline
@@ -395,7 +397,10 @@ class KernelTest(KernelTestBase):
         """Test RTL simulation matches QONNX golden reference."""
         # Delegate to shared utility
         self._execute_and_validate_golden(
-            stage3_model, test_inputs, golden_outputs,
-            "rtlsim", "RTL simulation (rtlsim)", kernel_test_config
+            stage3_model,
+            test_inputs,
+            golden_outputs,
+            "rtlsim",
+            "RTL simulation (rtlsim)",
+            kernel_test_config,
         )
-

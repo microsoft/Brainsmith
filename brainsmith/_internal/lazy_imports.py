@@ -63,15 +63,13 @@ class LazyModuleLoader:
             AttributeError: If the attribute is not in the lazy_map
         """
         if name not in self._lazy_map:
-            raise AttributeError(
-                f"module {self._package!r} has no attribute {name!r}"
-            )
+            raise AttributeError(f"module {self._package!r} has no attribute {name!r}")
 
         if name not in self._cache:
             module_path = self._lazy_map[name]
 
             if self._package:
-                module = import_module(f'.{module_path}', package=self._package)
+                module = import_module(f".{module_path}", package=self._package)
             else:
                 module = import_module(module_path)
 

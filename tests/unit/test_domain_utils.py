@@ -22,17 +22,17 @@ class TestGetSubdomainForType:
     """Test subdomain mapping for component types."""
 
     def test_kernel_subdomain(self):
-        assert get_subdomain_for_type('kernel') == 'kernels'
+        assert get_subdomain_for_type("kernel") == "kernels"
 
     def test_backend_subdomain(self):
         # Backends use same domain as kernels
-        assert get_subdomain_for_type('backend') == 'kernels'
+        assert get_subdomain_for_type("backend") == "kernels"
 
     def test_step_subdomain(self):
-        assert get_subdomain_for_type('step') == 'steps'
+        assert get_subdomain_for_type("step") == "steps"
 
     def test_unknown_type(self):
-        assert get_subdomain_for_type('unknown') is None
+        assert get_subdomain_for_type("unknown") is None
 
 
 class TestMatchDomainToSource:
@@ -41,63 +41,63 @@ class TestMatchDomainToSource:
     def test_exact_match(self):
         """Test exact domain match."""
         config = MagicMock()
-        config.component_sources = {'brainsmith': Path('/path')}
-        config.source_priority = ['brainsmith']
+        config.component_sources = {"brainsmith": Path("/path")}
+        config.source_priority = ["brainsmith"]
 
-        with patch('brainsmith.settings.get_config', return_value=config):
-            assert match_domain_to_source('brainsmith') == 'brainsmith'
+        with patch("brainsmith.settings.get_config", return_value=config):
+            assert match_domain_to_source("brainsmith") == "brainsmith"
 
     def test_prefix_match_kernels(self):
         """Test prefix match for brainsmith.kernels domain."""
         config = MagicMock()
-        config.component_sources = {'brainsmith': Path('/path')}
-        config.source_priority = ['brainsmith']
+        config.component_sources = {"brainsmith": Path("/path")}
+        config.source_priority = ["brainsmith"]
 
-        with patch('brainsmith.settings.get_config', return_value=config):
-            assert match_domain_to_source('brainsmith.kernels') == 'brainsmith'
+        with patch("brainsmith.settings.get_config", return_value=config):
+            assert match_domain_to_source("brainsmith.kernels") == "brainsmith"
 
     def test_prefix_match_steps(self):
         """Test prefix match for brainsmith.steps domain."""
         config = MagicMock()
-        config.component_sources = {'brainsmith': Path('/path')}
-        config.source_priority = ['brainsmith']
+        config.component_sources = {"brainsmith": Path("/path")}
+        config.source_priority = ["brainsmith"]
 
-        with patch('brainsmith.settings.get_config', return_value=config):
-            assert match_domain_to_source('brainsmith.steps') == 'brainsmith'
+        with patch("brainsmith.settings.get_config", return_value=config):
+            assert match_domain_to_source("brainsmith.steps") == "brainsmith"
 
     def test_longest_prefix_wins(self):
         """Test that longest matching prefix is preferred."""
         config = MagicMock()
         config.component_sources = {
-            'my_proj': Path('/path1'),
-            'my_proj.experimental': Path('/path2'),
+            "my_proj": Path("/path1"),
+            "my_proj.experimental": Path("/path2"),
         }
-        config.source_priority = ['my_proj.experimental', 'my_proj']
+        config.source_priority = ["my_proj.experimental", "my_proj"]
 
-        with patch('brainsmith.settings.get_config', return_value=config):
+        with patch("brainsmith.settings.get_config", return_value=config):
             # Should match longer prefix
-            result = match_domain_to_source('my_proj.experimental.kernels')
-            assert result == 'my_proj.experimental'
+            result = match_domain_to_source("my_proj.experimental.kernels")
+            assert result == "my_proj.experimental"
 
     def test_finn_domain(self):
         """Test FINN's long domain."""
         config = MagicMock()
-        config.component_sources = {'finn': Path('/path')}
-        config.source_priority = ['finn']
+        config.component_sources = {"finn": Path("/path")}
+        config.source_priority = ["finn"]
 
-        with patch('brainsmith.settings.get_config', return_value=config):
-            result = match_domain_to_source('finn.custom_op.fpgadataflow.hls')
-            assert result == 'finn'
+        with patch("brainsmith.settings.get_config", return_value=config):
+            result = match_domain_to_source("finn.custom_op.fpgadataflow.hls")
+            assert result == "finn"
 
     def test_no_match_uses_source_priority(self):
         """Test fallback to source_priority when no match found."""
         config = MagicMock()
-        config.component_sources = {'brainsmith': Path('/path')}
-        config.source_priority = ['brainsmith', 'custom']
+        config.component_sources = {"brainsmith": Path("/path")}
+        config.source_priority = ["brainsmith", "custom"]
 
-        with patch('brainsmith.settings.get_config', return_value=config):
-            result = match_domain_to_source('unknown.domain')
-            assert result == 'brainsmith'  # First in priority
+        with patch("brainsmith.settings.get_config", return_value=config):
+            result = match_domain_to_source("unknown.domain")
+            assert result == "brainsmith"  # First in priority
 
     def test_no_match_no_priority_uses_custom(self):
         """Test fallback to 'custom' when no match and no priority."""
@@ -105,9 +105,9 @@ class TestMatchDomainToSource:
         config.component_sources = {}
         config.source_priority = []
 
-        with patch('brainsmith.settings.get_config', return_value=config):
-            result = match_domain_to_source('unknown.domain')
-            assert result == 'custom'
+        with patch("brainsmith.settings.get_config", return_value=config):
+            result = match_domain_to_source("unknown.domain")
+            assert result == "custom"
 
 
 class TestDeriveDomainFromModule:
@@ -162,9 +162,9 @@ class TestDeriveDomainFromModule:
     def test_custom_source_kernels(self):
         """Test custom source with kernels category."""
         config = MagicMock()
-        config.component_sources = {'acme': Path('/path')}
+        config.component_sources = {"acme": Path("/path")}
 
-        with patch('brainsmith.settings.get_config', return_value=config):
+        with patch("brainsmith.settings.get_config", return_value=config):
             module = "acme.kernels.my_kernel"
             result = derive_domain_from_module(module)
             assert result == "acme.kernels"
@@ -172,9 +172,9 @@ class TestDeriveDomainFromModule:
     def test_custom_source_steps(self):
         """Test custom source with steps category."""
         config = MagicMock()
-        config.component_sources = {'acme': Path('/path')}
+        config.component_sources = {"acme": Path("/path")}
 
-        with patch('brainsmith.settings.get_config', return_value=config):
+        with patch("brainsmith.settings.get_config", return_value=config):
             module = "acme.steps.my_step"
             result = derive_domain_from_module(module)
             assert result == "acme.steps"
@@ -182,9 +182,9 @@ class TestDeriveDomainFromModule:
     def test_unique_module_name_pattern(self):
         """Test unique module names from discovery (source__category)."""
         config = MagicMock()
-        config.component_sources = {'project': Path('/path')}
+        config.component_sources = {"project": Path("/path")}
 
-        with patch('brainsmith.settings.get_config', return_value=config):
+        with patch("brainsmith.settings.get_config", return_value=config):
             module = "project__kernels.my_kernel"
             result = derive_domain_from_module(module)
             # Should handle unique naming pattern
@@ -193,7 +193,7 @@ class TestDeriveDomainFromModule:
     def test_hierarchical_source(self):
         """Test hierarchical source names."""
         # Mock discovered sources to include com.acme
-        with patch('brainsmith.registry._state._discovered_sources', {'com.acme'}):
+        with patch("brainsmith.registry._state._discovered_sources", {"com.acme"}):
             module = "com.acme.kernels.custom_op"
             result = derive_domain_from_module(module)
             assert result == "com.acme.kernels"
@@ -203,7 +203,7 @@ class TestDeriveDomainFromModule:
         config = MagicMock()
         config.component_sources = {}
 
-        with patch('brainsmith.settings.get_config', return_value=config):
+        with patch("brainsmith.settings.get_config", return_value=config):
             module = "unknown.kernels.my_op"
             result = derive_domain_from_module(module)
             assert result == "unknown.kernels"
@@ -213,7 +213,7 @@ class TestDeriveDomainFromModule:
         config = MagicMock()
         config.component_sources = {}
 
-        with patch('brainsmith.settings.get_config', return_value=config):
+        with patch("brainsmith.settings.get_config", return_value=config):
             module = "unknown_module"
             result = derive_domain_from_module(module)
             assert result == "unknown_module.kernels"
@@ -275,10 +275,10 @@ class TestIntegration:
     def test_round_trip_brainsmith(self):
         """Test module → domain → source round trip for brainsmith."""
         config = MagicMock()
-        config.component_sources = {'brainsmith': Path('/path')}
-        config.source_priority = ['brainsmith']
+        config.component_sources = {"brainsmith": Path("/path")}
+        config.source_priority = ["brainsmith"]
 
-        with patch('brainsmith.settings.get_config', return_value=config):
+        with patch("brainsmith.settings.get_config", return_value=config):
             # Module → domain
             module = "brainsmith.kernels.layernorm.layernorm_hls"
             domain = derive_domain_from_module(module)
@@ -291,10 +291,10 @@ class TestIntegration:
     def test_round_trip_finn(self):
         """Test module → domain → source round trip for FINN."""
         config = MagicMock()
-        config.component_sources = {'finn': Path('/path')}
-        config.source_priority = ['finn']
+        config.component_sources = {"finn": Path("/path")}
+        config.source_priority = ["finn"]
 
-        with patch('brainsmith.settings.get_config', return_value=config):
+        with patch("brainsmith.settings.get_config", return_value=config):
             # Module → domain
             module = "finn.custom_op.fpgadataflow.hls.mvau_hls"
             domain = derive_domain_from_module(module)

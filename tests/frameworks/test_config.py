@@ -35,6 +35,7 @@ class ModelStructure:
             input_dtypes={"input": DataType["INT8"], "param": DataType["INT8"]}
         )
     """
+
     operation: str
     input_shapes: dict[str, tuple[int, ...]]
     input_dtypes: dict[str, DataType]
@@ -79,6 +80,7 @@ class DesignParameters:
             backend_variants=("hls", "rtl")
         )
     """
+
     input_streams: dict[int, int] = field(default_factory=dict)
     output_streams: dict[int, int] = field(default_factory=dict)
     dimensions: dict[str, Any] = field(default_factory=dict)
@@ -109,6 +111,7 @@ class PlatformConfig:
         # UltraScale+
         ultrascale = PlatformConfig(fpgapart="xczu9eg-ffvb1156-2-e")
     """
+
     fpgapart: str | None = None
 
 
@@ -139,12 +142,9 @@ class ValidationConfig:
             tolerance_cppsim={"rtol": 1e-3, "atol": 1e-4}
         )
     """
-    tolerance_python: dict[str, float] = field(
-        default_factory=lambda: {"rtol": 1e-7, "atol": 1e-9}
-    )
-    tolerance_cppsim: dict[str, float] = field(
-        default_factory=lambda: {"rtol": 1e-5, "atol": 1e-6}
-    )
+
+    tolerance_python: dict[str, float] = field(default_factory=lambda: {"rtol": 1e-7, "atol": 1e-9})
+    tolerance_cppsim: dict[str, float] = field(default_factory=lambda: {"rtol": 1e-5, "atol": 1e-6})
     tolerance_rtlsim: dict[str, float] | None = None
 
     def get_tolerance_rtlsim(self) -> dict[str, float]:
@@ -196,6 +196,7 @@ class KernelTestConfig:
             for i, m in enumerate(models)
         ]
     """
+
     test_id: str
     model: ModelStructure
     design: DesignParameters = field(default_factory=DesignParameters)
@@ -261,4 +262,3 @@ class KernelTestConfig:
     def tolerance_rtlsim(self) -> dict[str, float] | None:
         """Access validation.tolerance_rtlsim directly."""
         return self.validation.tolerance_rtlsim
-

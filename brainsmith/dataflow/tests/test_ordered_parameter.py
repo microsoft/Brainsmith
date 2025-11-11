@@ -14,6 +14,7 @@ from brainsmith.dataflow.ordered_parameter import OrderedParameter
 # Construction and Validation Tests
 # ============================================================================
 
+
 def test_ordered_dimension_basic_construction():
     """Test basic OrderedParameter construction."""
     dim = OrderedParameter("SIMD", (1, 2, 4, 8, 16))
@@ -76,6 +77,7 @@ def test_ordered_dimension_converts_list_to_tuple():
 # Positional Access Tests
 # ============================================================================
 
+
 def test_min_max():
     """Test min() and max() methods."""
     dim = OrderedParameter("SIMD", (1, 2, 4, 8, 16, 32, 64))
@@ -133,6 +135,7 @@ def test_index_of_not_found():
 # ============================================================================
 # Navigation Tests
 # ============================================================================
+
 
 def test_step_up():
     """Test step_up() navigation."""
@@ -192,7 +195,7 @@ def test_step_down_clamping():
 
     # Step beyond min
     assert dim.step_down(4, 10) == 1  # Clamped at min
-    assert dim.step_down(1, 5) == 1   # Already at min
+    assert dim.step_down(1, 5) == 1  # Already at min
 
 
 def test_step_down_zero_steps():
@@ -214,11 +217,12 @@ def test_step_down_negative_n():
 # Percentage-Based Access Tests
 # ============================================================================
 
+
 def test_at_percentage_extremes():
     """Test at_percentage() at 0.0 and 1.0."""
     dim = OrderedParameter("PE", (1, 2, 4, 8, 16))
 
-    assert dim.at_percentage(0.0) == 1   # Min
+    assert dim.at_percentage(0.0) == 1  # Min
     assert dim.at_percentage(1.0) == 16  # Max
 
 
@@ -227,18 +231,18 @@ def test_at_percentage_middle():
     dim = OrderedParameter("test", (1, 2, 4, 8, 16))  # 5 values, indices 0-4
 
     # 0.5 * 4 = 2.0 → index 2 → value 4
-    assert dim.at_percentage(0.5, rounding='natural') == 4
+    assert dim.at_percentage(0.5, rounding="natural") == 4
 
 
 def test_at_percentage_quartiles():
     """Test at_percentage() at quartile points."""
     dim = OrderedParameter("SIMD", (1, 2, 4, 8, 16))  # 5 values
 
-    assert dim.at_percentage(0.0) == 1    # 0.0 * 4 = 0
-    assert dim.at_percentage(0.25) == 2   # 0.25 * 4 = 1.0 → round(1.0) = 1
-    assert dim.at_percentage(0.5) == 4    # 0.5 * 4 = 2.0 → round(2.0) = 2
-    assert dim.at_percentage(0.75) == 8   # 0.75 * 4 = 3.0 → round(3.0) = 3
-    assert dim.at_percentage(1.0) == 16   # 1.0 * 4 = 4
+    assert dim.at_percentage(0.0) == 1  # 0.0 * 4 = 0
+    assert dim.at_percentage(0.25) == 2  # 0.25 * 4 = 1.0 → round(1.0) = 1
+    assert dim.at_percentage(0.5) == 4  # 0.5 * 4 = 2.0 → round(2.0) = 2
+    assert dim.at_percentage(0.75) == 8  # 0.75 * 4 = 3.0 → round(3.0) = 3
+    assert dim.at_percentage(1.0) == 16  # 1.0 * 4 = 4
 
 
 def test_at_percentage_rounding_natural():
@@ -246,31 +250,31 @@ def test_at_percentage_rounding_natural():
     dim = OrderedParameter("test", (10, 20, 30, 40, 50))  # 5 values, indices 0-4
 
     # Test values that round to different indices
-    assert dim.at_percentage(0.1, rounding='natural') == 10  # 0.1*4=0.4 → round=0
-    assert dim.at_percentage(0.3, rounding='natural') == 20  # 0.3*4=1.2 → round=1
-    assert dim.at_percentage(0.4, rounding='natural') == 30  # 0.4*4=1.6 → round=2
-    assert dim.at_percentage(0.6, rounding='natural') == 30  # 0.6*4=2.4 → round=2
-    assert dim.at_percentage(0.7, rounding='natural') == 40  # 0.7*4=2.8 → round=3
+    assert dim.at_percentage(0.1, rounding="natural") == 10  # 0.1*4=0.4 → round=0
+    assert dim.at_percentage(0.3, rounding="natural") == 20  # 0.3*4=1.2 → round=1
+    assert dim.at_percentage(0.4, rounding="natural") == 30  # 0.4*4=1.6 → round=2
+    assert dim.at_percentage(0.6, rounding="natural") == 30  # 0.6*4=2.4 → round=2
+    assert dim.at_percentage(0.7, rounding="natural") == 40  # 0.7*4=2.8 → round=3
 
 
 def test_at_percentage_rounding_down():
     """Test at_percentage() with floor (down) rounding."""
     dim = OrderedParameter("test", (10, 20, 30, 40, 50))  # 5 values
 
-    assert dim.at_percentage(0.1, rounding='down') == 10  # 0.1*4=0.4 → floor=0
-    assert dim.at_percentage(0.3, rounding='down') == 20  # 0.3*4=1.2 → floor=1
-    assert dim.at_percentage(0.7, rounding='down') == 30  # 0.7*4=2.8 → floor=2
-    assert dim.at_percentage(0.9, rounding='down') == 40  # 0.9*4=3.6 → floor=3
+    assert dim.at_percentage(0.1, rounding="down") == 10  # 0.1*4=0.4 → floor=0
+    assert dim.at_percentage(0.3, rounding="down") == 20  # 0.3*4=1.2 → floor=1
+    assert dim.at_percentage(0.7, rounding="down") == 30  # 0.7*4=2.8 → floor=2
+    assert dim.at_percentage(0.9, rounding="down") == 40  # 0.9*4=3.6 → floor=3
 
 
 def test_at_percentage_rounding_up():
     """Test at_percentage() with ceil (up) rounding."""
     dim = OrderedParameter("test", (10, 20, 30, 40, 50))  # 5 values
 
-    assert dim.at_percentage(0.1, rounding='up') == 20  # 0.1*4=0.4 → ceil=1
-    assert dim.at_percentage(0.3, rounding='up') == 30  # 0.3*4=1.2 → ceil=2
-    assert dim.at_percentage(0.7, rounding='up') == 40  # 0.7*4=2.8 → ceil=3
-    assert dim.at_percentage(0.9, rounding='up') == 50  # 0.9*4=3.6 → ceil=4
+    assert dim.at_percentage(0.1, rounding="up") == 20  # 0.1*4=0.4 → ceil=1
+    assert dim.at_percentage(0.3, rounding="up") == 30  # 0.3*4=1.2 → ceil=2
+    assert dim.at_percentage(0.7, rounding="up") == 40  # 0.7*4=2.8 → ceil=3
+    assert dim.at_percentage(0.9, rounding="up") == 50  # 0.9*4=3.6 → ceil=4
 
 
 def test_at_percentage_exact_values():
@@ -278,10 +282,10 @@ def test_at_percentage_exact_values():
     dim = OrderedParameter("test", (10, 20, 30, 40))  # 4 values, indices 0-3
 
     # Exact index values (should give same result for all rounding modes)
-    assert dim.at_percentage(0.0) == 10   # 0.0*3=0
-    assert dim.at_percentage(1/3) == 20   # 0.333*3=1.0
-    assert dim.at_percentage(2/3) == 30   # 0.666*3=2.0
-    assert dim.at_percentage(1.0) == 40   # 1.0*3=3
+    assert dim.at_percentage(0.0) == 10  # 0.0*3=0
+    assert dim.at_percentage(1 / 3) == 20  # 0.333*3=1.0
+    assert dim.at_percentage(2 / 3) == 30  # 0.666*3=2.0
+    assert dim.at_percentage(1.0) == 40  # 1.0*3=3
 
 
 def test_at_percentage_invalid_percentage():
@@ -300,7 +304,7 @@ def test_at_percentage_invalid_rounding():
     dim = OrderedParameter("test", (1, 2, 4, 8))
 
     with pytest.raises(ValueError, match="Invalid rounding mode"):
-        dim.at_percentage(0.5, rounding='invalid')
+        dim.at_percentage(0.5, rounding="invalid")
 
 
 def test_at_percentage_single_value():
@@ -316,6 +320,7 @@ def test_at_percentage_single_value():
 # ============================================================================
 # Iteration Tests
 # ============================================================================
+
 
 def test_len():
     """Test __len__() method."""
@@ -358,6 +363,7 @@ def test_validate():
 # Display Tests
 # ============================================================================
 
+
 def test_repr_short():
     """Test __repr__() for short value lists."""
     dim = OrderedParameter("PE", (1, 2, 4, 8))
@@ -385,6 +391,7 @@ def test_repr_with_default():
 # Edge Cases
 # ============================================================================
 
+
 def test_single_value_dimension():
     """Test dimension with single value."""
     dim = OrderedParameter("test", (42,))
@@ -407,8 +414,8 @@ def test_two_value_dimension():
     assert dim.step_up(1, 1) == 10
     assert dim.step_down(10, 1) == 1
     assert dim.at_percentage(0.0) == 1
-    assert dim.at_percentage(0.5, rounding='down') == 1   # 0.5*1=0.5 → floor=0
-    assert dim.at_percentage(0.5, rounding='up') == 10    # 0.5*1=0.5 → ceil=1
+    assert dim.at_percentage(0.5, rounding="down") == 1  # 0.5*1=0.5 → floor=0
+    assert dim.at_percentage(0.5, rounding="up") == 10  # 0.5*1=0.5 → ceil=1
     assert dim.at_percentage(1.0) == 10
 
 

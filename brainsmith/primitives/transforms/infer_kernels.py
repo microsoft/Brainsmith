@@ -135,7 +135,7 @@ class InferKernels(Transformation):
                     logger.debug(f"Inferring {kernel_name} (legacy) via metadata lookup")
 
                     # Use attached registry name (fallback to __name__ for non-registered classes)
-                    registry_name = getattr(kernel_cls, '__registry_name__', kernel_cls.__name__)
+                    registry_name = getattr(kernel_cls, "__registry_name__", kernel_cls.__name__)
 
                     try:
                         transform_cls = get_kernel_infer(registry_name)
@@ -153,10 +153,7 @@ class InferKernels(Transformation):
                     graph_modified = graph_modified or modified
 
             except Exception as e:
-                logger.warning(
-                    f"Failed to infer {kernel_name}: {e}",
-                    exc_info=True
-                )
+                logger.warning(f"Failed to infer {kernel_name}: {e}", exc_info=True)
                 # Continue with other kernels (don't fail entire transform)
 
         return (model, graph_modified)

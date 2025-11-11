@@ -21,7 +21,7 @@ class TestDesignSpaceCombinationLimits:
             model_path=str(simple_onnx_model),
             steps=["step1", "step2", "step3", "step4", "step5"],
             kernel_backends=[],
-            max_combinations=100
+            max_combinations=100,
         )
         # Should not raise - linear space has 1 combination
         assert design_space is not None
@@ -36,11 +36,11 @@ class TestDesignSpaceCombinationLimits:
                 ["opt1", "opt2"],  # 2 options
                 "step3",
                 ["opt_a", "opt_b", "opt_c"],  # 3 options
-                "step5"
+                "step5",
                 # Total: 2 * 3 = 6 combinations
             ],
             kernel_backends=[],
-            max_combinations=100
+            max_combinations=100,
         )
         assert design_space is not None
 
@@ -57,7 +57,7 @@ class TestDesignSpaceCombinationLimits:
                     # Total: 4^3 = 64 combinations
                 ],
                 kernel_backends=[],
-                max_combinations=50  # Limit: 50
+                max_combinations=50,  # Limit: 50
             )
 
     @pytest.mark.fast
@@ -67,12 +67,12 @@ class TestDesignSpaceCombinationLimits:
         design_space = GlobalDesignSpace(
             model_path=str(simple_onnx_model),
             steps=[
-                ["opt1", "opt2"],           # 2
-                ["opt_a", "opt_b", "opt_c"], # 3
-                ["final1", "final2"]        # 2
+                ["opt1", "opt2"],  # 2
+                ["opt_a", "opt_b", "opt_c"],  # 3
+                ["final1", "final2"],  # 2
             ],
             kernel_backends=[],
-            max_combinations=20
+            max_combinations=20,
         )
         assert design_space is not None
 
@@ -80,12 +80,12 @@ class TestDesignSpaceCombinationLimits:
         design_space_at_limit = GlobalDesignSpace(
             model_path=str(simple_onnx_model),
             steps=[
-                ["opt1", "opt2"],           # 2
-                ["opt_a", "opt_b", "opt_c"], # 3
-                ["final1", "final2"]        # 2
+                ["opt1", "opt2"],  # 2
+                ["opt_a", "opt_b", "opt_c"],  # 3
+                ["final1", "final2"],  # 2
             ],
             kernel_backends=[],
-            max_combinations=12  # Exactly 12 combinations
+            max_combinations=12,  # Exactly 12 combinations
         )
         assert design_space_at_limit is not None
 
@@ -94,10 +94,10 @@ class TestDesignSpaceCombinationLimits:
             GlobalDesignSpace(
                 model_path=str(simple_onnx_model),
                 steps=[
-                    ["opt1", "opt2"],           # 2
-                    ["opt_a", "opt_b", "opt_c"], # 3
-                    ["final1", "final2"]        # 2
+                    ["opt1", "opt2"],  # 2
+                    ["opt_a", "opt_b", "opt_c"],  # 3
+                    ["final1", "final2"],  # 2
                 ],
                 kernel_backends=[],
-                max_combinations=11  # 11 < 12
+                max_combinations=11,  # 11 < 12
             )

@@ -15,6 +15,7 @@ from tests.support.constants import (
 
 # Configuration Fixtures
 
+
 @pytest.fixture
 def blueprint_config() -> DSEConfig:
     """Create a basic DSEConfig for testing.
@@ -23,9 +24,7 @@ def blueprint_config() -> DSEConfig:
         DSEConfig with test defaults
     """
     return DSEConfig(
-        clock_ns=DSE_DEFAULT_CLOCK_PERIOD_NS,
-        output=OutputType.ESTIMATES,
-        board="test_board"
+        clock_ns=DSE_DEFAULT_CLOCK_PERIOD_NS, output=OutputType.ESTIMATES, board="test_board"
     )
 
 
@@ -42,11 +41,12 @@ def base_finn_config() -> dict:
         "board": "test_board",
         "shell_flow_type": "test_flow",
         "generate_outputs": ["estimates"],
-        "folding_config_file": None
+        "folding_config_file": None,
     }
 
 
 # Design Space Fixtures
+
 
 @pytest.fixture
 def simple_design_space(simple_onnx_model) -> GlobalDesignSpace:
@@ -61,12 +61,8 @@ def simple_design_space(simple_onnx_model) -> GlobalDesignSpace:
     return GlobalDesignSpace(
         model_path=str(simple_onnx_model),
         kernel_backends=[],
-        steps=[
-            "test_step",
-            "test_step1",
-            "test_step2"
-        ],
-        max_combinations=DSE_DEFAULT_MAX_COMBINATIONS
+        steps=["test_step", "test_step1", "test_step2"],
+        max_combinations=DSE_DEFAULT_MAX_COMBINATIONS,
     )
 
 
@@ -85,14 +81,17 @@ def branching_design_space(simple_onnx_model) -> GlobalDesignSpace:
     return GlobalDesignSpace(
         model_path=str(simple_onnx_model),
         kernel_backends=[
-            ("TestKernel", [get_backend("custom:TestKernel_hls"), get_backend("custom:TestKernel_rtl")])
+            (
+                "TestKernel",
+                [get_backend("custom:TestKernel_hls"), get_backend("custom:TestKernel_rtl")],
+            )
         ],
         steps=[
             "test_step",
             ["test_step1", "test_step2"],  # Branch point
-            "test_step3"
+            "test_step3",
         ],
-        max_combinations=DSE_DEFAULT_MAX_COMBINATIONS
+        max_combinations=DSE_DEFAULT_MAX_COMBINATIONS,
     )
 
 
@@ -111,15 +110,18 @@ def multi_branch_design_space(simple_onnx_model) -> GlobalDesignSpace:
     return GlobalDesignSpace(
         model_path=str(simple_onnx_model),
         kernel_backends=[
-            ("TestKernel", [get_backend("custom:TestKernel_hls"), get_backend("custom:TestKernel_rtl")]),
-            ("TestKernel2", [get_backend("custom:TestKernel2_hls")])
+            (
+                "TestKernel",
+                [get_backend("custom:TestKernel_hls"), get_backend("custom:TestKernel_rtl")],
+            ),
+            ("TestKernel2", [get_backend("custom:TestKernel2_hls")]),
         ],
         steps=[
             "test_step",
             ["test_step1", "test_step2"],  # First branch
             "test_step3",
             ["~", "test_step"],  # Second branch with skip option
-            "test_step2"
+            "test_step2",
         ],
-        max_combinations=DSE_DEFAULT_MAX_COMBINATIONS
+        max_combinations=DSE_DEFAULT_MAX_COMBINATIONS,
     )

@@ -34,16 +34,12 @@ from brainsmith.registry import step  # noqa: E402
 
 # === Conversion Steps ===
 
-@step(name='qonnx_to_finn')
+
+@step(name="qonnx_to_finn")
 def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
     """Convert QONNX to FINN opset."""
 
-    for transform in [
-        ExpandNorms(),
-        FoldConstants(),
-        ConvertDivToMul(),
-        ConvertQONNXtoFINN()
-    ]:
+    for transform in [ExpandNorms(), FoldConstants(), ConvertDivToMul(), ConvertQONNXtoFINN()]:
         model = model.transform(transform)
 
     return model
@@ -51,7 +47,8 @@ def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
 
 # === Hardware Steps ===
 
-@step(name='specialize_layers')
+
+@step(name="specialize_layers")
 def specialize_layers_step(model: Any, cfg: Any) -> Any:
     """Specialize hardware layers using registry-based backend discovery."""
 
@@ -65,11 +62,7 @@ def specialize_layers_step(model: Any, cfg: Any) -> Any:
     # Run FINN's step_specialize_layers as catch-all for any remaining ops
     # model = step_specialize_layers(model, cfg)
 
-    for transform in [
-        GiveUniqueNodeNames(),
-        InferShapes(),
-        InferDataTypes()
-    ]:
+    for transform in [GiveUniqueNodeNames(), InferShapes(), InferDataTypes()]:
         model = model.transform(transform)
 
     return model
@@ -77,7 +70,8 @@ def specialize_layers_step(model: Any, cfg: Any) -> Any:
 
 # === Optimization Steps ===
 
-@step(name='constrain_folding_and_set_pumped_compute')
+
+@step(name="constrain_folding_and_set_pumped_compute")
 def constrain_folding_and_set_pumped_compute_step(model, cfg):
     """Apply optimizations including folding constraints and pumped compute."""
     for transform in [TempShuffleFixer(), SetPumpedCompute()]:

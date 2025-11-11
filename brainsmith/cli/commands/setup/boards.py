@@ -30,8 +30,9 @@ def _show_board_summary(boards_by_repo: dict[str, list[str]], title: str) -> Non
                     console.print(f"        • {board}")
 
 
-def _handle_existing_boards(board_mgr: "BoardManager", requested_repos: list[str],
-                           verbose: bool, force: bool) -> bool:
+def _handle_existing_boards(
+    board_mgr: "BoardManager", requested_repos: list[str], verbose: bool, force: bool
+) -> bool:
     """Handle the case where boards are already downloaded.
 
     Args:
@@ -84,8 +85,18 @@ def _handle_existing_boards(board_mgr: "BoardManager", requested_repos: list[str
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--force", "-f", is_flag=True, help="Force redownload even if already present")
 @click.option("--remove", is_flag=True, help="Remove board definition files")
-@click.option("--repo", "-r", multiple=True, help="Specific repository to download (e.g., xilinx, avnet). Downloads all if not specified.")
-@click.option("--verbose", "-v", is_flag=True, help="Show detailed list of all board definitions by repository")
+@click.option(
+    "--repo",
+    "-r",
+    multiple=True,
+    help="Specific repository to download (e.g., xilinx, avnet). Downloads all if not specified.",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Show detailed list of all board definitions by repository",
+)
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompts")
 @click.pass_obj
 def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool) -> None:
@@ -110,11 +121,15 @@ def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool
             if invalid_repos:
                 error_exit(
                     f"Unknown board repositories: {', '.join(invalid_repos)}",
-                    details=["Available repositories: avnet, xilinx, rfsoc4x2, kv260, aupzu3, pynq-z1, pynq-z2"]
+                    details=[
+                        "Available repositories: avnet, xilinx, rfsoc4x2, kv260, aupzu3, pynq-z1, pynq-z2"
+                    ],
                 )
             repos_to_remove = [r for r in valid_repos if r in existing_repos]
             if not repos_to_remove:
-                warning(f"None of the specified repositories are installed: {', '.join(valid_repos)}")
+                warning(
+                    f"None of the specified repositories are installed: {', '.join(valid_repos)}"
+                )
                 return
         else:
             repos_to_remove = existing_repos
@@ -149,7 +164,9 @@ def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool
         if invalid_repos:
             error_exit(
                 f"Unknown board repositories: {', '.join(invalid_repos)}",
-                details=["Available repositories: avnet, xilinx, rfsoc4x2, kv260, aupzu3, pynq-z1, pynq-z2"]
+                details=[
+                    "Available repositories: avnet, xilinx, rfsoc4x2, kv260, aupzu3, pynq-z1, pynq-z2"
+                ],
             )
         repos_to_download = valid_repos
     else:
@@ -158,9 +175,11 @@ def boards(ctx, force: bool, remove: bool, repo: tuple, verbose: bool, yes: bool
     if not _handle_existing_boards(board_mgr, repos_to_download, verbose, force):
         return
 
-    description = (f"Downloading {len(repos_to_download)} board repositories..."
-                  if repos_to_download
-                  else "Downloading board definition files...")
+    description = (
+        f"Downloading {len(repos_to_download)} board repositories..."
+        if repos_to_download
+        else "Downloading board definition files..."
+    )
 
     with progress_spinner(description, no_progress=ctx.no_progress):
         try:

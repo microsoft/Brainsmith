@@ -26,14 +26,14 @@ class ThresholdingAxi(KernelOp):
         attrs = super().get_nodeattr_types()
 
         kernel_attrs = {
-            "inputDataType": ('s', True, ""),
-            "weightDataType": ('s', True, ""),
-            "outputDataType": ('s', True, ""),
-            "CHANNELS": ('i', True, 0),
-            "PE": ('i', True, 0),
-            "runtime_writeable_weights": ('b', False, True),
+            "inputDataType": ("s", True, ""),
+            "weightDataType": ("s", True, ""),
+            "outputDataType": ("s", True, ""),
+            "CHANNELS": ("i", True, 0),
+            "PE": ("i", True, 0),
+            "runtime_writeable_weights": ("b", False, True),
             # Backend selection attribute
-            "preferred_impl_style": ('s', False, "rtl"),
+            "preferred_impl_style": ("s", False, "rtl"),
         }
         attrs.update(kernel_attrs)
 
@@ -51,11 +51,7 @@ class ThresholdingAxi(KernelOp):
         input_def = InputDefinition(
             name="input",
             datatype_constraints=[
-                DatatypeConstraintGroup(
-                    base_type="ANY",
-                    min_width=1,
-                    max_width=32
-                ),
+                DatatypeConstraintGroup(base_type="ANY", min_width=1, max_width=32),
             ],
             block_tiling=["CHANNELS"],
             stream_tiling=["PE"],
@@ -63,23 +59,14 @@ class ThresholdingAxi(KernelOp):
         kernel_def.add_input(input_def)
 
         # AXI-Lite weight interfaces as input definitions
-        input_def = InputDefinition(
-            name="weight",
-            datatype_constraints=[
-            ],
-            is_weight=True
-        )
+        input_def = InputDefinition(name="weight", datatype_constraints=[], is_weight=True)
         kernel_def.add_input(input_def)
 
         # Output definitions
         output_def = OutputDefinition(
             name="output",
             datatype_constraints=[
-                DatatypeConstraintGroup(
-                    base_type="ANY",
-                    min_width=1,
-                    max_width=32
-                ),
+                DatatypeConstraintGroup(base_type="ANY", min_width=1, max_width=32),
             ],
         )
         kernel_def.add_output(output_def)

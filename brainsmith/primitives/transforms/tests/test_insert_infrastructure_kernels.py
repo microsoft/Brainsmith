@@ -38,7 +38,7 @@ def make_fanout_model():
         "test_fanout",
         [inp],
         [outp0, outp1],
-        value_info=[tensor_x]  # Include intermediate tensor
+        value_info=[tensor_x],  # Include intermediate tensor
     )
 
     model = helper.make_model(graph, producer_name="test")

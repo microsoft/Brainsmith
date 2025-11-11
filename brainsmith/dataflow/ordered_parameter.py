@@ -60,7 +60,7 @@ class OrderedParameter:
 
         # Ensure tuple (not list)
         if not isinstance(self.values, tuple):
-            object.__setattr__(self, 'values', tuple(self.values))
+            object.__setattr__(self, "values", tuple(self.values))
 
         # Validate sorted
         if self.values != tuple(sorted(self.values)):
@@ -74,9 +74,7 @@ class OrderedParameter:
             # Find duplicates efficiently (O(n) instead of O(n²))
             seen = set()
             duplicates = {v for v in self.values if v in seen or seen.add(v)}
-            raise ValueError(
-                f"OrderedParameter '{self.name}' has duplicate values: {duplicates}"
-            )
+            raise ValueError(f"OrderedParameter '{self.name}' has duplicate values: {duplicates}")
 
         # Validate default (if specified)
         if self.default is not None and self.default not in self.values:
@@ -236,9 +234,7 @@ class OrderedParameter:
     # =========================================================================
 
     def at_percentage(
-        self,
-        percentage: float,
-        rounding: Literal['natural', 'down', 'up'] = 'natural'
+        self, percentage: float, rounding: Literal["natural", "down", "up"] = "natural"
     ) -> int:
         """Get value at percentage position in ordered sequence (0.0-1.0).
 
@@ -283,25 +279,22 @@ class OrderedParameter:
             40  # 1.0 * 3 = 3
         """
         if not 0.0 <= percentage <= 1.0:
-            raise ValueError(
-                f"Percentage must be in [0.0, 1.0], got {percentage}"
-            )
+            raise ValueError(f"Percentage must be in [0.0, 1.0], got {percentage}")
 
         # Map percentage to continuous index space
         max_idx = len(self.values) - 1
         float_idx = percentage * max_idx
 
         # Apply rounding strategy
-        if rounding == 'down':
+        if rounding == "down":
             idx = int(math.floor(float_idx))
-        elif rounding == 'up':
+        elif rounding == "up":
             idx = int(math.ceil(float_idx))
-        elif rounding == 'natural':
+        elif rounding == "natural":
             idx = round(float_idx)
         else:
             raise ValueError(
-                f"Invalid rounding mode '{rounding}'. "
-                f"Must be 'natural', 'down', or 'up'."
+                f"Invalid rounding mode '{rounding}'. " f"Must be 'natural', 'down', or 'up'."
             )
 
         # Clamp to valid range (defensive, should be unnecessary)
@@ -340,4 +333,4 @@ class OrderedParameter:
         return f"OrderedParameter('{self.name}', {vals}{default_str})"
 
 
-__all__ = ['OrderedParameter']
+__all__ = ["OrderedParameter"]

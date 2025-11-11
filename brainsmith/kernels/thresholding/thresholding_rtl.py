@@ -31,7 +31,7 @@ from brainsmith.registry import backend
     target_kernel="brainsmith:Thresholding",
     language="rtl",
     description="RTL implementation of Thresholding",
-    author="Microsoft Corporation"
+    author="Microsoft Corporation",
 )
 class Thresholding_rtl(Thresholding, RTLBackend):
     """RTL backend for Thresholding kernel (KernelOp-based).
@@ -61,11 +61,9 @@ class Thresholding_rtl(Thresholding, RTLBackend):
             # Memory depth triggers for threshold storage
             "depth_trigger_uram": ("i", False, 0),
             "depth_trigger_bram": ("i", False, 0),
-
             # Enable uniform threshold optimization
             # (doesn't actually do anything yet, only for resource estimations)
             "uniform_thres": ("i", False, 0, {0, 1}),
-
             # Enable deep pipelining for easier timing closure
             # Setting to 0 may save FFs but otherwise leave on
             "deep_pipeline": ("i", False, 1, {0, 1}),
@@ -231,11 +229,11 @@ class Thresholding_rtl(Thresholding, RTLBackend):
         i_bitwidth = DataType[input_data_type].bitwidth()
 
         code_gen_dict["$N$"] = [str(2**o_bitwidth - 1)]  # Number of needed thresholds
-        code_gen_dict["$WT$"] = [str(wdt.bitwidth())]    # Threshold precision
-        code_gen_dict["$WI$"] = [str(i_bitwidth)]        # Input precision
-        code_gen_dict["$C$"] = [str(num_channels)]       # Number of channels
-        code_gen_dict["$BIAS$"] = [str(bias)]            # Activation bias value
-        code_gen_dict["$PE$"] = [str(pe)]                # PE
+        code_gen_dict["$WT$"] = [str(wdt.bitwidth())]  # Threshold precision
+        code_gen_dict["$WI$"] = [str(i_bitwidth)]  # Input precision
+        code_gen_dict["$C$"] = [str(num_channels)]  # Number of channels
+        code_gen_dict["$BIAS$"] = [str(bias)]  # Activation bias value
+        code_gen_dict["$PE$"] = [str(pe)]  # PE
 
         # Is input datatype signed or unsigned?
         # Thresholding core needs to know this when comparing weights to inputs
@@ -255,7 +253,7 @@ class Thresholding_rtl(Thresholding, RTLBackend):
             o_bits = math.ceil(math.log2(2**o_bitwidth + bias))
         else:
             o_bits = 1 + math.ceil(
-                math.log2(-bias if -bias >= 2**(o_bitwidth - 1) else 2**o_bitwidth + bias)
+                math.log2(-bias if -bias >= 2 ** (o_bitwidth - 1) else 2**o_bitwidth + bias)
             )
         code_gen_dict["$O_BITS$"] = [str(int(o_bits))]
 
@@ -331,10 +329,7 @@ class Thresholding_rtl(Thresholding, RTLBackend):
             code_gen_line = "\n".join(code_gen_dict[key])
             template_wrapper = template_wrapper.replace(key, code_gen_line)
 
-        with open(
-            os.path.join(code_gen_dir, self.get_nodeattr("gen_top_module") + ".v"),
-            "w"
-        ) as f:
+        with open(os.path.join(code_gen_dir, self.get_nodeattr("gen_top_module") + ".v"), "w") as f:
             f.write(template_wrapper)
 
         # Copy RTL source files
@@ -365,9 +360,10 @@ class Thresholding_rtl(Thresholding, RTLBackend):
             for inputs in node.input:
                 # First input is data, second is thresholds
                 if in_ind == 0:
-                    assert str(context[inputs].dtype) in ["float32", "float16"], (
-                        "Input datatype is not float32 or float16 as expected."
-                    )
+                    assert str(context[inputs].dtype) in [
+                        "float32",
+                        "float16",
+                    ], "Input datatype is not float32 or float16 as expected."
 
                     expected_inp_shape = self.get_folded_input_shape()
                     reshaped_input = context[inputs].reshape(expected_inp_shape)
@@ -381,10 +377,7 @@ class Thresholding_rtl(Thresholding, RTLBackend):
 
                     # Make copy before saving
                     reshaped_input = reshaped_input.copy()
-                    np.save(
-                        os.path.join(code_gen_dir, f"input_{in_ind}.npy"),
-                        reshaped_input
-                    )
+                    np.save(os.path.join(code_gen_dir, f"input_{in_ind}.npy"), reshaped_input)
 
                 elif in_ind > 2:
                     raise Exception("Unexpected input found for Thresholding_rtl")
@@ -393,9 +386,7 @@ class Thresholding_rtl(Thresholding, RTLBackend):
 
             sim = self.get_rtlsim()
             nbits = self.get_instream_width()
-            rtlsim_inp = npy_to_rtlsim_input(
-                f"{code_gen_dir}/input_0.npy", export_idt, nbits
-            )
+            rtlsim_inp = npy_to_rtlsim_input(f"{code_gen_dir}/input_0.npy", export_idt, nbits)
 
             io_dict = {
                 "inputs": {"in0": rtlsim_inp},
@@ -426,9 +417,7 @@ class Thresholding_rtl(Thresholding, RTLBackend):
             context[node.output[0]] = output
 
         else:
-            raise Exception(
-                f"Invalid exec_mode: {mode}. Must be 'cppsim' or 'rtlsim'"
-            )
+            raise Exception(f"Invalid exec_mode: {mode}. Must be 'cppsim' or 'rtlsim'")
 
     def code_generation_ipi(self):
         """Constructs and returns TCL commands for node instantiation as RTL block."""
@@ -533,7 +522,7 @@ class Thresholding_rtl(Thresholding, RTLBackend):
 
             width_padded = roundup_to_integer_multiple(thresholds.shape[1], 2**o_bitwidth)
             thresh_padded = np.zeros((thresholds.shape[0], width_padded))
-            thresh_padded[:thresholds.shape[0], :n_thres_steps] = thresholds
+            thresh_padded[: thresholds.shape[0], :n_thres_steps] = thresholds
             thresh_stream = []
             bw_hexdigit = roundup_to_integer_multiple(wdt.bitwidth(), 32)
             padding = np.zeros(width_padded, dtype=np.int32)
@@ -565,9 +554,7 @@ class Thresholding_rtl(Thresholding, RTLBackend):
             # Add dummy dimension as final dimension (gets packed)
             t_expand = np.expand_dims(thresholds, axis=-1)
             bw_hexdigit = roundup_to_integer_multiple(wdt.bitwidth(), 4)
-            t_packed = pack_innermost_dim_as_hex_string(
-                t_expand, wdt, bw_hexdigit, prefix=""
-            )
+            t_packed = pack_innermost_dim_as_hex_string(t_expand, wdt, bw_hexdigit, prefix="")
 
             # If single threshold value found, broadcast
             if t_packed.shape[0] == 1:

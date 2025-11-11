@@ -101,4 +101,3 @@ class InferThresholdingAxi(Transformation):
                 graph_modified = True
 
         return (model, graph_modified)
-

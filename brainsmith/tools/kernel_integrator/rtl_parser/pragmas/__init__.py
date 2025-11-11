@@ -24,23 +24,23 @@ from .source import IncludeRTLPragma, TopModulePragma
 
 __all__ = [
     # Base classes
-    'Pragma',
-    'InterfacePragma',
-    'PragmaError',
+    "Pragma",
+    "InterfacePragma",
+    "PragmaError",
     # Source pragmas
-    'TopModulePragma',
-    'IncludeRTLPragma',
+    "TopModulePragma",
+    "IncludeRTLPragma",
     # Interface pragmas
-    'DatatypeConstraintPragma',
-    'DatatypePragma',
-    'WeightPragma',
+    "DatatypeConstraintPragma",
+    "DatatypePragma",
+    "WeightPragma",
     # Parameter pragmas
-    'AliasPragma',
-    'DerivedParameterPragma',
-    'AxiLiteParamPragma',
+    "AliasPragma",
+    "DerivedParameterPragma",
+    "AxiLiteParamPragma",
     # Dimension pragmas
-    'BDimPragma',
-    'SDimPragma',
+    "BDimPragma",
+    "SDimPragma",
     # Relationship pragmas
-    'RelationshipPragma',
+    "RelationshipPragma",
 ]

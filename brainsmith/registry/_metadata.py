@@ -23,6 +23,7 @@ class ComponentType(Enum):
         BACKEND: HLS or RTL backend implementation
         STEP: Pipeline transformation step
     """
+
     KERNEL = auto()
     BACKEND = auto()
     STEP = auto()
@@ -32,7 +33,7 @@ class ComponentType(Enum):
         return self.name.lower()
 
     @classmethod
-    def from_string(cls, s: str) -> 'ComponentType':
+    def from_string(cls, s: str) -> "ComponentType":
         """Parse component type from string.
 
         Args:
@@ -53,11 +54,8 @@ class ComponentType(Enum):
         try:
             return cls[s.upper()]
         except KeyError:
-            valid = ', '.join([t.name.lower() for t in cls])
-            raise ValueError(
-                f"Invalid component type: '{s}'. "
-                f"Must be one of: {valid}"
-            )
+            valid = ", ".join([t.name.lower() for t in cls])
+            raise ValueError(f"Invalid component type: '{s}'. " f"Must be one of: {valid}")
 
 
 @dataclass
@@ -68,6 +66,7 @@ class ImportSpec:
         module: Python module path (e.g., 'brainsmith.kernels.layernorm')
         attr: Attribute name in module (e.g., 'LayerNorm')
     """
+
     module: str
     attr: str
 
@@ -90,6 +89,7 @@ class ComponentMetadata:
         backend_target: Target kernel name (backends only)
         backend_language: Implementation language 'hls' or 'rtl' (backends only)
     """
+
     name: str
     source: str
     component_type: ComponentType
@@ -116,6 +116,7 @@ class ComponentMetadata:
 # Metadata Helper Functions
 # ============================================================================
 
+
 def resolve_lazy_class(spec: type | dict[str, str] | None) -> type | None:
     """Resolve lazy class import spec to actual class.
 
@@ -140,9 +141,10 @@ def resolve_lazy_class(spec: type | dict[str, str] | None) -> type | None:
     if spec is None:
         return None
 
-    if isinstance(spec, dict) and 'module' in spec:
+    if isinstance(spec, dict) and "module" in spec:
         import importlib
-        module = importlib.import_module(spec['module'])
-        return getattr(module, spec['class_name'])
+
+        module = importlib.import_module(spec["module"])
+        return getattr(module, spec["class_name"])
 
     return spec

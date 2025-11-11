@@ -63,7 +63,7 @@ target_clk_ns = 10
 
 
 class QOnnxQuantizeNodeConfig:
-    def __init__(self, scale = 1.0, zeropt = 0, bitwidth = 8, narrow=0, signed=1, rounding_mode="ROUND"):
+    def __init__(self, scale=1.0, zeropt=0, bitwidth=8, narrow=0, signed=1, rounding_mode="ROUND"):
         self.narrow = narrow
         self.signed = signed
         self.rounding_mode = rounding_mode
@@ -71,24 +71,29 @@ class QOnnxQuantizeNodeConfig:
         self.zeropt = zeropt
         self.bitwidth = bitwidth
 
+
 def make_quant_node(name, inp, outp, qconfig):
     return helper.make_node(
-            'Quant',
-            domain='qonnx.custom_op.general',
-            inputs=[inp.name, f'{name}_quant_scale', f'{name}_quant_zeropt', f'{name}_quant_bitwidth'],
-            outputs=[outp.name],
-            narrow=qconfig.narrow,
-            signed=qconfig.signed,
-            rounding_mode=qconfig.rounding_mode,
-            name=f'{name}QuantNode',
+        "Quant",
+        domain="qonnx.custom_op.general",
+        inputs=[inp.name, f"{name}_quant_scale", f"{name}_quant_zeropt", f"{name}_quant_bitwidth"],
+        outputs=[outp.name],
+        narrow=qconfig.narrow,
+        signed=qconfig.signed,
+        rounding_mode=qconfig.rounding_mode,
+        name=f"{name}QuantNode",
     )
+
 
 def get_tensorinfo_shape(itensor):
     return [dim.dim_value for dim in itensor.type.tensor_type.shape.dim]
 
+
 def add_quant_node_to_tensor(model, name, itensor, qconfig, as_consumer=True):
     # Create a tensor output for the new quantize node
-    ntensor = helper.make_tensor_value_info(f"{name}_quant_0", TensorProto.FLOAT, get_tensorinfo_shape(itensor))
+    ntensor = helper.make_tensor_value_info(
+        f"{name}_quant_0", TensorProto.FLOAT, get_tensorinfo_shape(itensor)
+    )
 
     # Create the new quantize node
     if as_consumer:
@@ -100,7 +105,6 @@ def add_quant_node_to_tensor(model, name, itensor, qconfig, as_consumer=True):
     model.graph.node.append(node)
     model.graph.value_info.append(ntensor)
 
-
     # update the initializers
     model.set_initializer(node.input[1], np.asarray([qconfig.scale], dtype=np.float32))
     model.set_initializer(node.input[2], np.asarray([qconfig.zeropt], dtype=np.float32))
@@ -108,9 +112,12 @@ def add_quant_node_to_tensor(model, name, itensor, qconfig, as_consumer=True):
 
     return ntensor
 
+
 def add_quant_node_before_tensor(model, name, otensor, qconfig):
     # Create a tensor input for the new quantize node
-    itensor = helper.make_tensor_value_info(f"{name}_quant_input_0", TensorProto.FLOAT, get_tensorinfo_shape(otensor))
+    itensor = helper.make_tensor_value_info(
+        f"{name}_quant_input_0", TensorProto.FLOAT, get_tensorinfo_shape(otensor)
+    )
 
     # Create the new quantize node
     node = make_quant_node(name, itensor, otensor, qconfig)
@@ -127,7 +134,9 @@ def add_quant_node_before_tensor(model, name, otensor, qconfig):
     return itensor
 
 
-def display_errors_from_binary_operation(expected, c, a, b, a_mask=[0,0,0,0], b_mask=[0,0,0,0], c_mask=[0,0,0,0], desc=None):
+def display_errors_from_binary_operation(
+    expected, c, a, b, a_mask=[0, 0, 0, 0], b_mask=[0, 0, 0, 0], c_mask=[0, 0, 0, 0], desc=None
+):
     mismatched = np.asarray(expected != c).nonzero()
 
     a_indices = list(mismatched)
@@ -149,26 +158,27 @@ def display_errors_from_binary_operation(expected, c, a, b, a_mask=[0,0,0,0], b_
     print(f"expected: {expected[tuple(c_indices)]}")
 
 
-def make_single_rope_modelwrapper(seq_len, hidden, head_size, num_heads, idt, wdt, cos_quant, sin_quant, simd, impl_style):
-
+def make_single_rope_modelwrapper(
+    seq_len, hidden, head_size, num_heads, idt, wdt, cos_quant, sin_quant, simd, impl_style
+):
     io_shape = [1, num_heads, seq_len, head_size]
 
     # Define the input tensor
-    act_in = helper.make_tensor_value_info('act_in', onnx.TensorProto.FLOAT, io_shape)
+    act_in = helper.make_tensor_value_info("act_in", onnx.TensorProto.FLOAT, io_shape)
 
     # Define the output tensor
-    act_out = helper.make_tensor_value_info('act_out', onnx.TensorProto.FLOAT, io_shape)
+    act_out = helper.make_tensor_value_info("act_out", onnx.TensorProto.FLOAT, io_shape)
 
     # Create the graph
     graph = helper.make_graph(
-        nodes = [],
-        name = 'RopeGraph',
-        inputs = [act_in],
-        outputs = [act_out],
-        initializer = [
-            helper.make_tensor('cos_quant', onnx.TensorProto.FLOAT, cos_quant.shape, cos_quant),
-            helper.make_tensor('sin_quant', onnx.TensorProto.FLOAT, sin_quant.shape, sin_quant),
-        ]
+        nodes=[],
+        name="RopeGraph",
+        inputs=[act_in],
+        outputs=[act_out],
+        initializer=[
+            helper.make_tensor("cos_quant", onnx.TensorProto.FLOAT, cos_quant.shape, cos_quant),
+            helper.make_tensor("sin_quant", onnx.TensorProto.FLOAT, sin_quant.shape, sin_quant),
+        ],
     )
 
     # Create the QONNX model
@@ -188,23 +198,27 @@ def make_single_rope_modelwrapper(seq_len, hidden, head_size, num_heads, idt, wd
 
     # print(f"beta-alpha:{sincos_beta-sincos_alpha} qbeta-qalpha: {sincos_qbeta - sincos_qalpha} scale: {sincos_scale}, zeropt: {sincos_zeropt}")
 
-    #WQuantConfig = QOnnxQuantizeNodeConfig(scale=sincos_scale, zeropt=sincos_zeropt, narrow=1.0, bitwidth=wdt.bitwidth())
-    #cosTVI = helper.make_tensor_value_info('cos', onnx.TensorProto.FLOAT, model.get_initializer("cos").shape)
-    #sinTVI = helper.make_tensor_value_info('sin', onnx.TensorProto.FLOAT, model.get_initializer("sin").shape)
+    # WQuantConfig = QOnnxQuantizeNodeConfig(scale=sincos_scale, zeropt=sincos_zeropt, narrow=1.0, bitwidth=wdt.bitwidth())
+    # cosTVI = helper.make_tensor_value_info('cos', onnx.TensorProto.FLOAT, model.get_initializer("cos").shape)
+    # sinTVI = helper.make_tensor_value_info('sin', onnx.TensorProto.FLOAT, model.get_initializer("sin").shape)
 
-    #cos_quant = add_quant_node_to_tensor(model, "cos", cosTVI, WQuantConfig)
-    #sin_quant = add_quant_node_to_tensor(model, "sin", sinTVI, WQuantConfig)
+    # cos_quant = add_quant_node_to_tensor(model, "cos", cosTVI, WQuantConfig)
+    # sin_quant = add_quant_node_to_tensor(model, "sin", sinTVI, WQuantConfig)
 
-    cos_quant_tv = helper.make_tensor_value_info('cos_quant', onnx.TensorProto.FLOAT, cos_quant.shape)
-    sin_quant_tv = helper.make_tensor_value_info('sin_quant', onnx.TensorProto.FLOAT, sin_quant.shape)
+    cos_quant_tv = helper.make_tensor_value_info(
+        "cos_quant", onnx.TensorProto.FLOAT, cos_quant.shape
+    )
+    sin_quant_tv = helper.make_tensor_value_info(
+        "sin_quant", onnx.TensorProto.FLOAT, sin_quant.shape
+    )
 
     # Define the custom RoPE node
     rope_node = helper.make_node(
-        'RotaryEmbedding',  # Custom node name
-        [ act_quant.name,  cos_quant_tv.name, sin_quant_tv.name],  # Inputs
+        "RotaryEmbedding",  # Custom node name
+        [act_quant.name, cos_quant_tv.name, sin_quant_tv.name],  # Inputs
         #  cos_quant_otensor.name, sin_quant_otensor.name],  # Inputs],
         ["act_out"],  # Outputs
-        name='CustomRoPE',
+        name="CustomRoPE",
         domain="finnbrainsmith.custom_op.fpgadataflow",
         backend="fpgadataflow",
         HiddenDimension=hidden,
@@ -230,8 +244,9 @@ def make_single_rope_modelwrapper(seq_len, hidden, head_size, num_heads, idt, wd
 
     return model
 
+
 # input image dimension
-#@pytest.mark.parametrize("idim", [[8, 8], [10, 8]])
+# @pytest.mark.parametrize("idim", [[8, 8], [10, 8]])
 # number of channels
 @pytest.mark.parametrize("seq_len", [2, 4, 32, 128])
 @pytest.mark.parametrize("head_size", [32, 64])
@@ -242,7 +257,7 @@ def make_single_rope_modelwrapper(seq_len, hidden, head_size, num_heads, idt, wd
 @pytest.mark.parametrize("idt", [DataType["INT8"], DataType["INT16"]])
 @pytest.mark.parametrize("wdt", [DataType["INT16"]])
 # execution mode
-#@pytest.mark.parametrize("mode", ["cppsim", "rtlsim"])
+# @pytest.mark.parametrize("mode", ["cppsim", "rtlsim"])
 # implementation style
 @pytest.mark.parametrize("impl_style", ["rtl"])
 @pytest.mark.fpgadataflow
@@ -252,11 +267,15 @@ def test_fpgadataflow_rope(seq_len, head_size, num_heads, idt, wdt, simd, impl_s
     hidden = head_size * num_heads
 
     if simd >= head_size:
-        pytest.skip("The current implementation does not support an SIMD == or greater than head_size. This can likely be fixed but haven't had the time to do so yet.")
+        pytest.skip(
+            "The current implementation does not support an SIMD == or greater than head_size. This can likely be fixed but haven't had the time to do so yet."
+        )
 
     assert head_size % simd == 0
+
     def is_power_of_two(n):
         return n > 0 and (n & (n - 1)) == 0
+
     assert is_power_of_two(simd)
 
     act_in = gen_finn_dt_tensor(idt, [1, num_heads, seq_len, head_size])
@@ -267,13 +286,16 @@ def test_fpgadataflow_rope(seq_len, head_size, num_heads, idt, wdt, simd, impl_s
 
     midpoint = head_size // 2
 
-    act_in1 = np.concatenate((-act_in[...,midpoint:], act_in[...,:midpoint]), axis=-1)
+    act_in1 = np.concatenate((-act_in[..., midpoint:], act_in[..., :midpoint]), axis=-1)
 
     # open onnx file and retrieve weights
     onnx_filename = get_rope_onnx_filename(10000.0, 1, num_heads, seq_len, head_size)
-    onnx_path     = "../../src/finnbrainsmith/custom_op/fpgadataflow/rotaryembedding/onnxgraphs/" + onnx_filename
-    print(f'pwd: {os.getcwd()}')
-    onnx_model    = onnx.load(onnx_path)
+    onnx_path = (
+        "../../src/finnbrainsmith/custom_op/fpgadataflow/rotaryembedding/onnxgraphs/"
+        + onnx_filename
+    )
+    print(f"pwd: {os.getcwd()}")
+    onnx_model = onnx.load(onnx_path)
 
     qonnx_model = ModelWrapper(onnx_model)
     cos = np.expand_dims(qonnx_model.get_initializer("cos_param"), 0)
@@ -290,62 +312,68 @@ def test_fpgadataflow_rope(seq_len, head_size, num_heads, idt, wdt, simd, impl_s
 
     expected = cos_mul + sin_mul
 
-    clip = 2**(idt.bitwidth()-1) - 1
+    clip = 2 ** (idt.bitwidth() - 1) - 1
     expected = np.where(expected > clip, clip, expected)
     expected = np.where(expected < -clip, -clip, expected)
     expected = np.where(expected == -0.0, 0.0, expected)
     input_dict = {"input": act_in}
 
-    model = make_single_rope_modelwrapper(seq_len, hidden, head_size, num_heads, idt, wdt, cos_quant, sin_quant, simd, impl_style)
+    model = make_single_rope_modelwrapper(
+        seq_len, hidden, head_size, num_heads, idt, wdt, cos_quant, sin_quant, simd, impl_style
+    )
 
-    #model.save("rope_model-before-convert-qonnx-to-finn.onnx")
-    model = model.transform(ConvertQONNXtoFINN(filter_function=default_filter_function_generator(max_multithreshold_bit_width=idt.bitwidth())))
+    # model.save("rope_model-before-convert-qonnx-to-finn.onnx")
+    model = model.transform(
+        ConvertQONNXtoFINN(
+            filter_function=default_filter_function_generator(
+                max_multithreshold_bit_width=idt.bitwidth()
+            )
+        )
+    )
     model = model.transform(absorb.AbsorbSignBiasIntoMultiThreshold())
     model = model.transform(absorb.AbsorbAddIntoMultiThreshold())
     model.save("rope_model-after-convert-qonnx-to-finn.onnx")
 
-
-    #model.save("rope_model-before-infer-shapes.onnx")
+    # model.save("rope_model-before-infer-shapes.onnx")
     model = model.transform(InferShapes())
 
-    #model = model.transform(RoundAndClipThresholds())
-    #model.save("rope_model-before-infer-thresholding-layer.onnx")
+    # model = model.transform(RoundAndClipThresholds())
+    # model.save("rope_model-before-infer-thresholding-layer.onnx")
     model = model.transform(to_hw.InferThresholdingLayer())
     model.save("rope_model-after-infer-thresholding-layer.onnx")
 
     # Isolate fpga dataflow layers
-    #parent_model = model.transform(CreateDataflowPartition())
-    #parent_model.save('parent_model.onnx') # Debug
-    #sdp_node = parent_model.get_nodes_by_op_type("StreamingDataflowPartition")[0]
-    #sdp_node_path = getCustomOp(sdp_node).get_nodeattr("model")
-    #model = ModelWrapper(sdp_node_path)
-    #model.save('partitioned_model.onnx') # Debug
+    # parent_model = model.transform(CreateDataflowPartition())
+    # parent_model.save('parent_model.onnx') # Debug
+    # sdp_node = parent_model.get_nodes_by_op_type("StreamingDataflowPartition")[0]
+    # sdp_node_path = getCustomOp(sdp_node).get_nodeattr("model")
+    # model = ModelWrapper(sdp_node_path)
+    # model.save('partitioned_model.onnx') # Debug
 
     model = model.transform(SpecializeLayers(test_fpga_part))
     model = model.transform(GiveUniqueNodeNames())
     model.save("rope_model-after-specialize.onnx")
 
-
     # write a json SIMD configuration file
     config = {
-                "Defaults": {},
-                "Thresholding_rtl_0" : {
-                   "PE": simd,
-                   "runtime_writeable_weights": 0,
-                   "depth_trigger_uram": 0,
-                   "depth_trigger_bram": 0
-               }
-             }
+        "Defaults": {},
+        "Thresholding_rtl_0": {
+            "PE": simd,
+            "runtime_writeable_weights": 0,
+            "depth_trigger_uram": 0,
+            "depth_trigger_bram": 0,
+        },
+    }
     import json
+
     with open("simd_config.json", "w") as f:
         json.dump(config, f)
 
     model = model.transform(ApplyConfig("simd_config.json"))
 
-
     model = model.transform(SetExecMode("rtlsim"))
-    #model.set_metadata_prop('rtlsim_backend', "pyxsi")
-    #model.set_metadata_prop("exec_mode", "rtlsim")
+    # model.set_metadata_prop('rtlsim_backend', "pyxsi")
+    # model.set_metadata_prop("exec_mode", "rtlsim")
     print("prepare ip")
     model = model.transform(PrepareIP(test_fpga_part, target_clk_ns))
     print("hls synth ip")
@@ -359,15 +387,21 @@ def test_fpgadataflow_rope(seq_len, head_size, num_heads, idt, wdt, simd, impl_s
     model.save("rope_model-after-create-stitched-ip.onnx")
 
     model.set_metadata_prop("exec_mode", "rtlsim")
-    model.set_metadata_prop('rtlsim_backend', "pyverilator")
+    model.set_metadata_prop("rtlsim_backend", "pyverilator")
     input_dict = {"act_in": act_in}
     sim_output = oxe.execute_onnx(model, input_dict)
 
-    display_errors_from_binary_operation(expected, sim_output['act_out'], act_in, cos_quant, b_mask=[1,1,0,0], desc="cos-mul" )
-    display_errors_from_binary_operation(expected, sim_output['act_out'], act_in1, sin_quant, b_mask=[1,1,0,0], desc="sin-mul" )
-    display_errors_from_binary_operation(expected, sim_output['act_out'], cos_mul, sin_mul, desc="add" )
+    display_errors_from_binary_operation(
+        expected, sim_output["act_out"], act_in, cos_quant, b_mask=[1, 1, 0, 0], desc="cos-mul"
+    )
+    display_errors_from_binary_operation(
+        expected, sim_output["act_out"], act_in1, sin_quant, b_mask=[1, 1, 0, 0], desc="sin-mul"
+    )
+    display_errors_from_binary_operation(
+        expected, sim_output["act_out"], cos_mul, sin_mul, desc="add"
+    )
 
-    assert (sim_output['act_out'] == expected).all()
+    assert (sim_output["act_out"] == expected).all()
 
     op_type = "RotaryEmbedding_" + "rtl"
     model.save("rope_model-after-specialization.onnx")

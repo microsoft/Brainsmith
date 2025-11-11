@@ -78,7 +78,7 @@ def _find_project_config() -> Path | None:
         Path to config file, or None if not found
     """
     # Priority 1: Explicit project directory override
-    if project_dir_override := os.environ.get('BSMITH_PROJECT_DIR'):
+    if project_dir_override := os.environ.get("BSMITH_PROJECT_DIR"):
         project_dir = Path(project_dir_override).resolve()
         candidate = project_dir / _PROJECT_CONFIG_FILE
 
@@ -108,11 +108,7 @@ def _find_project_config() -> Path | None:
 class YamlSettingsSource(PydanticBaseSettingsSource):
     """Custom settings source for YAML files with support for project configs."""
 
-    def __init__(
-        self,
-        settings_cls: type[BaseSettings],
-        project_file: Path | None = None
-    ):
+    def __init__(self, settings_cls: type[BaseSettings], project_file: Path | None = None):
         super().__init__(settings_cls)
         self.yaml_files = []
         self.project_file_used = None  # Track which project file was actually loaded
@@ -152,7 +148,7 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
                 merged_data = deep_merge(merged_data, data)
             except yaml.YAMLError as e:
                 # Extract location info if available
-                if hasattr(e, 'problem_mark'):
+                if hasattr(e, "problem_mark"):
                     mark = e.problem_mark
                     location = f"line {mark.line + 1}, column {mark.column + 1}"
                 else:
@@ -173,7 +169,7 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
             return self._data[field_name], field_name, True
 
         # Special handling for _project_file_used
-        if field_name == '_project_file_used' and self.project_file_used:
+        if field_name == "_project_file_used" and self.project_file_used:
             return self.project_file_used, field_name, True
 
         return None, field_name, False
@@ -183,7 +179,7 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
         data = self._data.copy()
         # Include project file info for project_dir detection
         if self.project_file_used:
-            data['_project_file_used'] = self.project_file_used
+            data["_project_file_used"] = self.project_file_used
         return data
 
 
@@ -195,30 +191,25 @@ class LoggingConfig(BaseModel):
 
     # Simple (exposed in CLI)
     level: str = Field(
-        default="normal",
-        description="Console verbosity level: quiet | normal | verbose | debug"
+        default="normal", description="Console verbosity level: quiet | normal | verbose | debug"
     )
 
     # Advanced (config file only)
     finn_tools: dict[str, str] | None = Field(
         default=None,
-        description="Per-tool log levels for FINN tools (e.g., {'vivado': 'WARNING', 'hls': 'INFO'})"
+        description="Per-tool log levels for FINN tools (e.g., {'vivado': 'WARNING', 'hls': 'INFO'})",
     )
 
     suppress_patterns: list[str] | None = Field(
         default=None,
-        description="Regex patterns to suppress from console output (file logs unaffected)"
+        description="Regex patterns to suppress from console output (file logs unaffected)",
     )
 
     max_log_size_mb: int = Field(
-        default=0,
-        description="Maximum log file size in MB (0 = no rotation)"
+        default=0, description="Maximum log file size in MB (0 = no rotation)"
     )
 
-    keep_backups: int = Field(
-        default=3,
-        description="Number of rotated log backups to keep"
-    )
+    keep_backups: int = Field(default=3, description="Number of rotated log backups to keep")
 
     model_config = ConfigDict(extra="forbid")
 
@@ -234,14 +225,8 @@ class SystemConfig(BaseSettings):
     """
 
     # NOTE: bsmith_dir is now a cached property, not a configurable field
-    build_dir: Path = Field(
-        default=Path("build"),
-        description="Build directory for artifacts"
-    )
-    deps_dir: Path = Field(
-        default=Path("deps"),
-        description="Dependencies directory"
-    )
+    build_dir: Path = Field(default=Path("build"), description="Build directory for artifacts")
+    deps_dir: Path = Field(default=Path("deps"), description="Dependencies directory")
     # project_dir is computed (not user-configurable) - always set to brainsmith root
     # It's set in model_post_init as a regular attribute
     component_sources: dict[str, Path | None] = Field(
@@ -253,7 +238,7 @@ class SystemConfig(BaseSettings):
             "'project' source defaults to project_dir (supports kernels/ and steps/ subdirectories). "
             "Core namespace 'brainsmith' and entry point sources (e.g., 'finn') are "
             "loaded automatically and cannot be configured here."
-        )
+        ),
     )
     source_priority: list[str] = Field(
         default=list(DEFAULT_SOURCE_PRIORITY),
@@ -263,7 +248,7 @@ class SystemConfig(BaseSettings):
             "auto-appended if not explicitly listed. The 'custom' source (ephemeral "
             "runtime components) is always included at the end by default but can be "
             "repositioned by users."
-        )
+        ),
     )
     source_module_prefixes: dict[str, str] = Field(
         default_factory=lambda: SOURCE_MODULE_PREFIXES.copy(),
@@ -271,40 +256,30 @@ class SystemConfig(BaseSettings):
             "**DEPRECATED:** This field is no longer needed and will be removed in a future release. "
             "Source detection now uses component_sources keys directly for hierarchical prefix matching. "
             "Setting this field will emit a deprecation warning during configuration loading."
-        )
+        ),
     )
 
     # Xilinx configuration (flattened)
     xilinx_path: Path = Field(
-        default=Path("/tools/Xilinx"),
-        description="Xilinx root installation path"
+        default=Path("/tools/Xilinx"), description="Xilinx root installation path"
     )
-    xilinx_version: str = Field(
-        default="2024.2",
-        description="Xilinx tool version"
-    )
+    xilinx_version: str = Field(default="2024.2", description="Xilinx tool version")
     vivado_path: Path | None = Field(
-        default=None,
-        description="Path to Vivado (auto-detected from xilinx_path)"
+        default=None, description="Path to Vivado (auto-detected from xilinx_path)"
     )
     vitis_path: Path | None = Field(
-        default=None,
-        description="Path to Vitis (auto-detected from xilinx_path)"
+        default=None, description="Path to Vitis (auto-detected from xilinx_path)"
     )
     vitis_hls_path: Path | None = Field(
-        default=None,
-        description="Path to Vitis HLS (auto-detected from xilinx_path)"
+        default=None, description="Path to Vitis HLS (auto-detected from xilinx_path)"
     )
 
     vendor_platform_paths: str = Field(
         default="/opt/xilinx/platforms",
-        description="Vendor platform repository paths (Xilinx/Intel FPGA platforms)"
+        description="Vendor platform repository paths (Xilinx/Intel FPGA platforms)",
     )
 
-    components_strict: bool = Field(
-        default=True,
-        description="Strict component loading"
-    )
+    components_strict: bool = Field(default=True, description="Strict component loading")
 
     cache_components: bool = Field(
         default=True,
@@ -313,17 +288,16 @@ class SystemConfig(BaseSettings):
             "uses a manifest cache in .brainsmith/ to speed up startup. Cache "
             "auto-invalidates when component files are modified. Set to False to always "
             "perform eager discovery."
-        )
+        ),
     )
 
     vivado_ip_cache: Path | None = Field(
         default=None,
-        description="Vivado IP cache directory (auto-computed from build_dir if not set)"
+        description="Vivado IP cache directory (auto-computed from build_dir if not set)",
     )
 
     netron_port: int = Field(
-        default=8080,
-        description="Port for Netron neural network visualization"
+        default=8080, description="Port for Netron neural network visualization"
     )
 
     default_workers: int = Field(
@@ -331,25 +305,22 @@ class SystemConfig(BaseSettings):
         description=(
             "Default number of workers for parallel operations "
             "(exports to NUM_DEFAULT_WORKERS for FINN)"
-        )
+        ),
     )
 
     logging: LoggingConfig = Field(
         default_factory=LoggingConfig,
-        description="Logging configuration (verbosity, filters, rotation)"
+        description="Logging configuration (verbosity, filters, rotation)",
     )
 
     finn_root: Path | None = Field(
-        default=None,
-        description="FINN root directory (defaults to deps_dir/finn)"
+        default=None, description="FINN root directory (defaults to deps_dir/finn)"
     )
     finn_build_dir: Path | None = Field(
-        default=None,
-        description="FINN build directory (defaults to build_dir)"
+        default=None, description="FINN build directory (defaults to build_dir)"
     )
     finn_deps_dir: Path | None = Field(
-        default=None,
-        description="FINN dependencies directory (defaults to deps_dir)"
+        default=None, description="FINN dependencies directory (defaults to deps_dir)"
     )
 
     model_config = SettingsConfigDict(
@@ -384,11 +355,11 @@ class SystemConfig(BaseSettings):
         """
         # Extract file paths from init_settings if provided
         init_dict = init_settings()
-        project_file = init_dict.get('_project_file')
+        project_file = init_dict.get("_project_file")
 
         return (
             init_settings,  # CLI args (already resolved to CWD in load_config)
-            env_settings,   # Env vars (stay relative, resolved in model_post_init)
+            env_settings,  # Env vars (stay relative, resolved in model_post_init)
             YamlSettingsSource(settings_cls, project_file=project_file),
         )
 
@@ -514,7 +485,7 @@ class SystemConfig(BaseSettings):
                     "Source detection now uses component_sources keys directly for hierarchical prefix matching. "
                     "Please remove this field from your configuration.",
                     DeprecationWarning,
-                    stacklevel=3
+                    stacklevel=3,
                 )
                 logger.warning(
                     "DEPRECATED: source_module_prefixes in configuration. "
@@ -529,6 +500,7 @@ class SystemConfig(BaseSettings):
         """
         try:
             import brainsmith
+
             bsmith_dir = Path(brainsmith.__file__).parent.parent
 
             if not (bsmith_dir / "pyproject.toml").exists():
@@ -562,13 +534,13 @@ class SystemConfig(BaseSettings):
             ValueError: If no project can be detected
         """
         # Check for explicit project file first (e.g., from project init)
-        project_file_used = getattr(self, '_project_file_used', None)
+        project_file_used = getattr(self, "_project_file_used", None)
         if project_file_used:
             return Path(project_file_used).parent.resolve()
 
         # Then check environment variable override
-        if 'BSMITH_PROJECT_DIR' in os.environ:
-            return Path(os.environ['BSMITH_PROJECT_DIR']).resolve()
+        if "BSMITH_PROJECT_DIR" in os.environ:
+            return Path(os.environ["BSMITH_PROJECT_DIR"]).resolve()
 
         # Walk up from CWD to find config
         config_file = _find_project_config()
@@ -585,7 +557,7 @@ class SystemConfig(BaseSettings):
             f"\nCurrent directory: {Path.cwd()}"
         )
 
-    @field_validator('component_sources', mode='before')
+    @field_validator("component_sources", mode="before")
     @classmethod
     def validate_component_sources(cls, v: Any) -> dict[str, Path | None]:
         """Validate component sources and warn about reserved source names.
@@ -598,9 +570,10 @@ class SystemConfig(BaseSettings):
         cannot override reserved names.
         """
         import logging
+
         logger = logging.getLogger(__name__)
 
-        default_sources = cls.model_fields['component_sources'].default_factory()
+        default_sources = cls.model_fields["component_sources"].default_factory()
 
         if v is None or not isinstance(v, dict):
             return default_sources
@@ -665,6 +638,7 @@ class SystemConfig(BaseSettings):
             >>> # User runs: source ~/.brainsmith/env.sh
         """
         from .env_export import EnvironmentExporter
+
         env_dict = EnvironmentExporter(self).to_env_dict()
 
         script_lines = [
@@ -694,38 +668,42 @@ class SystemConfig(BaseSettings):
             script_lines.append(f'export {key}="{escaped_value}"')
 
         # Add Xilinx tool paths to PATH
-        script_lines.extend([
-            "",
-            "# Add Xilinx tools to PATH",
-            'if [ -n "$VIVADO_PATH" ]; then',
-            '    export PATH="$VIVADO_PATH/bin:$PATH"',
-            'fi',
-            "",
-            'if [ -n "$VITIS_PATH" ]; then',
-            '    export PATH="$VITIS_PATH/bin:$PATH"',
-            'fi',
-            "",
-            'if [ -n "$HLS_PATH" ]; then',
-            '    export PATH="$HLS_PATH/bin:$PATH"',
-            'fi',
-        ])
+        script_lines.extend(
+            [
+                "",
+                "# Add Xilinx tools to PATH",
+                'if [ -n "$VIVADO_PATH" ]; then',
+                '    export PATH="$VIVADO_PATH/bin:$PATH"',
+                "fi",
+                "",
+                'if [ -n "$VITIS_PATH" ]; then',
+                '    export PATH="$VITIS_PATH/bin:$PATH"',
+                "fi",
+                "",
+                'if [ -n "$HLS_PATH" ]; then',
+                '    export PATH="$HLS_PATH/bin:$PATH"',
+                "fi",
+            ]
+        )
 
         # Source Xilinx settings64.sh for complete environment
-        script_lines.extend([
-            "",
-            "# Source Xilinx tool settings for full environment",
-            "# Vitis includes Vivado, so check it first",
-            'if [ -n "$VITIS_PATH" ] && [ -f "$VITIS_PATH/settings64.sh" ]; then',
-            '    source "$VITIS_PATH/settings64.sh" 2>/dev/null',
-            'elif [ -n "$VIVADO_PATH" ] && [ -f "$VIVADO_PATH/settings64.sh" ]; then',
-            '    source "$VIVADO_PATH/settings64.sh" 2>/dev/null',
-            'fi',
-            "",
-            "# Source HLS separately (not included in Vitis)",
-            'if [ -n "$HLS_PATH" ] && [ -f "$HLS_PATH/settings64.sh" ]; then',
-            '    source "$HLS_PATH/settings64.sh" 2>/dev/null',
-            'fi',
-        ])
+        script_lines.extend(
+            [
+                "",
+                "# Source Xilinx tool settings for full environment",
+                "# Vitis includes Vivado, so check it first",
+                'if [ -n "$VITIS_PATH" ] && [ -f "$VITIS_PATH/settings64.sh" ]; then',
+                '    source "$VITIS_PATH/settings64.sh" 2>/dev/null',
+                'elif [ -n "$VIVADO_PATH" ] && [ -f "$VIVADO_PATH/settings64.sh" ]; then',
+                '    source "$VIVADO_PATH/settings64.sh" 2>/dev/null',
+                "fi",
+                "",
+                "# Source HLS separately (not included in Vitis)",
+                'if [ -n "$HLS_PATH" ] && [ -f "$HLS_PATH/settings64.sh" ]; then',
+                '    source "$HLS_PATH/settings64.sh" 2>/dev/null',
+                "fi",
+            ]
+        )
 
         output_path = Path(output_path).expanduser()
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -758,7 +736,7 @@ class SystemConfig(BaseSettings):
         """
         output_path.parent / ".brainsmith"
 
-        envrc_content = '''#!/usr/bin/env bash
+        envrc_content = """#!/usr/bin/env bash
 # Auto-generated by brainsmith
 # Enable with: direnv allow
 
@@ -785,7 +763,7 @@ fi
 
 # Source Brainsmith environment (sets all variables, sources Xilinx settings64.sh)
 source_env .brainsmith/env.sh
-'''
+"""
 
         output_path = Path(output_path).expanduser()
         output_path.write_text(envrc_content)
@@ -802,7 +780,7 @@ source_env .brainsmith/env.sh
         Returns:
             Bash code as string
         """
-        return '''# Cleanup function - removes paths matching pattern from PATH-like variable
+        return """# Cleanup function - removes paths matching pattern from PATH-like variable
 _cleanup_path_var() {
     local var_name=$1
     local pattern=$2
@@ -826,7 +804,7 @@ if [ -n "${PATH:-}" ]; then
 fi
 
 # Clean up the helper function
-unset -f _cleanup_path_var'''
+unset -f _cleanup_path_var"""
 
 
 # CLI helper for Poe task

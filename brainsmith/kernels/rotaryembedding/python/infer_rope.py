@@ -37,7 +37,7 @@ class InferRoPE(Transformation):
                 get_by_name(node.attribute, "scale").f
 
                 # Get custom attributes (not in Op by default)
-                #rope_theta = get_by_name(node).get_nodeattr("RopeTheta")
+                # rope_theta = get_by_name(node).get_nodeattr("RopeTheta")
                 # Get any needed tensor info
                 shape_in = model.get_tensor_shape(act_in)
                 idt = model.get_tensor_datatype(act_in)
@@ -45,8 +45,8 @@ class InferRoPE(Transformation):
 
                 # We assume input order [batch, seq_len, hidden_dim]
                 # TODO: Add logic to handle NCW cases
-                seq_len=shape_in[-2]
-                hidden_dim=shape_in[-1]
+                seq_len = shape_in[-2]
+                hidden_dim = shape_in[-1]
 
                 # Create node with no parallelization first
                 simd = 1
@@ -60,7 +60,7 @@ class InferRoPE(Transformation):
                     backend="fpgadataflow",
                     SequenceLength=seq_len,
                     HiddenDimension=hidden_dim,
-                    HeadDimension=hidden_dim//num_heads,
+                    HeadDimension=hidden_dim // num_heads,
                     NumHeads=num_heads,
                     simd=simd,
                     inputDataType=idt.name,

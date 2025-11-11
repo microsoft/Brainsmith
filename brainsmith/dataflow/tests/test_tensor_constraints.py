@@ -52,28 +52,24 @@ class TestTensorDimMatches:
     def test_tuple_reference_match(self):
         """Test matching against other interface dimension."""
         constraint = TensorDimMatches("parameters", -1, [1, ("input", -1)])
-        ctx = MockValidationContext({
-            "input": (1, 224, 224, 64),
-            "parameters": (64,)
-        })
+        ctx = MockValidationContext({"input": (1, 224, 224, 64), "parameters": (64,)})
         assert constraint.check(ctx) is None  # parameters[-1]=64 matches input[-1]=64
 
     def test_tuple_reference_scalar_match(self):
         """Test scalar broadcast case."""
         constraint = TensorDimMatches("parameters", -1, [1, ("input", -1)])
-        ctx = MockValidationContext({
-            "input": (1, 224, 224, 64),
-            "parameters": (1,)
-        })
+        ctx = MockValidationContext({"input": (1, 224, 224, 64), "parameters": (1,)})
         assert constraint.check(ctx) is None  # parameters[-1]=1 matches allowed value 1
 
     def test_tuple_reference_no_match(self):
         """Test rejection of wrong dimension size."""
         constraint = TensorDimMatches("parameters", -1, [1, ("input", -1)])
-        ctx = MockValidationContext({
-            "input": (1, 224, 224, 64),
-            "parameters": (32,)  # Wrong size
-        })
+        ctx = MockValidationContext(
+            {
+                "input": (1, 224, 224, 64),
+                "parameters": (32,),  # Wrong size
+            }
+        )
         error = constraint.check(ctx)
         assert error is not None
         assert "32" in error
@@ -93,10 +89,7 @@ class TestTensorDimMatches:
     def test_param_reference(self):
         """Test parameter reference resolution."""
         constraint = TensorDimMatches("input", -1, ["CHANNELS"])
-        ctx = MockValidationContext(
-            {"input": (1, 224, 224, 64)},
-            {"CHANNELS": 64}
-        )
+        ctx = MockValidationContext({"input": (1, 224, 224, 64)}, {"CHANNELS": 64})
         assert constraint.check(ctx) is None
 
     def test_interface_not_found(self):
@@ -125,7 +118,7 @@ class TestTensorDimMatches:
     def test_evaluation_phase(self):
         """Test constraint evaluates in structural phase."""
         constraint = TensorDimMatches("input", -1, [64])
-        assert constraint.evaluation_phase == 'structural'
+        assert constraint.evaluation_phase == "structural"
 
 
 class TestTensorSizeMatches:
@@ -160,28 +153,19 @@ class TestTensorSizeMatches:
     def test_tuple_reference_match(self):
         """Test matching against other interface dimension."""
         constraint = TensorSizeMatches("parameters", [1, ("input", -1)])
-        ctx = MockValidationContext({
-            "input": (1, 224, 224, 64),
-            "parameters": (64,)
-        })
+        ctx = MockValidationContext({"input": (1, 224, 224, 64), "parameters": (64,)})
         assert constraint.check(ctx) is None  # size=64 matches input[-1]=64
 
     def test_tuple_reference_scalar(self):
         """Test scalar broadcast case."""
         constraint = TensorSizeMatches("parameters", [1, ("input", -1)])
-        ctx = MockValidationContext({
-            "input": (1, 224, 224, 64),
-            "parameters": (1,)
-        })
+        ctx = MockValidationContext({"input": (1, 224, 224, 64), "parameters": (1,)})
         assert constraint.check(ctx) is None
 
     def test_param_reference(self):
         """Test parameter reference resolution."""
         constraint = TensorSizeMatches("parameters", ["NUM_PARAMS"])
-        ctx = MockValidationContext(
-            {"parameters": (64,)},
-            {"NUM_PARAMS": 64}
-        )
+        ctx = MockValidationContext({"parameters": (64,)}, {"NUM_PARAMS": 64})
         assert constraint.check(ctx) is None
 
     def test_interface_not_found(self):
@@ -202,7 +186,7 @@ class TestTensorSizeMatches:
     def test_evaluation_phase(self):
         """Test constraint evaluates in structural phase."""
         constraint = TensorSizeMatches("parameters", [64])
-        assert constraint.evaluation_phase == 'structural'
+        assert constraint.evaluation_phase == "structural"
 
 
 class TestFINNCompatibility:
@@ -213,10 +197,12 @@ class TestFINNCompatibility:
         size_constraint = TensorSizeMatches("parameters", [1, ("input", -1)])
         dim_constraint = TensorDimMatches("parameters", -1, [1, ("input", -1)])
 
-        ctx = MockValidationContext({
-            "input": (1, 224, 224, 64),
-            "parameters": (1,)  # Scalar broadcast
-        })
+        ctx = MockValidationContext(
+            {
+                "input": (1, 224, 224, 64),
+                "parameters": (1,),  # Scalar broadcast
+            }
+        )
 
         assert size_constraint.check(ctx) is None
         assert dim_constraint.check(ctx) is None
@@ -226,10 +212,12 @@ class TestFINNCompatibility:
         size_constraint = TensorSizeMatches("parameters", [1, ("input", -1)])
         dim_constraint = TensorDimMatches("parameters", -1, [1, ("input", -1)])
 
-        ctx = MockValidationContext({
-            "input": (1, 224, 224, 64),
-            "parameters": (64,)  # Per-channel
-        })
+        ctx = MockValidationContext(
+            {
+                "input": (1, 224, 224, 64),
+                "parameters": (64,),  # Per-channel
+            }
+        )
 
         assert size_constraint.check(ctx) is None
         assert dim_constraint.check(ctx) is None
@@ -239,10 +227,12 @@ class TestFINNCompatibility:
         size_constraint = TensorSizeMatches("parameters", [1, ("input", -1)])
         dim_constraint = TensorDimMatches("parameters", -1, [1, ("input", -1)])
 
-        ctx = MockValidationContext({
-            "input": (1, 224, 224, 64),
-            "parameters": (8, 8)  # Total size 64 but shape [8, 8]
-        })
+        ctx = MockValidationContext(
+            {
+                "input": (1, 224, 224, 64),
+                "parameters": (8, 8),  # Total size 64 but shape [8, 8]
+            }
+        )
 
         # Size matches (8*8=64)
         assert size_constraint.check(ctx) is None
@@ -257,10 +247,12 @@ class TestFINNCompatibility:
         size_constraint = TensorSizeMatches("parameters", [1, ("input", -1)])
         dim_constraint = TensorDimMatches("parameters", -1, [1, ("input", -1)])
 
-        ctx = MockValidationContext({
-            "input": (1, 224, 224, 64),
-            "parameters": (32,)  # Wrong size
-        })
+        ctx = MockValidationContext(
+            {
+                "input": (1, 224, 224, 64),
+                "parameters": (32,),  # Wrong size
+            }
+        )
 
         # Size doesn't match
         size_error = size_constraint.check(ctx)

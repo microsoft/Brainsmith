@@ -15,6 +15,7 @@ from qonnx.transformation.base import Transformation
 
 class SetPumpedCompute(Transformation):
     """For all MVAUs and DynMatMuls set the pumped compute attribute"""
+
     def __init__(self):
         super().__init__()
 

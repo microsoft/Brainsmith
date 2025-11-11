@@ -51,10 +51,7 @@ class Executor(Protocol):
     """
 
     def execute(
-        self,
-        op: HWCustomOp,
-        model: ModelWrapper,
-        inputs: dict[str, np.ndarray]
+        self, op: HWCustomOp, model: ModelWrapper, inputs: dict[str, np.ndarray]
     ) -> dict[str, np.ndarray]:
         """Execute backend and return outputs.
 
@@ -81,10 +78,7 @@ class PythonExecutor:
     """
 
     def execute(
-        self,
-        op: HWCustomOp,
-        model: ModelWrapper,
-        inputs: dict[str, np.ndarray]
+        self, op: HWCustomOp, model: ModelWrapper, inputs: dict[str, np.ndarray]
     ) -> dict[str, np.ndarray]:
         """Execute operator via QONNX execution (includes Quant nodes).
 
@@ -125,10 +119,7 @@ class PythonExecutor:
 
             # Execute up to and including the target operator
             return execute_onnx(
-                model,
-                inputs,
-                return_full_exec_context=False,
-                end_node=op.onnx_node
+                model, inputs, return_full_exec_context=False, end_node=op.onnx_node
             )
 
         except Exception as e:
@@ -154,10 +145,7 @@ class CppSimExecutor:
     """
 
     def execute(
-        self,
-        op: HWCustomOp,
-        model: ModelWrapper,
-        inputs: dict[str, np.ndarray]
+        self, op: HWCustomOp, model: ModelWrapper, inputs: dict[str, np.ndarray]
     ) -> dict[str, np.ndarray]:
         """Execute operator via cppsim.
 
@@ -180,6 +168,7 @@ class CppSimExecutor:
         # Verify backend type
         try:
             from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
+
             if not isinstance(op, HLSBackend):
                 pytest.skip(
                     f"{op.__class__.__name__} is not an HLS backend. "
@@ -228,10 +217,7 @@ class CppSimExecutor:
 
             # Execute up to and including the target operator
             return execute_onnx(
-                model,
-                inputs,
-                return_full_exec_context=False,
-                end_node=op.onnx_node
+                model, inputs, return_full_exec_context=False, end_node=op.onnx_node
             )
 
         except Exception as e:
@@ -246,13 +232,13 @@ class CppSimExecutor:
 
     def _ensure_kernel_ready(self, op: HWCustomOp, model: ModelWrapper) -> None:
         """Ensure kernel instance is available for code generation."""
-        if hasattr(op, 'build_design_space'):
+        if hasattr(op, "build_design_space"):
             # New KernelOp API (Brainsmith dataflow system)
             op.build_design_space(model)
-        elif hasattr(op, 'get_kernel_instance'):
+        elif hasattr(op, "get_kernel_instance"):
             # Legacy FINN API
             op.get_kernel_instance(model)
-        elif hasattr(op, 'get_kernel_model'):
+        elif hasattr(op, "get_kernel_model"):
             # Alternative legacy API
             op.get_kernel_model(model)
 
@@ -276,7 +262,7 @@ class RTLSimExecutor:
     def __init__(
         self,
         fpgapart: str = PARITY_DEFAULT_FPGA_PART_HLS,
-        clk_ns: float = PARITY_DEFAULT_CLOCK_PERIOD_NS
+        clk_ns: float = PARITY_DEFAULT_CLOCK_PERIOD_NS,
     ):
         """Initialize RTL simulator with FPGA part and clock period.
 
@@ -288,10 +274,7 @@ class RTLSimExecutor:
         self.clk_ns = clk_ns
 
     def execute(
-        self,
-        op: HWCustomOp,
-        model: ModelWrapper,
-        inputs: dict[str, np.ndarray]
+        self, op: HWCustomOp, model: ModelWrapper, inputs: dict[str, np.ndarray]
     ) -> dict[str, np.ndarray]:
         """Execute operator via rtlsim.
 
@@ -310,10 +293,10 @@ class RTLSimExecutor:
         # Check requirements
         try:
             from finn import xsi
+
             if not xsi.is_available():
                 pytest.skip(
-                    "XSI (Xilinx Simulator) not available. "
-                    "Run: python -m finn.xsi.setup"
+                    "XSI (Xilinx Simulator) not available. " "Run: python -m finn.xsi.setup"
                 )
         except ImportError:
             pytest.skip("finn.xsi module not available")
@@ -341,10 +324,12 @@ class RTLSimExecutor:
         try:
             # Ensure node has a name (required for HLS synthesis)
             from qonnx.transformation.general import GiveUniqueNodeNames
+
             model = model.transform(GiveUniqueNodeNames())
 
             # Refresh op reference after transformation
             from finn.util.basic import getHWCustomOp
+
             hw_node = model.graph.node[0]
             op = getHWCustomOp(hw_node, model)
 
@@ -385,7 +370,9 @@ class RTLSimExecutor:
             op = getHWCustomOp(hw_node, model)
 
         except Exception as e:
-            debug_dir_msg = f"1. Check {code_gen_dir} for generated HDL/HLS files\n" if code_gen_dir else ""
+            debug_dir_msg = (
+                f"1. Check {code_gen_dir} for generated HDL/HLS files\n" if code_gen_dir else ""
+            )
             pytest.fail(
                 f"rtlsim preparation failed for {op.__class__.__name__}:\n"
                 f"\n"
@@ -405,10 +392,7 @@ class RTLSimExecutor:
 
             # Execute up to and including the target operator
             return execute_onnx(
-                model,
-                inputs,
-                return_full_exec_context=False,
-                end_node=op.onnx_node
+                model, inputs, return_full_exec_context=False, end_node=op.onnx_node
             )
 
         except Exception as e:
@@ -423,18 +407,19 @@ class RTLSimExecutor:
 
     def _ensure_kernel_ready(self, op: HWCustomOp, model: ModelWrapper) -> None:
         """Ensure kernel instance is available for HDL generation."""
-        if hasattr(op, 'build_design_space'):
+        if hasattr(op, "build_design_space"):
             # New KernelOp API (Brainsmith dataflow system)
             op.build_design_space(model)
-        elif hasattr(op, 'get_kernel_instance'):
+        elif hasattr(op, "get_kernel_instance"):
             # Legacy FINN API
             op.get_kernel_instance(model)
-        elif hasattr(op, 'get_kernel_model'):
+        elif hasattr(op, "get_kernel_model"):
             # Alternative legacy API
             op.get_kernel_model(model)
 
 
 # Convenience factory
+
 
 def make_executors() -> dict[str, Executor]:
     """Create standard set of executors for common test patterns.
@@ -450,8 +435,4 @@ def make_executors() -> dict[str, Executor]:
             outputs = executor.execute(op, model, inputs)
             validator.validate(outputs, golden, backend_name, **tol)
     """
-    return {
-        "python": PythonExecutor(),
-        "cppsim": CppSimExecutor(),
-        "rtlsim": RTLSimExecutor()
-    }
+    return {"python": PythonExecutor(), "cppsim": CppSimExecutor(), "rtlsim": RTLSimExecutor()}

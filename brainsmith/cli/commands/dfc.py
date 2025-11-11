@@ -18,12 +18,22 @@ logger = logging.getLogger(__name__)
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("model", type=click.Path(exists=True, path_type=Path))
 @click.argument("blueprint", type=click.Path(exists=True, path_type=Path))
-@click.option("--output-dir", "-o", type=click.Path(path_type=Path),
-              help="Output directory (defaults to build dir with timestamp)")
-@click.option("--start-step", type=str,
-              help="Override blueprint start_step - start execution from this step (inclusive)")
-@click.option("--stop-step", type=str,
-              help="Override blueprint stop_step - stop execution at this step (inclusive)")
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output directory (defaults to build dir with timestamp)",
+)
+@click.option(
+    "--start-step",
+    type=str,
+    help="Override blueprint start_step - start execution from this step (inclusive)",
+)
+@click.option(
+    "--stop-step",
+    type=str,
+    help="Override blueprint stop_step - stop execution at this step (inclusive)",
+)
 @click.pass_obj
 def dfc(
     ctx: ApplicationContext,
@@ -31,7 +41,7 @@ def dfc(
     blueprint: Path,
     output_dir: Path | None,
     start_step: str | None,
-    stop_step: str | None
+    stop_step: str | None,
 ) -> None:
     """Create a dataflow core accelerator for neural network acceleration.
 
@@ -52,7 +62,9 @@ def dfc(
     if stop_step:
         console.print(f"Stop step: {stop_step}")
 
-    logger.info(f"Starting dataflow core creation with model={model}, blueprint={blueprint}, output_dir={output_dir}")
+    logger.info(
+        f"Starting dataflow core creation with model={model}, blueprint={blueprint}, output_dir={output_dir}"
+    )
 
     # Import DSE module only when command executes (not for --help)
     from brainsmith.dse import explore_design_space
@@ -64,7 +76,7 @@ def dfc(
             blueprint_path=str(blueprint),
             output_dir=str(output_dir) if output_dir else None,
             start_step_override=start_step,
-            stop_step_override=stop_step
+            stop_step_override=stop_step,
         )
 
         success("Dataflow core created successfully!")
@@ -79,4 +91,3 @@ def dfc(
         if logger.isEnabledFor(logging.DEBUG):
             console.print_exception()
         raise CLIError(f"Dataflow core creation failed: {e}", details=[DFC_ERROR_HINT])
-

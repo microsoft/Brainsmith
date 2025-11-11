@@ -40,9 +40,10 @@ class ExitCode(IntEnum):
 
     See: https://man.freebsd.org/cgi/man.cgi?query=sysexits
     """
-    OK = 0                # Successful termination
-    USAGE = 64            # Command line usage error
-    DATAERR = 65          # Data format error (validation)
-    SOFTWARE = 70         # Internal software error
-    CONFIG = 78           # Configuration error
-    INTERRUPTED = 130     # SIGINT (128 + 2)
+
+    OK = 0  # Successful termination
+    USAGE = 64  # Command line usage error
+    DATAERR = 65  # Data format error (validation)
+    SOFTWARE = 70  # Internal software error
+    CONFIG = 78  # Configuration error
+    INTERRUPTED = 130  # SIGINT (128 + 2)

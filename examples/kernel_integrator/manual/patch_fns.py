@@ -81,9 +81,9 @@ class Thresholding(HWCustomOp):
                 tdt = DataType.get_smallest_possible(-tdt_max - 1)
         else:
             tdt = DataType.get_smallest_possible(tdt_max)
-        assert np.vectorize(tdt.allowed)(
-            threshold_tensor
-        ).all(), "Thresholds can't be expressed with type %s" % str(tdt)
+        assert np.vectorize(tdt.allowed)(threshold_tensor).all(), (
+            "Thresholds can't be expressed with type %s" % str(tdt)
+        )
         self.set_nodeattr("weightDataType", tdt.name)
         # Update QONNX DataType of tensor for consistency
         model.set_tensor_datatype(self.onnx_node.input[1], tdt)

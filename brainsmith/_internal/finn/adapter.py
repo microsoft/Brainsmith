@@ -13,6 +13,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
 class FINNAdapter:
     """Adapter for FINN build system.
 
@@ -40,6 +41,7 @@ class FINNAdapter:
     def __init__(self):
         # Warn if environment not sourced (soft validation - let FINN errors surface naturally)
         from brainsmith.settings.validation import warn_if_environment_not_sourced
+
         warn_if_environment_not_sourced()
 
         self._check_finn_dependencies()
@@ -67,10 +69,7 @@ class FINNAdapter:
             raise RuntimeError(error_msg)
 
     def build(
-        self,
-        input_model: Path,
-        config_dict: dict[str, Any],
-        output_dir: Path
+        self, input_model: Path, config_dict: dict[str, Any], output_dir: Path
     ) -> Path | None:
         """Execute FINN build with proper path handling.
 
@@ -114,6 +113,7 @@ class FINNAdapter:
             # This prevents FINN from adding its own handlers, allowing us to control
             # all logging through the Brainsmith logging system
             from brainsmith._internal.logging import get_finn_config
+
             logging_config = get_finn_config()
             finn_config.update(logging_config)
 
@@ -168,6 +168,7 @@ class FINNAdapter:
         # Verify it's a valid ONNX file
         try:
             import onnx
+
             onnx.load(model_path)
         except Exception as e:
             raise RuntimeError(f"Invalid ONNX model at {model_path}: {e}")

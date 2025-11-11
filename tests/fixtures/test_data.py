@@ -56,9 +56,7 @@ from qonnx.util.basic import gen_finn_dt_tensor
 # ============================================================================
 
 
-def generate_test_data(
-    datatype: DataType, shape: tuple, seed: int | None = None
-) -> np.ndarray:
+def generate_test_data(datatype: DataType, shape: tuple, seed: int | None = None) -> np.ndarray:
     """Generate test data for any QONNX DataType, including FP8.
 
     Extends QONNX's gen_finn_dt_tensor() with support for FLOAT<exp,mant,bias> types.

@@ -16,11 +16,7 @@ from brainsmith.kernels.crop.crop import Crop
 from brainsmith.registry import backend
 
 
-@backend(
-    target_kernel="brainsmith:Crop",
-    language="hls",
-    author="Josh Monson"
-)
+@backend(target_kernel="brainsmith:Crop", language="hls", author="Josh Monson")
 class Crop_hls(Crop, HLSBackend):
     """HLS backend for Crop kernel (KernelOp-based).
 
@@ -60,11 +56,11 @@ class Crop_hls(Crop, HLSBackend):
     def global_includes(self):
         self.code_gen_dict["$GLOBALS$"] = [
             '#include "crop.hpp"',
-            '#include <bs_utils.hpp>',
-            '#include <ap_int.h>',
-            '#include <hls_vector.h>',
-            '#include <hls_stream.h>',
-            '#include <iostream>',
+            "#include <bs_utils.hpp>",
+            "#include <ap_int.h>",
+            "#include <hls_vector.h>",
+            "#include <hls_stream.h>",
+            "#include <iostream>",
         ]
 
     def defines(self, var):
@@ -156,7 +152,7 @@ class Crop_hls(Crop, HLSBackend):
         builder.append_includes("-I$BSMITH_DIR/deps/cnpy/")
         builder.append_includes("-I$BSMITH_DIR/deps/finn-hlslib")
         kernel_dir = os.path.dirname(os.path.abspath(__file__))
-        utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
+        utils_dir = os.path.join(os.path.dirname(kernel_dir), "utils")
         # Crop doesn't have kernel-specific HPP files, only needs utils
         builder.append_includes(f"-I{utils_dir}")
         builder.append_includes("-I{}/include".format(os.environ["VITIS_PATH"]))
@@ -198,7 +194,6 @@ class Crop_hls(Crop, HLSBackend):
         # Use uppercase SIMD for KernelOp
         self.get_nodeattr("SIMD")
 
-
         self.code_gen_dict["$DOCOMPUTE$"] = [
             f"""
             static hls::stream<TV>  in0_V;
@@ -232,7 +227,8 @@ class Crop_hls(Crop, HLSBackend):
     def ipgen_extra_includes(self):
         """Add kernel-specific include paths."""
         import os
+
         kernel_dir = os.path.dirname(os.path.abspath(__file__))
-        utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
+        utils_dir = os.path.join(os.path.dirname(kernel_dir), "utils")
         # Crop doesn't have kernel-specific HPP files, only needs utils
         return f"-I{utils_dir}"

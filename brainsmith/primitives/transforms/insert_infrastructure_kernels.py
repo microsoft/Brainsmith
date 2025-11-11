@@ -107,7 +107,7 @@ class InsertInfrastructureKernels(Transformation):
 
         for kernel_cls in self.kernel_classes:
             # Get kernel name for lookup
-            kernel_name = getattr(kernel_cls, '__name__', str(kernel_cls))
+            kernel_name = getattr(kernel_cls, "__name__", str(kernel_cls))
 
             # Look up insertion transform
             transform_cls = INFRASTRUCTURE_TRANSFORM_MAP.get(kernel_name)
@@ -138,6 +138,7 @@ def _register_builtin_transforms():
     """Register Brainsmith's built-in infrastructure transforms."""
     try:
         from .insert_duplicate_streams import InsertDuplicateStreams
+
         _register_infrastructure_transform("DuplicateStreams", InsertDuplicateStreams)
         logger.debug("Registered DuplicateStreams → InsertDuplicateStreams")
     except ImportError as e:

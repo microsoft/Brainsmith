@@ -46,6 +46,7 @@ TilingSpec = (
 # DSE Dimension Type
 # ============================================================================
 
+
 @dataclass(frozen=True)
 class ParameterSpec:
     """Explorable parameter in design space.
@@ -109,9 +110,10 @@ class ParameterSpec:
         Tiling dimensions (PE, SIMD) are ALWAYS ordered (auto-wrapped in OrderedParameter)
         since they're computed as divisors (naturally ordered sequences).
     """
+
     name: str
-    values: set[int | str] | Callable[['BuildContext'], set[int | str]]
-    type: Literal['int', 'string'] | None = None
+    values: set[int | str] | Callable[["BuildContext"], set[int | str]]
+    type: Literal["int", "string"] | None = None
     default: int | str | None = None
 
     def __post_init__(self):
@@ -154,6 +156,7 @@ class ParameterSpec:
 # Helper Functions
 # ============================================================================
 
+
 def _infer_nodeattr_type(param_spec: ParameterSpec) -> tuple[str, bool, int | str]:
     """Infer FINN nodeattr type specification from ParameterSpec.
 
@@ -191,7 +194,11 @@ def _infer_nodeattr_type(param_spec: ParameterSpec) -> tuple[str, bool, int | st
     # Use explicit type if provided (required for callables)
     if param_spec.type is not None:
         type_code = "i" if param_spec.type == "int" else "s"
-        default = param_spec.default if param_spec.default is not None else (1 if param_spec.type == "int" else "")
+        default = (
+            param_spec.default
+            if param_spec.default is not None
+            else (1 if param_spec.type == "int" else "")
+        )
         return (type_code, False, default)
 
     # Infer from first value (literal values only)
@@ -209,11 +216,15 @@ def _infer_nodeattr_type(param_spec: ParameterSpec) -> tuple[str, bool, int | st
         return ("i", False, default)
     else:
         # String parameter: use sorted first as default
-        default = param_spec.default if param_spec.default is not None else sorted(param_spec.values)[0]
+        default = (
+            param_spec.default if param_spec.default is not None else sorted(param_spec.values)[0]
+        )
         return ("s", False, default)
 
 
-def _extract_tiling_params(block_tiling: TilingSpec | None, stream_tiling: TilingSpec | None) -> list[str]:
+def _extract_tiling_params(
+    block_tiling: TilingSpec | None, stream_tiling: TilingSpec | None
+) -> list[str]:
     """Extract unique string parameters from tiling specs."""
     params = set()
     for spec in (block_tiling, stream_tiling):
@@ -351,7 +362,7 @@ class KernelSchema:
     """
 
     # ============= VALIDATION =============
-    constraints: list['Constraint'] = field(default_factory=list)
+    constraints: list["Constraint"] = field(default_factory=list)
 
     # ============= TRANSFORMATION =============
     attribute_mapping: dict[str, str] = field(default_factory=dict)

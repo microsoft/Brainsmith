@@ -54,48 +54,150 @@ VALIDATION_CASES = [
     # ========================================================================
     # Core Datatype Coverage - Height Axis Cropping
     # ========================================================================
-    ("crop_height_int4", (1, 16, 16, 32), (1, 2, 14), DataType["INT4"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
-    ("crop_height_uint4", (1, 16, 16, 32), (1, 2, 14), DataType["UINT4"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
-    ("crop_height_int8", (1, 28, 28, 64), (1, 4, 24), DataType["INT8"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
-    ("crop_height_uint8", (1, 28, 28, 64), (1, 4, 24), DataType["UINT8"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
-    ("crop_height_int16", (1, 32, 32, 128), (1, 6, 26), DataType["INT16"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
-    ("crop_height_uint16", (1, 32, 32, 128), (1, 6, 26), DataType["UINT16"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
-
+    (
+        "crop_height_int4",
+        (1, 16, 16, 32),
+        (1, 2, 14),
+        DataType["INT4"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
+    (
+        "crop_height_uint4",
+        (1, 16, 16, 32),
+        (1, 2, 14),
+        DataType["UINT4"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
+    (
+        "crop_height_int8",
+        (1, 28, 28, 64),
+        (1, 4, 24),
+        DataType["INT8"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
+    (
+        "crop_height_uint8",
+        (1, 28, 28, 64),
+        (1, 4, 24),
+        DataType["UINT8"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
+    (
+        "crop_height_int16",
+        (1, 32, 32, 128),
+        (1, 6, 26),
+        DataType["INT16"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
+    (
+        "crop_height_uint16",
+        (1, 32, 32, 128),
+        (1, 6, 26),
+        DataType["UINT16"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
     # ========================================================================
     # Core Datatype Coverage - Width Axis Cropping
     # ========================================================================
-    ("crop_width_int8", (1, 28, 28, 64), (2, 4, 24), DataType["INT8"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
-    ("crop_width_uint8", (1, 28, 28, 64), (2, 4, 24), DataType["UINT8"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
-
+    (
+        "crop_width_int8",
+        (1, 28, 28, 64),
+        (2, 4, 24),
+        DataType["INT8"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
+    (
+        "crop_width_uint8",
+        (1, 28, 28, 64),
+        (2, 4, 24),
+        DataType["UINT8"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
     # ========================================================================
     # SIMD Parallelization - Height Cropping with Different SIMD Values
     # ========================================================================
-    ("crop_height_simd8", (1, 28, 28, 64), (1, 4, 24), DataType["INT8"], DESIGN_SIMD8, PLATFORM_ZYNQ7020),
-    ("crop_height_simd16", (1, 32, 32, 64), (1, 4, 28), DataType["INT8"], DESIGN_SIMD16, PLATFORM_ZYNQ7020),
-
+    (
+        "crop_height_simd8",
+        (1, 28, 28, 64),
+        (1, 4, 24),
+        DataType["INT8"],
+        DESIGN_SIMD8,
+        PLATFORM_ZYNQ7020,
+    ),
+    (
+        "crop_height_simd16",
+        (1, 32, 32, 64),
+        (1, 4, 28),
+        DataType["INT8"],
+        DESIGN_SIMD16,
+        PLATFORM_ZYNQ7020,
+    ),
     # ========================================================================
     # Edge Cases
     # ========================================================================
     # Zero crop (passthrough)
-    ("crop_zero", (1, 16, 16, 32), (1, 0, 16), DataType["INT8"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
+    (
+        "crop_zero",
+        (1, 16, 16, 32),
+        (1, 0, 16),
+        DataType["INT8"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
     # Minimal output (crop to 2×W)
-    ("crop_minimal_height", (1, 16, 16, 32), (1, 7, 9), DataType["INT8"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
+    (
+        "crop_minimal_height",
+        (1, 16, 16, 32),
+        (1, 7, 9),
+        DataType["INT8"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
     # Maximal crop (one edge only)
-    ("crop_maximal_north", (1, 28, 28, 64), (1, 20, 28), DataType["INT8"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
-
+    (
+        "crop_maximal_north",
+        (1, 28, 28, 64),
+        (1, 20, 28),
+        DataType["INT8"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
     # ========================================================================
     # Spatial Dimension Variations
     # ========================================================================
     # Wide aspect ratio (H < W)
-    ("crop_wide", (1, 16, 64, 64), (2, 8, 56), DataType["INT8"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
+    (
+        "crop_wide",
+        (1, 16, 64, 64),
+        (2, 8, 56),
+        DataType["INT8"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
     # Tall aspect ratio (H > W)
-    ("crop_tall", (1, 64, 16, 64), (1, 8, 56), DataType["INT8"], DESIGN_BASELINE, PLATFORM_ZYNQ7020),
+    (
+        "crop_tall",
+        (1, 64, 16, 64),
+        (1, 8, 56),
+        DataType["INT8"],
+        DESIGN_BASELINE,
+        PLATFORM_ZYNQ7020,
+    ),
 ]
 
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
 
 def make_crop_test_config(
     test_id: str,
@@ -131,7 +233,7 @@ def make_crop_test_config(
         model=ModelStructure(
             operation="Gather",  # Will be transformed to Crop by Crop.infer_from()
             input_shapes={"input": input_shape},
-            input_dtypes={"input": input_dtype}
+            input_dtypes={"input": input_dtype},
         ),
         design=design,
         platform=platform,
@@ -151,11 +253,9 @@ TEST_CONFIGS = [
 # Test Configuration Fixture
 # ============================================================================
 
+
 @pytest.fixture(
-    params=[
-        pytest.param(config, marks=config.marks, id=config.test_id)
-        for config in TEST_CONFIGS
-    ]
+    params=[pytest.param(config, marks=config.marks, id=config.test_id) for config in TEST_CONFIGS]
 )
 def kernel_test_config(request) -> KernelTestConfig:
     """Parameterized test configuration for Crop validation cases.
@@ -169,6 +269,7 @@ def kernel_test_config(request) -> KernelTestConfig:
 # ============================================================================
 # Test Class
 # ============================================================================
+
 
 class TestCropValidation(KernelTest):
     """Validation tests for Crop kernel operation.
@@ -234,33 +335,22 @@ class TestCropValidation(KernelTest):
         input_tensor = helper.make_tensor_value_info(
             "input",
             TensorProto.FLOAT,  # QONNX convention: container type is FLOAT
-            list(input_shape)
+            list(input_shape),
         )
 
         # Output tensor (shape will be inferred)
         output_shape = list(input_shape)
         output_shape[axis] = end_idx - start_idx  # Cropped dimension
-        output_tensor = helper.make_tensor_value_info(
-            "output",
-            TensorProto.FLOAT,
-            output_shape
-        )
+        output_tensor = helper.make_tensor_value_info("output", TensorProto.FLOAT, output_shape)
 
         # Indices initializer (static)
         indices_init = helper.make_tensor(
-            "indices",
-            TensorProto.INT64,
-            list(indices_shape),
-            indices_array.flatten().tolist()
+            "indices", TensorProto.INT64, list(indices_shape), indices_array.flatten().tolist()
         )
 
         # Gather node
         gather_node = helper.make_node(
-            "Gather",
-            inputs=["input", "indices"],
-            outputs=["output"],
-            name="Gather_0",
-            axis=axis
+            "Gather", inputs=["input", "indices"], outputs=["output"], name="Gather_0", axis=axis
         )
 
         # Create graph
@@ -269,7 +359,7 @@ class TestCropValidation(KernelTest):
             name="test_crop_gather",
             inputs=[input_tensor],
             outputs=[output_tensor],
-            initializer=[indices_init]
+            initializer=[indices_init],
         )
 
         model = ModelWrapper(qonnx_make_model(graph))
@@ -284,6 +374,7 @@ class TestCropValidation(KernelTest):
             Crop class (KernelOp)
         """
         from brainsmith.kernels.crop import Crop
+
         return Crop
 
     def get_num_inputs(self):

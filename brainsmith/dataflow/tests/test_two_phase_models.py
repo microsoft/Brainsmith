@@ -20,6 +20,7 @@ from brainsmith.dataflow.dse_models import (
 # Test KernelDesignSpace.configure()
 # =============================================================================
 
+
 def test_configure_valid_params():
     """Test configure() with valid parallelization parameters."""
     input_inv = InterfaceDesignSpace(

@@ -38,10 +38,7 @@ from .addstreams import AddStreams
 
 
 @backend(
-    name="AddStreamsHLS",
-    target_kernel="brainsmith:AddStreams",
-    language="hls",
-    author="FINN Team"
+    name="AddStreamsHLS", target_kernel="brainsmith:AddStreams", language="hls", author="FINN Team"
 )
 class AddStreams_hls(AddStreams, HLSBackend):
     """Class that corresponds to finn-hlslib AddStreams_Batch function."""

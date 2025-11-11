@@ -40,7 +40,7 @@ class TempShuffleFixer(Transformation):
                 if (inner_moves == 1) and (simd > 1):
                     logger.warning(
                         "Safety precaution: changing shuffle SIMD to 1 where inner_moves=1 (node: %s)",
-                        node.name
+                        node.name,
                     )
                     inst.set_nodeattr("SIMD", 1)
                     graph_modified = True

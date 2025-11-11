@@ -4,4 +4,3 @@
 """Shared constants for Brainsmith core."""
 
 SKIP_INDICATOR = "~"
-

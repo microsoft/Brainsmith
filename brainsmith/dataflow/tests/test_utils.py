@@ -30,15 +30,10 @@ def create_layernorm_model():
         SIMD=1,
         epsilon=1e-5,
         input0Datatype="FLOAT32",
-        output0Datatype="FLOAT32"
+        output0Datatype="FLOAT32",
     )
 
-    graph = helper.make_graph(
-        [node],
-        "layernorm_graph",
-        [input_tensor],
-        [output_tensor]
-    )
+    graph = helper.make_graph([node], "layernorm_graph", [input_tensor], [output_tensor])
 
     model = helper.make_model(graph)
     model_w = ModelWrapper(model)
@@ -49,6 +44,7 @@ def create_layernorm_model():
 # ====================================================================
 # Tests for iter_valid_configurations()
 # ====================================================================
+
 
 def test_iter_valid_configurations_single_param():
     """Test iteration over single parameter (SIMD)."""
@@ -89,8 +85,9 @@ def test_iter_valid_configurations_count():
     configs = list(iter_valid_configurations(kernel_op, model_w))
     actual_count = len(configs)
 
-    assert actual_count == expected_count, \
-        f"Should generate {expected_count} configs, got {actual_count}"
+    assert (
+        actual_count == expected_count
+    ), f"Should generate {expected_count} configs, got {actual_count}"
 
 
 def test_iter_valid_configurations_with_filter():
@@ -108,13 +105,11 @@ def test_iter_valid_configurations_with_filter():
 
     # Verify all configs pass the filter
     for config in configs:
-        assert 4 <= config["SIMD"] <= 128, \
-            f"SIMD={config['SIMD']} should be in range [4, 128]"
+        assert 4 <= config["SIMD"] <= 128, f"SIMD={config['SIMD']} should be in range [4, 128]"
 
     # Verify we got fewer configs than without filter (unless all values already in range)
     # For 768-dim LayerNorm, divisors include {1, 2, 3} which are < 4, so filtering should reduce count
-    assert len(configs) <= len(all_configs), \
-        "Filtered configs should not exceed unfiltered"
+    assert len(configs) <= len(all_configs), "Filtered configs should not exceed unfiltered"
 
 
 def test_iter_valid_configurations_filter_eliminates_all():
@@ -167,8 +162,9 @@ def test_iter_valid_configurations_validates():
         configured = kernel_op.get_design_point(model_w)
 
         # Verify parameters match
-        assert configured.params["SIMD"] == config["SIMD"], \
-            "Configured instance should have correct SIMD"
+        assert (
+            configured.params["SIMD"] == config["SIMD"]
+        ), "Configured instance should have correct SIMD"
 
 
 def test_iter_valid_configurations_deterministic():
@@ -192,13 +188,14 @@ def test_iter_valid_configurations_iterator_behavior():
     result = iter_valid_configurations(kernel_op, model_w)
 
     # Should be an iterator
-    assert hasattr(result, '__iter__'), "Should return an iterator"
-    assert hasattr(result, '__next__'), "Should be a generator/iterator"
+    assert hasattr(result, "__iter__"), "Should return an iterator"
+    assert hasattr(result, "__next__"), "Should be a generator/iterator"
 
 
 # ====================================================================
 # Tests for get_interface() (existing utility)
 # ====================================================================
+
 
 def test_get_interface_success():
     """Test successful interface retrieval."""

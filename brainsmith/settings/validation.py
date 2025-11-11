@@ -37,8 +37,7 @@ def validate_config_file_creation(path: Path, force: bool) -> None:
 
     if path.exists() and not force:
         raise ValidationError(
-            f"{path} already exists. Use --force to overwrite.",
-            details=[CONFIG_OVERWRITE_HINT]
+            f"{path} already exists. Use --force to overwrite.", details=[CONFIG_OVERWRITE_HINT]
         )
 
 
@@ -92,7 +91,10 @@ def ensure_environment_sourced(marker_var: str = "BSMITH_DIR") -> None:
     if marker_var not in os.environ:
         print("❌ Brainsmith environment not detected", file=sys.stderr)
         print("", file=sys.stderr)
-        print("Before running brainsmith commands or tests, activate the environment:", file=sys.stderr)
+        print(
+            "Before running brainsmith commands or tests, activate the environment:",
+            file=sys.stderr,
+        )
         print("", file=sys.stderr)
         print("  Option 1 (Recommended): direnv", file=sys.stderr)
         print("    brainsmith project allow-direnv", file=sys.stderr)
@@ -127,7 +129,7 @@ def warn_if_environment_not_sourced(marker_var: str = "BSMITH_DIR") -> bool:
             "Brainsmith environment not detected (%s not set). "
             "Some features may not work correctly. "
             "Run: source .brainsmith/env.sh",
-            marker_var
+            marker_var,
         )
         return False
     return True

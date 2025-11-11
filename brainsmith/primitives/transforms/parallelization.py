@@ -51,22 +51,33 @@ from qonnx.transformation.base import Transformation
 # Type Hints
 # ============================================================================
 
+
 class KernelOpProtocol(Protocol):
     """Protocol for KernelOp interface (avoiding circular import)."""
+
     onnx_node: Any
     _design_point: Any
     _design_space: Any
 
-    def build_design_space(self, model: ModelWrapper) -> None: ...
-    def apply_design_point(self, point: Any) -> None: ...
-    def get_nodeattr(self, name: str) -> Any: ...
-    def get_exp_cycles(self) -> int: ...
+    def build_design_space(self, model: ModelWrapper) -> None:
+        ...
+
+    def apply_design_point(self, point: Any) -> None:
+        ...
+
+    def get_nodeattr(self, name: str) -> Any:
+        ...
+
+    def get_exp_cycles(self) -> int:
+        ...
 
     @property
-    def design_point(self) -> Any: ...
+    def design_point(self) -> Any:
+        ...
 
     @property
-    def design_space(self) -> Any: ...
+    def design_space(self) -> Any:
+        ...
 
 
 NodeInstance = HWCustomOp | KernelOpProtocol
@@ -105,32 +116,37 @@ def _discover_elementwise_binary_ops() -> list[str]:
 ELEMENTWISE_BINARY_OPS = _discover_elementwise_binary_ops()
 
 # Ops that use PE parallelism (up to NumChannels)
-_PE_OPS = frozenset([
-    "AddStreams_hls",
-    "ChannelwiseOp_hls",
-    "DuplicateStreams_hls",
-    "GlobalAccPool_hls",
-    "Thresholding_hls",
-    "Thresholding_rtl",
-    *ELEMENTWISE_BINARY_OPS,
-])
+_PE_OPS = frozenset(
+    [
+        "AddStreams_hls",
+        "ChannelwiseOp_hls",
+        "DuplicateStreams_hls",
+        "GlobalAccPool_hls",
+        "Thresholding_hls",
+        "Thresholding_rtl",
+        *ELEMENTWISE_BINARY_OPS,
+    ]
+)
 
 # Ops that use SIMD parallelism (up to NumChannels)
-_SIMD_OPS = frozenset([
-    "FMPadding_rtl",
-    "FMPadding_Pixel_hls",
-    "ConvolutionInputGenerator_rtl",
-    "QuantSoftmax_hls",
-    "Shuffle_hls",
-    "LayerNorm_hls",
-    "StreamingSplit_hls",
-    "StreamingConcat_hls",
-])
+_SIMD_OPS = frozenset(
+    [
+        "FMPadding_rtl",
+        "FMPadding_Pixel_hls",
+        "ConvolutionInputGenerator_rtl",
+        "QuantSoftmax_hls",
+        "Shuffle_hls",
+        "LayerNorm_hls",
+        "StreamingSplit_hls",
+        "StreamingConcat_hls",
+    ]
+)
 
 
 # ============================================================================
 # Phase 1: Helper Functions
 # ============================================================================
+
 
 def _ensure_design_space(node_inst: NodeInstance, model: ModelWrapper) -> None:
     """Ensure design space is built for node instance.
@@ -139,7 +155,7 @@ def _ensure_design_space(node_inst: NodeInstance, model: ModelWrapper) -> None:
         node_inst: KernelOp instance
         model: ModelWrapper containing the node
     """
-    if getattr(node_inst, '_design_space', None) is None:
+    if getattr(node_inst, "_design_space", None) is None:
         node_inst.build_design_space(model)
 
 
@@ -155,13 +171,13 @@ def _can_set_input_stream(space: Any, idx: int, value: int) -> bool:
         True if stream exists and value is valid
     """
     try:
-        if not hasattr(space, 'input_streams'):
+        if not hasattr(space, "input_streams"):
             return False
         if idx >= len(space.input_streams):
             return False
         # Check if value is in valid range
         stream = space.input_streams[idx]
-        if hasattr(stream, 'values'):
+        if hasattr(stream, "values"):
             return value in stream.values
         return True
     except (AttributeError, IndexError, TypeError):
@@ -180,13 +196,13 @@ def _can_set_output_stream(space: Any, idx: int, value: int) -> bool:
         True if stream exists and value is valid
     """
     try:
-        if not hasattr(space, 'output_streams'):
+        if not hasattr(space, "output_streams"):
             return False
         if idx >= len(space.output_streams):
             return False
         # Check if value is in valid range
         stream = space.output_streams[idx]
-        if hasattr(stream, 'values'):
+        if hasattr(stream, "values"):
             return value in stream.values
         return True
     except (AttributeError, IndexError, TypeError):
@@ -194,11 +210,7 @@ def _can_set_output_stream(space: Any, idx: int, value: int) -> bool:
 
 
 def _try_strategy(
-    node_inst: NodeInstance,
-    model: ModelWrapper,
-    param_name: str,
-    value: int,
-    strategy: str
+    node_inst: NodeInstance, model: ModelWrapper, param_name: str, value: int, strategy: str
 ) -> bool:
     """Try single strategy for setting parameter, return True if successful.
 
@@ -262,7 +274,7 @@ def set_parallelization(
     param_name: str,
     value: int,
     model: ModelWrapper,
-    strategies: list[str] | None = None
+    strategies: list[str] | None = None,
 ) -> None:
     """Set parallelization parameter (PE, SIMD, etc.) on mixed graph nodes.
 
@@ -310,9 +322,7 @@ def set_parallelization(
 
 
 def get_parallelization(
-    node_inst: NodeInstance,
-    is_brainsmith: bool,
-    param_name: str
+    node_inst: NodeInstance, is_brainsmith: bool, param_name: str
 ) -> int | None:
     """Get current parallelization parameter value.
 
@@ -330,7 +340,7 @@ def get_parallelization(
     """
     if is_brainsmith:
         # Brainsmith: Try design point first (most reliable)
-        point = getattr(node_inst, '_design_point', None)
+        point = getattr(node_inst, "_design_point", None)
         if point is not None and param_name in point.config:
             return point.config[param_name]
 
@@ -355,6 +365,7 @@ def get_parallelization(
 # ============================================================================
 # Phase 2: ApplyParallelizationConfig
 # ============================================================================
+
 
 class ApplyParallelizationConfig(Transformation):
     """Apply parallelization config from JSON file to mixed graphs.
@@ -413,11 +424,7 @@ class ApplyParallelizationConfig(Transformation):
             model = model.transform(ApplyParallelizationConfig(config_file))
     """
 
-    def __init__(
-        self,
-        config: str | dict[str, Any],
-        node_filter: Callable = lambda x: True
-    ):
+    def __init__(self, config: str | dict[str, Any], node_filter: Callable = lambda x: True):
         super().__init__()
         self.config = config
         self.node_filter = node_filter
@@ -481,30 +488,22 @@ class ApplyParallelizationConfig(Transformation):
                     try:
                         set_parallelization(node_inst, is_brainsmith, attr, val, model)
                     except ValueError as e:
-                        warnings.warn(
-                            f"Could not apply default {attr}={val} to {node.name}: {e}"
-                        )
+                        warnings.warn(f"Could not apply default {attr}={val} to {node.name}: {e}")
 
             # Apply node-specific config (overrides defaults)
             for attr, value in node_config.items():
                 try:
                     set_parallelization(node_inst, is_brainsmith, attr, value, model)
                 except ValueError as e:
-                    warnings.warn(
-                        f"Could not apply {attr}={value} to {node.name}: {e}"
-                    )
+                    warnings.warn(f"Could not apply {attr}={value} to {node.name}: {e}")
 
         # Configuration verification warnings
         if missing_configurations:
-            warnings.warn(
-                f"\nNo HW configuration for nodes: {', '.join(missing_configurations)}"
-            )
+            warnings.warn(f"\nNo HW configuration for nodes: {', '.join(missing_configurations)}")
 
         unused_configs = [x for x in model_config if x not in used_configurations]
         if unused_configs:
-            warnings.warn(
-                f"\nUnused HW configurations: {', '.join(unused_configs)}"
-            )
+            warnings.warn(f"\nUnused HW configurations: {', '.join(unused_configs)}")
 
         # Single iteration is sufficient
         return (model, False)
@@ -514,11 +513,9 @@ class ApplyParallelizationConfig(Transformation):
 # Phase 3: SetParallelization - Helper Functions
 # ============================================================================
 
+
 def get_valid_values_for_param(
-    node_inst: NodeInstance,
-    is_brainsmith: bool,
-    param_name: str,
-    model: ModelWrapper
+    node_inst: NodeInstance, is_brainsmith: bool, param_name: str, model: ModelWrapper
 ) -> list[int]:
     """Get valid values for a parallelization parameter.
 
@@ -641,6 +638,7 @@ def get_max_value_for_param(node_inst: Any, param_name: str) -> int:
 # Phase 3: SetParallelization - Transformation Class
 # ============================================================================
 
+
 class SetParallelization(Transformation):
     """Auto-generate parallelization config for mixed graphs.
 
@@ -686,7 +684,7 @@ class SetParallelization(Transformation):
         self,
         target_cycles_per_frame: int = 1000,
         mvau_wwidth_max: int = 36,
-        two_pass_relaxation: bool = True
+        two_pass_relaxation: bool = True,
     ):
         super().__init__()
         self.target_cycles_per_frame = target_cycles_per_frame
@@ -694,11 +692,7 @@ class SetParallelization(Transformation):
         self.two_pass_relaxation = two_pass_relaxation
 
     def optimize_parameter(
-        self,
-        node_inst: NodeInstance,
-        is_brainsmith: bool,
-        param_name: str,
-        model: ModelWrapper
+        self, node_inst: NodeInstance, is_brainsmith: bool, param_name: str, model: ModelWrapper
     ) -> bool:
         """Optimize single parameter using greedy search.
 
@@ -712,9 +706,7 @@ class SetParallelization(Transformation):
             True if target cycles met, False if reached max value
         """
         # Get valid values for this parameter
-        valid_values = get_valid_values_for_param(
-            node_inst, is_brainsmith, param_name, model
-        )
+        valid_values = get_valid_values_for_param(node_inst, is_brainsmith, param_name, model)
 
         if not valid_values:
             return False  # No optimization possible
@@ -730,11 +722,7 @@ class SetParallelization(Transformation):
         # Reached max value without meeting target
         return False
 
-    def optimize_mvau(
-        self,
-        node_inst: Any,
-        model: Any
-    ) -> None:
+    def optimize_mvau(self, node_inst: Any, model: Any) -> None:
         """Two-stage optimization for FINN MVAU nodes.
 
         MVAU nodes require special handling:
@@ -834,9 +822,7 @@ class SetParallelization(Transformation):
                     try:
                         self.optimize_parameter(node_inst, True, param_name, model)
                     except (ValueError, AttributeError) as e:
-                        warnings.warn(
-                            f"Could not optimize {param_name} for {node.name}: {e}"
-                        )
+                        warnings.warn(f"Could not optimize {param_name} for {node.name}: {e}")
 
             elif op_type in ["MVAU_hls", "MVAU_rtl"]:
                 # FINN MVAU: Two-stage optimization (SIMD first, then PE)
@@ -899,13 +885,13 @@ class SetParallelization(Transformation):
 
 __all__ = [
     # Phase 1 Helper functions
-    'get_node_interface',
-    'set_parallelization',
-    'get_parallelization',
+    "get_node_interface",
+    "set_parallelization",
+    "get_parallelization",
     # Phase 3 Helper functions
-    'get_valid_values_for_param',
-    'get_max_value_for_param',
+    "get_valid_values_for_param",
+    "get_max_value_for_param",
     # Transformations
-    'ApplyParallelizationConfig',
-    'SetParallelization',
+    "ApplyParallelizationConfig",
+    "SetParallelization",
 ]

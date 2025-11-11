@@ -57,11 +57,7 @@ class DuplicateStreams(KernelOp):
     # ================================================================
 
     @classmethod
-    def build_schema(
-        cls,
-        node: NodeProto,
-        model: ModelWrapper | None
-    ) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         """Build schema with dynamic output count from node structure.
 
         This is a DYNAMIC SCHEMA - inspects node.output to determine count.
@@ -75,11 +71,11 @@ class DuplicateStreams(KernelOp):
         Returns:
             KernelSchema with N outputs matching node.output
         """
-        inputs=[
+        inputs = [
             df.InputSchema(
                 name="input",
-                block_tiling=[FULL_DIM],      # Process full dimensions
-                stream_tiling=["PE"],          # Channel parallelism
+                block_tiling=[FULL_DIM],  # Process full dimensions
+                stream_tiling=["PE"],  # Channel parallelism
             ),
         ]
 
@@ -89,9 +85,9 @@ class DuplicateStreams(KernelOp):
         outputs = [
             df.OutputSchema(
                 name=f"output{i}",
-                block_tiling=[FULL_DIM],          # Same as input
-                stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],    # Match input PE
-                datatype="input",                  # Passthrough datatype
+                block_tiling=[FULL_DIM],  # Same as input
+                stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],  # Match input PE
+                datatype="input",  # Passthrough datatype
             )
             for i in range(num_outputs)
         ]
@@ -122,7 +118,7 @@ class DuplicateStreams(KernelOp):
             "Split",
             inputs=[self.onnx_node.input[0]],
             outputs=list(self.onnx_node.output),
-            axis=-1  # Split along channel (not actually splitting, just for shape)
+            axis=-1,  # Split along channel (not actually splitting, just for shape)
         )
 
     # ================================================================

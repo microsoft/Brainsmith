@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 # Design Space Exploration Model Types
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class InterfaceDesignSpace:
     """Interface design space built once, configured many times.
@@ -68,6 +69,7 @@ class InterfaceDesignSpace:
         parallelism_dimension: OrderedParameter for stream parameter (None if no parallelism)
         parallelism_param: Parameter name for stream dimension (e.g., "SIMD", "PE")
     """
+
     name: str
     tensor_shape: Shape
     block_shape: Shape
@@ -93,6 +95,7 @@ class InterfaceDesignPoint:
         design_space: Parent InterfaceDesignSpace
         stream_shape: Resolved stream dimensions for this configuration
     """
+
     design_space: InterfaceDesignSpace
     stream_shape: Shape
 
@@ -204,6 +207,7 @@ class InterfaceDesignPoint:
 # Design Space Exploration Kernel Models
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class KernelDesignSpace:
     """Kernel design space built once, configured many times.
@@ -221,12 +225,15 @@ class KernelDesignSpace:
         parameters: Explorable parameters - OrderedParameter (with navigation) or
                    frozenset (discrete categories like ram_style)
     """
+
     name: str
     inputs: dict[str, InterfaceDesignSpace]
     outputs: dict[str, InterfaceDesignSpace]
     internal_datatypes: dict[str, BaseDataType]
-    optimization_constraints: list['Constraint']
-    parameters: dict[str, Union['OrderedParameter', frozenset]]  # OrderedParameter for ordered, frozenset for discrete
+    optimization_constraints: list["Constraint"]
+    parameters: dict[
+        str, Union["OrderedParameter", frozenset]
+    ]  # OrderedParameter for ordered, frozenset for discrete
 
     @property
     def input_list(self) -> list[InterfaceDesignSpace]:
@@ -250,7 +257,7 @@ class KernelDesignSpace:
     # Dimension Query Methods
     # =========================================================================
 
-    def get_parameter(self, name: str) -> Union['OrderedParameter', frozenset]:
+    def get_parameter(self, name: str) -> Union["OrderedParameter", frozenset]:
         """Get parameter by name.
 
         Args:
@@ -264,7 +271,7 @@ class KernelDesignSpace:
         """
         return self.parameters[name]
 
-    def get_ordered_parameter(self, name: str) -> 'OrderedParameter':
+    def get_ordered_parameter(self, name: str) -> "OrderedParameter":
         """Get ordered parameter by name.
 
         Args:
@@ -313,7 +320,7 @@ class KernelDesignSpace:
         """
         return isinstance(self.parameters[name], frozenset)
 
-    def configure(self, config: dict[str, int | str]) -> 'KernelDesignPoint':
+    def configure(self, config: dict[str, int | str]) -> "KernelDesignPoint":
         """Instantiate kernel at specified point in design space.
 
         Creates a KernelDesignPoint with resolved stream shapes and validates
@@ -350,8 +357,7 @@ class KernelDesignSpace:
         for param_name, value in params.items():
             if param_name not in self.parameters:
                 raise ValueError(
-                    f"Unknown parameter: {param_name}. "
-                    f"Known: {list(self.parameters.keys())}"
+                    f"Unknown parameter: {param_name}. " f"Known: {list(self.parameters.keys())}"
                 )
 
             param = self.parameters[param_name]
@@ -367,10 +373,7 @@ class KernelDesignSpace:
             # Handle discrete (frozenset)
             elif isinstance(param, frozenset):
                 if value not in param:
-                    raise ValueError(
-                        f"Invalid {param_name}={value}. "
-                        f"Valid: {sorted(param)}"
-                    )
+                    raise ValueError(f"Invalid {param_name}={value}. " f"Valid: {sorted(param)}")
             else:
                 # Fallback for backward compatibility (shouldn't happen)
                 if value not in param:
@@ -381,10 +384,7 @@ class KernelDesignSpace:
             raise ValueError(f"Missing parameters: {missing}")
 
     def _instantiate_interfaces(
-        self,
-        interfaces: dict[str, Any],
-        params: dict[str, int],
-        interface_lookup: dict[str, Any]
+        self, interfaces: dict[str, Any], params: dict[str, int], interface_lookup: dict[str, Any]
     ) -> dict[str, Any]:
         """Create instance interfaces with resolved stream shapes.
 
@@ -401,20 +401,20 @@ class KernelDesignSpace:
         configured = {}
         for interface in interfaces.values():
             stream_shape = (
-                interface.block_shape if interface.stream_tiling is None
+                interface.block_shape
+                if interface.stream_tiling is None
                 else resolve_template(
                     interface.stream_tiling,
                     interface.block_shape,
                     lambda name: params[name],
                     interface_lookup,
                     model=None,  # Not available during configure (optional)
-                    tensor_name=None  # Resolves at STREAM hierarchy level
+                    tensor_name=None,  # Resolves at STREAM hierarchy level
                 )
             )
 
             configured_interface = InterfaceDesignPoint(
-                design_space=interface,
-                stream_shape=stream_shape
+                design_space=interface, stream_shape=stream_shape
             )
             configured[interface.name] = configured_interface
             interface_lookup[interface.name] = configured_interface
@@ -422,9 +422,7 @@ class KernelDesignSpace:
         return configured
 
     def _validate_instance(
-        self,
-        instance: 'KernelDesignPoint',
-        config: dict[str, int | str]
+        self, instance: "KernelDesignPoint", config: dict[str, int | str]
     ) -> None:
         """Validate instance satisfies parametric constraints.
 
@@ -440,9 +438,7 @@ class KernelDesignSpace:
         ctx = ConfigurationValidationContext(configured_model=instance, params=config)
         for constraint in self.optimization_constraints:
             if error := constraint.check(ctx):
-                raise ValidationError(
-                    f"Constraint failed for {config}: {error}"
-                )
+                raise ValidationError(f"Constraint failed for {config}: {error}")
 
 
 @dataclass(frozen=True)
@@ -462,6 +458,7 @@ class KernelDesignPoint:
         outputs: Configured output interfaces (by name)
         config: Dimension values defining this point (e.g., {"SIMD": 16, "PE": 4})
     """
+
     design_space: KernelDesignSpace
     inputs: dict[str, InterfaceDesignPoint]
     outputs: dict[str, InterfaceDesignPoint]
@@ -476,6 +473,7 @@ class KernelDesignPoint:
     def output_list(self) -> list[InterfaceDesignPoint]:
         """Outputs in declaration order (for ONNX positional mapping)."""
         return list(self.outputs.values())
+
     # Convenience properties (delegate to design space)
     @property
     def name(self) -> str:
@@ -492,8 +490,9 @@ class KernelDesignPoint:
         if not self.inputs:
             return 1
         # InterfaceDesignPoint has tensor_folding_factor and block_folding_factor
-        return max(inp.tensor_folding_factor * inp.block_folding_factor
-                   for inp in self.inputs.values())
+        return max(
+            inp.tensor_folding_factor * inp.block_folding_factor for inp in self.inputs.values()
+        )
 
     @property
     def max_block_folding_factor(self) -> int:
@@ -533,7 +532,7 @@ class KernelDesignPoint:
     # Navigation Methods (Immutable - Return New Instances)
     # =========================================================================
 
-    def with_dimension(self, name: str, value: int | str) -> 'KernelDesignPoint':
+    def with_dimension(self, name: str, value: int | str) -> "KernelDesignPoint":
         """Create new design point with specified dimension value.
 
         Works for both ordered and discrete dimensions.
@@ -558,7 +557,7 @@ class KernelDesignPoint:
         new_config = {**self.config, name: value}
         return self.design_space.configure(new_config)
 
-    def with_min(self, name: str) -> 'KernelDesignPoint':
+    def with_min(self, name: str) -> "KernelDesignPoint":
         """Create new design point with ordered dimension at minimum.
 
         Args:
@@ -580,7 +579,7 @@ class KernelDesignPoint:
         min_val = self.design_space.get_ordered_parameter(name).min()
         return self.with_dimension(name, min_val)
 
-    def with_max(self, name: str) -> 'KernelDesignPoint':
+    def with_max(self, name: str) -> "KernelDesignPoint":
         """Create new design point with ordered dimension at maximum.
 
         Args:
@@ -603,11 +602,8 @@ class KernelDesignPoint:
         return self.with_dimension(name, max_val)
 
     def with_percentage(
-        self,
-        name: str,
-        percentage: float,
-        rounding: str = 'natural'
-    ) -> 'KernelDesignPoint':
+        self, name: str, percentage: float, rounding: str = "natural"
+    ) -> "KernelDesignPoint":
         """Create new design point with ordered dimension at percentage.
 
         Args:
@@ -632,7 +628,7 @@ class KernelDesignPoint:
         value = self.design_space.get_ordered_parameter(name).at_percentage(percentage, rounding)
         return self.with_dimension(name, value)
 
-    def with_step_up(self, name: str, n: int = 1) -> 'KernelDesignPoint':
+    def with_step_up(self, name: str, n: int = 1) -> "KernelDesignPoint":
         """Create new design point with ordered dimension stepped up.
 
         Clamps at maximum if n steps would exceed bounds.
@@ -660,7 +656,7 @@ class KernelDesignPoint:
         new_val = dim.step_up(current, n)
         return self.with_dimension(name, new_val)
 
-    def with_step_down(self, name: str, n: int = 1) -> 'KernelDesignPoint':
+    def with_step_down(self, name: str, n: int = 1) -> "KernelDesignPoint":
         """Create new design point with ordered dimension stepped down.
 
         Clamps at minimum if n steps would go below bounds.
@@ -693,11 +689,8 @@ class KernelDesignPoint:
     # =========================================================================
 
     def sweep_dimension(
-        self,
-        name: str,
-        start: int | str | None = None,
-        stop: int | str | None = None
-    ) -> Iterator['KernelDesignPoint']:
+        self, name: str, start: int | str | None = None, stop: int | str | None = None
+    ) -> Iterator["KernelDesignPoint"]:
         """Sweep through all valid values for a dimension.
 
         For ordered dimensions, iterates in order from start to stop.
@@ -746,8 +739,8 @@ class KernelDesignPoint:
         self,
         name: str,
         percentages: list[float],
-        rounding: Literal['natural', 'down', 'up'] = 'natural'
-    ) -> Iterator['KernelDesignPoint']:
+        rounding: Literal["natural", "down", "up"] = "natural",
+    ) -> Iterator["KernelDesignPoint"]:
         """Sweep through ordered dimension at specified percentage points.
 
         Only valid for ordered dimensions.
@@ -786,8 +779,8 @@ class KernelDesignPoint:
         interface_list: list[InterfaceDesignPoint],
         interface_type: str,
         index: int,
-        value: int
-    ) -> 'KernelDesignPoint':
+        value: int,
+    ) -> "KernelDesignPoint":
         """Helper for with_input_stream and with_output_stream.
 
         Args:
@@ -822,8 +815,8 @@ class KernelDesignPoint:
         interface_type: str,
         index: int,
         percentage: float,
-        rounding: Literal['natural', 'down', 'up']
-    ) -> 'KernelDesignPoint':
+        rounding: Literal["natural", "down", "up"],
+    ) -> "KernelDesignPoint":
         """Helper for with_input_stream_percentage and with_output_stream_percentage.
 
         Args:
@@ -853,7 +846,7 @@ class KernelDesignPoint:
 
         return self.with_percentage(param, percentage, rounding)
 
-    def with_input_stream(self, index: int, value: int) -> 'KernelDesignPoint':
+    def with_input_stream(self, index: int, value: int) -> "KernelDesignPoint":
         """Set input interface stream parallelism by index.
 
         Convenience method for interface-agnostic parallelism navigation.
@@ -876,7 +869,7 @@ class KernelDesignPoint:
         """
         return self._with_stream_helper(self.input_list, "Input", index, value)
 
-    def with_output_stream(self, index: int, value: int) -> 'KernelDesignPoint':
+    def with_output_stream(self, index: int, value: int) -> "KernelDesignPoint":
         """Set output interface stream parallelism by index.
 
         Args:
@@ -893,11 +886,8 @@ class KernelDesignPoint:
         return self._with_stream_helper(self.output_list, "Output", index, value)
 
     def with_input_stream_percentage(
-        self,
-        index: int,
-        percentage: float,
-        rounding: Literal['natural', 'down', 'up'] = 'natural'
-    ) -> 'KernelDesignPoint':
+        self, index: int, percentage: float, rounding: Literal["natural", "down", "up"] = "natural"
+    ) -> "KernelDesignPoint":
         """Set input stream parallelism to percentage of range.
 
         Args:
@@ -917,11 +907,8 @@ class KernelDesignPoint:
         )
 
     def with_output_stream_percentage(
-        self,
-        index: int,
-        percentage: float,
-        rounding: Literal['natural', 'down', 'up'] = 'natural'
-    ) -> 'KernelDesignPoint':
+        self, index: int, percentage: float, rounding: Literal["natural", "down", "up"] = "natural"
+    ) -> "KernelDesignPoint":
         """Set output stream parallelism to percentage of range.
 
         Args:
@@ -957,9 +944,7 @@ class KernelDesignPoint:
             IndexError: If index out of range
         """
         if index < 0 or index >= len(self.input_list):
-            raise IndexError(
-                f"Input index {index} out of range [0, {len(self.input_list)})"
-            )
+            raise IndexError(f"Input index {index} out of range [0, {len(self.input_list)})")
 
         return self.input_list[index].design_space.parallelism_param
 
@@ -976,9 +961,7 @@ class KernelDesignPoint:
             IndexError: If index out of range
         """
         if index < 0 or index >= len(self.output_list):
-            raise IndexError(
-                f"Output index {index} out of range [0, {len(self.output_list)})"
-            )
+            raise IndexError(f"Output index {index} out of range [0, {len(self.output_list)})")
 
         return self.output_list[index].design_space.parallelism_param
 
@@ -1012,7 +995,7 @@ class KernelDesignPoint:
         param = self.get_output_stream_param(index)
         return self.config.get(param) if param else None
 
-    def get_input_stream_dimension(self, index: int) -> Optional['OrderedParameter']:
+    def get_input_stream_dimension(self, index: int) -> Optional["OrderedParameter"]:
         """Get parallelism dimension for input interface.
 
         Args:
@@ -1025,13 +1008,11 @@ class KernelDesignPoint:
             IndexError: If index out of range
         """
         if index < 0 or index >= len(self.input_list):
-            raise IndexError(
-                f"Input index {index} out of range [0, {len(self.input_list)})"
-            )
+            raise IndexError(f"Input index {index} out of range [0, {len(self.input_list)})")
 
         return self.input_list[index].design_space.parallelism_dimension
 
-    def get_output_stream_dimension(self, index: int) -> Optional['OrderedParameter']:
+    def get_output_stream_dimension(self, index: int) -> Optional["OrderedParameter"]:
         """Get parallelism dimension for output interface.
 
         Args:
@@ -1044,8 +1025,6 @@ class KernelDesignPoint:
             IndexError: If index out of range
         """
         if index < 0 or index >= len(self.output_list):
-            raise IndexError(
-                f"Output index {index} out of range [0, {len(self.output_list)})"
-            )
+            raise IndexError(f"Output index {index} out of range [0, {len(self.output_list)})")
 
         return self.output_list[index].design_space.parallelism_dimension

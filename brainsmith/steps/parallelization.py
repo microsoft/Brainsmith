@@ -21,7 +21,7 @@ from brainsmith.registry import step
 logger = logging.getLogger(__name__)
 
 
-@step(name='apply_parallelization_config')
+@step(name="apply_parallelization_config")
 def apply_parallelization_config_step(model: Any, cfg: Any) -> Any:
     """Apply parallelization config from JSON file.
 
@@ -46,12 +46,10 @@ def apply_parallelization_config_step(model: Any, cfg: Any) -> Any:
             "LayerNorm_0": {"PE": 16}
         }
     """
-    config_file = getattr(cfg, 'folding_config_file', None)
+    config_file = getattr(cfg, "folding_config_file", None)
 
     if config_file is None:
-        logger.warning(
-            "No folding_config_file specified in config, skipping parallelization"
-        )
+        logger.warning("No folding_config_file specified in config, skipping parallelization")
         return model
 
     logger.debug(f"Applying parallelization config from: {config_file}")
@@ -60,7 +58,7 @@ def apply_parallelization_config_step(model: Any, cfg: Any) -> Any:
     return model
 
 
-@step(name='target_fps_parallelization')
+@step(name="target_fps_parallelization")
 def target_fps_parallelization_step(model: Any, cfg: Any) -> Any:
     """Auto-generate parallelization from target FPS.
 
@@ -82,16 +80,14 @@ def target_fps_parallelization_step(model: Any, cfg: Any) -> Any:
         synth_clk_period_ns = 5.0 (5ns clock = 200MHz)
         target_cycles = 1e9 / (100 * 5.0) = 2,000,000 cycles per frame
     """
-    target_fps = getattr(cfg, 'target_fps', None)
+    target_fps = getattr(cfg, "target_fps", None)
 
     if target_fps is None:
-        logger.warning(
-            "No target_fps specified in config, skipping auto-parallelization"
-        )
+        logger.warning("No target_fps specified in config, skipping auto-parallelization")
         return model
 
     # Get clock period (default to 5ns if not specified)
-    clock_period_ns = getattr(cfg, 'synth_clk_period_ns', 5.0)
+    clock_period_ns = getattr(cfg, "synth_clk_period_ns", 5.0)
 
     # Calculate target cycles from FPS
     # Cycles = (1 second / target_fps) / clock_period
@@ -104,10 +100,10 @@ def target_fps_parallelization_step(model: Any, cfg: Any) -> Any:
     )
 
     # Get optional MVAU weight stream width constraint (default 36 bits)
-    mvau_wwidth_max = getattr(cfg, 'mvau_wwidth_max', 36)
+    mvau_wwidth_max = getattr(cfg, "mvau_wwidth_max", 36)
 
     # Get optional two-pass relaxation flag (default True)
-    two_pass_relaxation = getattr(cfg, 'two_pass_relaxation', True)
+    two_pass_relaxation = getattr(cfg, "two_pass_relaxation", True)
 
     model = model.transform(
         SetParallelization(

@@ -133,11 +133,14 @@ def make_elementwise_onnx_model(onnx_op_type: str, lhs_dtype="INT8", rhs_dtype="
     return model
 
 
-@pytest.mark.parametrize("onnx_op,finn_op", [
-    ("Add", "ElementwiseAdd"),
-    ("Mul", "ElementwiseMul"),
-    ("Sub", "ElementwiseSub"),
-])
+@pytest.mark.parametrize(
+    "onnx_op,finn_op",
+    [
+        ("Add", "ElementwiseAdd"),
+        ("Mul", "ElementwiseMul"),
+        ("Sub", "ElementwiseSub"),
+    ],
+)
 def test_inference_transform_onnx_to_finn_kernel(onnx_op, finn_op):
     """Test InferElementwiseBinaryOperation transforms ONNX → FINN base kernel."""
     # Stage 1: Create ONNX model
@@ -158,8 +161,9 @@ def test_inference_transform_onnx_to_finn_kernel(onnx_op, finn_op):
     assert node.op_type == finn_op, f"Expected {finn_op}, got {node.op_type}"
 
     # Check domain
-    assert node.domain == "finn.custom_op.fpgadataflow", \
-        f"Expected finn.custom_op.fpgadataflow domain, got {node.domain}"
+    assert (
+        node.domain == "finn.custom_op.fpgadataflow"
+    ), f"Expected finn.custom_op.fpgadataflow domain, got {node.domain}"
 
     # Check backend attribute
     op = getHWCustomOp(node, model)
@@ -200,7 +204,7 @@ def make_finn_elementwise_model(finn_op_type: str):
         lhs_dtype="INT8",
         rhs_dtype="INT8",
         out_dtype="INT16",
-        name=f"{finn_op_type}_0"
+        name=f"{finn_op_type}_0",
     )
 
     # Build model
@@ -228,18 +232,20 @@ def test_config():
 
     # Set kernel_selections for all elementwise operations
     cfg.kernel_selections = [
-        (f"finn:Elementwise{op}", [f"finn:Elementwise{op}_hls"])
-        for op in ["Add", "Mul", "Sub"]
+        (f"finn:Elementwise{op}", [f"finn:Elementwise{op}_hls"]) for op in ["Add", "Mul", "Sub"]
     ]
 
     return cfg
 
 
-@pytest.mark.parametrize("finn_op", [
-    "ElementwiseAdd",
-    "ElementwiseMul",
-    "ElementwiseSub",
-])
+@pytest.mark.parametrize(
+    "finn_op",
+    [
+        "ElementwiseAdd",
+        "ElementwiseMul",
+        "ElementwiseSub",
+    ],
+)
 def test_specialization_transform_finn_to_backend(finn_op, test_config):
     """Test SpecializeKernels transforms FINN base kernel → HLS backend."""
     # Stage 1: Create FINN elementwise model (post-inference)
@@ -259,12 +265,14 @@ def test_specialization_transform_finn_to_backend(finn_op, test_config):
 
     # Check op_type mutation (base → backend)
     expected_backend_op = f"{finn_op}_hls"
-    assert node.op_type == expected_backend_op, \
-        f"Expected {expected_backend_op}, got {node.op_type}"
+    assert (
+        node.op_type == expected_backend_op
+    ), f"Expected {expected_backend_op}, got {node.op_type}"
 
     # Check domain mutation (FINN adds language suffix)
-    assert node.domain == "finn.custom_op.fpgadataflow.hls", \
-        f"Expected finn.custom_op.fpgadataflow.hls domain, got {node.domain}"
+    assert (
+        node.domain == "finn.custom_op.fpgadataflow.hls"
+    ), f"Expected finn.custom_op.fpgadataflow.hls domain, got {node.domain}"
 
     # Check backend attribute
     op = getHWCustomOp(node, model)
@@ -276,10 +284,13 @@ def test_specialization_transform_finn_to_backend(finn_op, test_config):
 # ============================================================================
 
 
-@pytest.mark.parametrize("onnx_op,finn_op", [
-    ("Add", "ElementwiseAdd"),
-    ("Mul", "ElementwiseMul"),
-])
+@pytest.mark.parametrize(
+    "onnx_op,finn_op",
+    [
+        ("Add", "ElementwiseAdd"),
+        ("Mul", "ElementwiseMul"),
+    ],
+)
 def test_end_to_end_onnx_to_hls_backend(onnx_op, finn_op, test_config):
     """Test complete pipeline: ONNX → FINN kernel → HLS backend."""
     # Stage 1: Create ONNX model

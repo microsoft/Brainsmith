@@ -31,6 +31,7 @@ from brainsmith.registry import kernel
 
 def _channelwise_output_datatype():
     """Polymorphic datatype resolver for ChannelwiseOp based on 'func' nodeattr."""
+
     def resolver(interfaces, param_getter, model, tensor_name):
         # Handle FINN's uppercase "Func" attribute for compatibility
         try:
@@ -51,63 +52,60 @@ def _channelwise_output_datatype():
 
 
 CHANNELWISE_SCHEMA = df.KernelSchema(
-        name="ChannelwiseOp",
-        inputs=[
-            df.InputSchema(
-                name="input",
-                block_tiling=FULL_SHAPE,       # Process full tensor shape
-                stream_tiling=["PE"],          # Channel parallelism with PE
-                required_layout="NHWC",        # Hardware requires NHWC
-            ),
-            df.InputSchema(
-                name="parameters",
-                block_tiling=[],               # No tiling (static data)
-                stream_tiling=[],              # Not streamed
-                datatype=VALUE_OPTIMIZED,      # Optimize from actual values
-            ),
-        ],
-        outputs=[
-            df.OutputSchema(
-                name="output",
-                block_tiling=FULL_SHAPE,                      # Same as input
-                stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],  # Match input PE
-                datatype=_channelwise_output_datatype(),      # Dispatches based on func nodeattr
-                required_layout="NHWC",
-            )
-        ],
-        # STRUCTURAL (fixed at inference)
-        kernel_params={
-            # Operation type: ONNX op names
-            "func": ("s", True, "Add", {"Add", "Mul", "LessOrEqual", "GreaterOrEqual"}),
-        },
-
-        # DSE PARAMETERS (explorable resource parameters)
-        dse_parameters={
-            # RAM style for parameter storage (HLS-specific)
-            "ram_style": df.ParameterSpec(
-                name="ram_style",
-                values={"distributed", "block"},
-                default="distributed"
-            ),
-        },
-
-        constraints=[
-            df.IsDynamic(("input",)),      # Streaming activation input
-            df.IsStatic(("parameters",)),  # Static weight input
-            df.DatatypeInteger(("input", "parameters")),
-            # Parameters: scalar (1) or per-channel (matches input channels)
-            df.TensorSizeMatches("parameters", [1, ("input", -1)]),
-            df.TensorDimMatches("parameters", -1, [1, ("input", -1)]),
-        ],
-    )
+    name="ChannelwiseOp",
+    inputs=[
+        df.InputSchema(
+            name="input",
+            block_tiling=FULL_SHAPE,  # Process full tensor shape
+            stream_tiling=["PE"],  # Channel parallelism with PE
+            required_layout="NHWC",  # Hardware requires NHWC
+        ),
+        df.InputSchema(
+            name="parameters",
+            block_tiling=[],  # No tiling (static data)
+            stream_tiling=[],  # Not streamed
+            datatype=VALUE_OPTIMIZED,  # Optimize from actual values
+        ),
+    ],
+    outputs=[
+        df.OutputSchema(
+            name="output",
+            block_tiling=FULL_SHAPE,  # Same as input
+            stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],  # Match input PE
+            datatype=_channelwise_output_datatype(),  # Dispatches based on func nodeattr
+            required_layout="NHWC",
+        )
+    ],
+    # STRUCTURAL (fixed at inference)
+    kernel_params={
+        # Operation type: ONNX op names
+        "func": ("s", True, "Add", {"Add", "Mul", "LessOrEqual", "GreaterOrEqual"}),
+    },
+    # DSE PARAMETERS (explorable resource parameters)
+    dse_parameters={
+        # RAM style for parameter storage (HLS-specific)
+        "ram_style": df.ParameterSpec(
+            name="ram_style", values={"distributed", "block"}, default="distributed"
+        ),
+    },
+    constraints=[
+        df.IsDynamic(("input",)),  # Streaming activation input
+        df.IsStatic(("parameters",)),  # Static weight input
+        df.DatatypeInteger(("input", "parameters")),
+        # Parameters: scalar (1) or per-channel (matches input channels)
+        df.TensorSizeMatches("parameters", [1, ("input", -1)]),
+        df.TensorDimMatches("parameters", -1, [1, ("input", -1)]),
+    ],
+)
 
 # =============================================================================
 # ChannelwiseOp Kernel Implementation
 # =============================================================================
 
+
 @kernel(
     description="Channel-wise parametric operations (add/mul/cmp) with PE parallelism",
-    author="Thomas Keller (migrated from AMD FINN)"
+    author="Thomas Keller (migrated from AMD FINN)",
 )
 class ChannelwiseOp(KernelOp):
     """Hardware kernel for channel-wise parametric operations.
@@ -147,7 +145,9 @@ class ChannelwiseOp(KernelOp):
         return True
 
     @classmethod
-    def infer_from(cls, node: NodeProto, model: ModelWrapper, insert_index: int) -> TransformationResult:
+    def infer_from(
+        cls, node: NodeProto, model: ModelWrapper, insert_index: int
+    ) -> TransformationResult:
         """Infer ChannelwiseOp from ONNX Add/Mul/LessOrEqual/GreaterOrEqual.
 
         Uses helper functions to detect and reorder inputs to canonical
@@ -216,17 +216,17 @@ class ChannelwiseOp(KernelOp):
         tmem = self.calc_tmem()
 
         # Basic shape validation (builder ensures divisibility)
-        assert orig_param_vector.ndim == 1, (
-            f"Parameter vector dimension is {orig_param_vector.ndim}. Expected dimension: 1."
-        )
-        assert orig_param_vector.shape[0] == num_channels, (
-            f"Parameter vector size {orig_param_vector.shape[0]} != NumChannels {num_channels}"
-        )
+        assert (
+            orig_param_vector.ndim == 1
+        ), f"Parameter vector dimension is {orig_param_vector.ndim}. Expected dimension: 1."
+        assert (
+            orig_param_vector.shape[0] == num_channels
+        ), f"Parameter vector size {orig_param_vector.shape[0]} != NumChannels {num_channels}"
 
         # Ensure all parameters are integers (Defensive check)
-        assert (orig_param_vector.astype(np.int32) == orig_param_vector).all(), (
-            "All parameters must be integers"
-        )
+        assert (
+            orig_param_vector.astype(np.int32) == orig_param_vector
+        ).all(), "All parameters must be integers"
 
         # Distribute rows between PEs (interleaving)
         # Transform: [ch0, ch1, ..., ch_n] → [[ch0, ch_PE, ...], [ch1, ch_PE+1, ...], ...]

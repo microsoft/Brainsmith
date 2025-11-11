@@ -62,16 +62,18 @@ class TestBrainsmithNodeStableDomain:
         model = model.transform(InferKernels())
         node = model.graph.node[0]
 
-        assert node.domain == "brainsmith.kernels", \
-            f"Expected domain 'brainsmith.kernels', got '{node.domain}'"
+        assert (
+            node.domain == "brainsmith.kernels"
+        ), f"Expected domain 'brainsmith.kernels', got '{node.domain}'"
 
         # Specialize
         model = model.transform(SpecializeKernels("xc7z020clg400-1"))
         node = model.graph.node[0]
 
         # Domain should be unchanged
-        assert node.domain == "brainsmith.kernels", \
-            f"Domain mutated! Expected 'brainsmith.kernels', got '{node.domain}'"
+        assert (
+            node.domain == "brainsmith.kernels"
+        ), f"Domain mutated! Expected 'brainsmith.kernels', got '{node.domain}'"
 
     def test_optype_unchanged(self):
         """Brainsmith nodes should not have op_type mutation."""
@@ -81,16 +83,18 @@ class TestBrainsmithNodeStableDomain:
         model = model.transform(InferKernels())
         node = model.graph.node[0]
 
-        assert node.op_type == "ChannelwiseOp", \
-            f"Expected op_type 'ChannelwiseOp', got '{node.op_type}'"
+        assert (
+            node.op_type == "ChannelwiseOp"
+        ), f"Expected op_type 'ChannelwiseOp', got '{node.op_type}'"
 
         # Specialize
         model = model.transform(SpecializeKernels("xc7z020clg400-1"))
         node = model.graph.node[0]
 
         # Op type should be unchanged (not ChannelwiseOp_hls)
-        assert node.op_type == "ChannelwiseOp", \
-            f"Op type mutated! Expected 'ChannelwiseOp', got '{node.op_type}'"
+        assert (
+            node.op_type == "ChannelwiseOp"
+        ), f"Op type mutated! Expected 'ChannelwiseOp', got '{node.op_type}'"
 
     def test_implementation_attribute_set(self):
         """Brainsmith nodes should have implementation attribute set."""
@@ -107,8 +111,12 @@ class TestBrainsmithNodeStableDomain:
 
         # Should have implementation attribute
         impl = op.get_nodeattr("implementation")
-        assert impl in {"vitis_hls", "vivado_hls", "verilog", "systemverilog"}, \
-            f"Invalid implementation '{impl}'"
+        assert impl in {
+            "vitis_hls",
+            "vivado_hls",
+            "verilog",
+            "systemverilog",
+        }, f"Invalid implementation '{impl}'"
 
     def test_backend_attribute_set(self):
         """Brainsmith nodes should have backend='fpgadataflow' for FINN compatibility."""
@@ -125,8 +133,7 @@ class TestBrainsmithNodeStableDomain:
 
         # Should have backend attribute for FINN compatibility
         backend = op.get_nodeattr("backend")
-        assert backend == "fpgadataflow", \
-            f"Expected backend='fpgadataflow', got '{backend}'"
+        assert backend == "fpgadataflow", f"Expected backend='fpgadataflow', got '{backend}'"
 
     def test_preferred_impl_style_hls(self):
         """Respect preferred_impl_style='hls'."""
@@ -146,8 +153,7 @@ class TestBrainsmithNodeStableDomain:
         op = getHWCustomOp(node, model)
 
         impl = op.get_nodeattr("implementation")
-        assert "hls" in impl.lower(), \
-            f"Expected HLS implementation, got '{impl}'"
+        assert "hls" in impl.lower(), f"Expected HLS implementation, got '{impl}'"
 
     def test_preferred_impl_style_rtl(self):
         """Respect preferred_impl_style='rtl'."""
@@ -167,8 +173,7 @@ class TestBrainsmithNodeStableDomain:
         op = getHWCustomOp(node, model)
 
         impl = op.get_nodeattr("implementation")
-        assert impl in {"verilog", "systemverilog"}, \
-            f"Expected RTL implementation, got '{impl}'"
+        assert impl in {"verilog", "systemverilog"}, f"Expected RTL implementation, got '{impl}'"
 
 
 class TestFINNNodeBackwardCompatibility:
@@ -213,8 +218,9 @@ class TestEdgeCases:
         op = getHWCustomOp(node, model)
         second_impl = op.get_nodeattr("implementation")
 
-        assert first_impl == second_impl, \
-            f"Re-specialization changed implementation: {first_impl} → {second_impl}"
+        assert (
+            first_impl == second_impl
+        ), f"Re-specialization changed implementation: {first_impl} → {second_impl}"
 
     def test_non_hw_nodes_unchanged(self):
         """Non-hardware nodes should be left unchanged."""

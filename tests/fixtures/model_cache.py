@@ -44,9 +44,7 @@ class ModelCache:
             "golden_misses": 0,
         }
 
-    def get_stage1_model(
-        self, test_id: str, builder: Callable[[], ModelWrapper]
-    ) -> ModelWrapper:
+    def get_stage1_model(self, test_id: str, builder: Callable[[], ModelWrapper]) -> ModelWrapper:
         """Get or build Stage 1 ONNX model.
 
         Args:
@@ -84,9 +82,7 @@ class ModelCache:
         self._stage2_models[test_id] = (op, model)
         return op, model
 
-    def get_stage3_model(
-        self, test_id: str, fpgapart: str, builder: Callable[[], tuple]
-    ) -> tuple:
+    def get_stage3_model(self, test_id: str, fpgapart: str, builder: Callable[[], tuple]) -> tuple:
         """Get or build Stage 3 Backend model.
 
         Args:

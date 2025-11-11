@@ -26,6 +26,7 @@ class DSEConfig:
         stop_step: Optional pipeline ending step
         finn_overrides: Direct FINN configuration overrides
     """
+
     # Always required
     clock_ns: float  # Required field, mapped to synth_clk_period_ns in FINN config
 
@@ -58,7 +59,7 @@ def _parse_output_type(output_str: str) -> OutputType:
     try:
         return OutputType(output_str)
     except ValueError:
-        valid = ', '.join(t.value for t in OutputType)
+        valid = ", ".join(t.value for t in OutputType)
         raise ValueError(f"Invalid output '{output_str}'. Must be one of: {valid}")
 
 
@@ -79,12 +80,10 @@ def extract_config(data: dict[str, Any]) -> DSEConfig:
         ValueError: If validation fails (from DSEConfig.__post_init__)
     """
     return DSEConfig(
-        clock_ns=float(data['clock_ns']),
-        output=_parse_output_type(data.get('output', 'estimates')),
-        board=data.get('board'),
-        start_step=data.get('start_step'),
-        stop_step=data.get('stop_step'),
-        finn_overrides=data.get('finn_config', {})
+        clock_ns=float(data["clock_ns"]),
+        output=_parse_output_type(data.get("output", "estimates")),
+        board=data.get("board"),
+        start_step=data.get("start_step"),
+        stop_step=data.get("stop_step"),
+        finn_overrides=data.get("finn_config", {}),
     )
-
-

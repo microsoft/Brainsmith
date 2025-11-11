@@ -54,10 +54,8 @@ except ImportError:
 # Commutative Input Detection
 # ============================================================================
 
-def find_static_dynamic_pair(
-    inputs: list[str],
-    model: ModelWrapper
-) -> tuple[str, str] | None:
+
+def find_static_dynamic_pair(inputs: list[str], model: ModelWrapper) -> tuple[str, str] | None:
     """Find (dynamic, static) pair from commutative binary op inputs.
 
     For operations like Add, Mul where input order doesn't affect semantics,
@@ -107,10 +105,7 @@ def find_static_dynamic_pair(
         return (inputs[0], inputs[1])
 
 
-def find_dynamic_inputs(
-    inputs: list[str],
-    model: ModelWrapper
-) -> list[str]:
+def find_dynamic_inputs(inputs: list[str], model: ModelWrapper) -> list[str]:
     """Find all dynamic (non-initializer) inputs.
 
     Used for operations that expect all-dynamic inputs (e.g., AddStreams).
@@ -130,10 +125,7 @@ def find_dynamic_inputs(
     return [inp for inp in inputs if inp not in initializer_names]
 
 
-def find_static_inputs(
-    inputs: list[str],
-    model: ModelWrapper
-) -> list[str]:
+def find_static_inputs(inputs: list[str], model: ModelWrapper) -> list[str]:
     """Find all static (initializer) inputs.
 
     Args:
@@ -151,10 +143,7 @@ def find_static_inputs(
     return [inp for inp in inputs if inp in initializer_names]
 
 
-def find_dynamic_dynamic_pair(
-    inputs: list[str],
-    model: ModelWrapper
-) -> tuple[str, str] | None:
+def find_dynamic_dynamic_pair(inputs: list[str], model: ModelWrapper) -> tuple[str, str] | None:
     """Find (lhs, rhs) pair from both-dynamic binary op inputs.
 
     For operations like Add, Mul where both inputs are streaming/dynamic,
@@ -199,10 +188,8 @@ def find_dynamic_dynamic_pair(
 # Tensor Property Checks (For Inference-Time Validation)
 # ============================================================================
 
-def check_all_integer_types(
-    tensors: list[str],
-    model: ModelWrapper
-) -> bool:
+
+def check_all_integer_types(tensors: list[str], model: ModelWrapper) -> bool:
     """Check if all tensors have integer datatypes.
 
     Args:
@@ -222,10 +209,7 @@ def check_all_integer_types(
         return False
 
 
-def check_shapes_equal(
-    tensors: list[str],
-    model: ModelWrapper
-) -> bool:
+def check_shapes_equal(tensors: list[str], model: ModelWrapper) -> bool:
     """Check if all tensors have identical shapes.
 
     Args:
@@ -243,9 +227,7 @@ def check_shapes_equal(
 
 
 def check_parameter_shape_matches_channels(
-    data_tensor: str,
-    param_tensor: str,
-    model: ModelWrapper
+    data_tensor: str, param_tensor: str, model: ModelWrapper
 ) -> bool:
     """Check if parameter shape matches channel count or is scalar.
 
@@ -303,10 +285,9 @@ def check_parameter_shape_matches_channels(
 # Scalar Broadcasting Helper
 # ============================================================================
 
+
 def expand_scalar_to_channels(
-    scalar_tensor_name: str,
-    num_channels: int,
-    model: ModelWrapper
+    scalar_tensor_name: str, num_channels: int, model: ModelWrapper
 ) -> str:
     """Expand scalar parameter to per-channel vector.
 
@@ -356,7 +337,7 @@ def expand_scalar_to_channels(
         expanded_name,
         orig_tensor_proto.data_type,  # Reuse ONNX tensor proto type
         [num_channels],
-        expanded_values.flatten().tolist()
+        expanded_values.flatten().tolist(),
     )
 
     # Add to graph
@@ -374,11 +355,8 @@ def expand_scalar_to_channels(
 # Broadcasting Analysis (Phase 2)
 # ============================================================================
 
-def check_shapes_broadcastable(
-    tensor1: str,
-    tensor2: str,
-    model: ModelWrapper
-) -> bool:
+
+def check_shapes_broadcastable(tensor1: str, tensor2: str, model: ModelWrapper) -> bool:
     """Check if two tensors have broadcastable shapes.
 
     Uses numpy broadcasting semantics (matches ONNX).
@@ -406,11 +384,7 @@ def check_shapes_broadcastable(
         return False
 
 
-def get_broadcast_info(
-    lhs_tensor: str,
-    rhs_tensor: str,
-    model: ModelWrapper
-):
+def get_broadcast_info(lhs_tensor: str, rhs_tensor: str, model: ModelWrapper):
     """Get broadcasting metadata for two tensors.
 
     Returns BroadcastInfo object with broadcasting analysis, or None if
@@ -445,10 +419,8 @@ def get_broadcast_info(
 # Scalar Tensor Normalization
 # ============================================================================
 
-def lift_scalar_to_rank1(
-    tensor_name: str,
-    model: ModelWrapper
-) -> bool:
+
+def lift_scalar_to_rank1(tensor_name: str, model: ModelWrapper) -> bool:
     """Lift scalar tensor (rank 0) to rank-1 tensor with single element.
 
     ONNX Broadcasting Semantics: Scalar [] and rank-1 [1] are semantically

@@ -80,7 +80,6 @@ class KernelTestBase(ABC):
         """
         return 42
 
-
     def get_backend_variants(self) -> list[type] | None:
         """Backend variant classes for specialization in priority order.
 
@@ -223,22 +222,22 @@ class KernelTestBase(ABC):
         op = getHWCustomOp(onnx_node, model)
 
         # Verify it's a HW node
-        assert isinstance(op, HWCustomOp), (
-            f"Node {target_node} is not a hardware operator (found {type(op).__name__})"
-        )
+        assert isinstance(
+            op, HWCustomOp
+        ), f"Node {target_node} is not a hardware operator (found {type(op).__name__})"
 
         # Type checking if expected_type provided
         if expected_type is not None:
             if isinstance(expected_type, type):
                 # Class check
-                assert isinstance(op, expected_type), (
-                    f"Node {target_node} is {type(op).__name__}, expected {expected_type.__name__}"
-                )
+                assert isinstance(
+                    op, expected_type
+                ), f"Node {target_node} is {type(op).__name__}, expected {expected_type.__name__}"
             elif isinstance(expected_type, str):
                 # op_type string check
-                assert op.onnx_node.op_type == expected_type, (
-                    f"Node {target_node} has op_type {op.onnx_node.op_type}, expected {expected_type}"
-                )
+                assert (
+                    op.onnx_node.op_type == expected_type
+                ), f"Node {target_node} has op_type {op.onnx_node.op_type}, expected {expected_type}"
 
         return op
 
@@ -284,9 +283,7 @@ class KernelTestBase(ABC):
         return self._generate_test_inputs(kernel_test_config)
 
     def _build_golden_outputs(
-        self,
-        stage1_model: ModelWrapper,
-        test_inputs: dict[str, np.ndarray]
+        self, stage1_model: ModelWrapper, test_inputs: dict[str, np.ndarray]
     ) -> dict[str, np.ndarray]:
         """Build golden outputs from Stage 1 model.
 
@@ -453,18 +450,14 @@ class KernelTestBase(ABC):
             True if op has kernel_schema attribute (Brainsmith KernelOp)
             False if FINN HWCustomOp only
         """
-        return hasattr(op, 'kernel_schema')
+        return hasattr(op, "kernel_schema")
 
     # ========================================================================
     # Shared Utility 5: Auto-Configuration from Fixture
     # ========================================================================
 
     def auto_configure_from_fixture(
-        self,
-        op,
-        model: ModelWrapper,
-        stage: int,
-        config: KernelTestConfig
+        self, op, model: ModelWrapper, stage: int, config: KernelTestConfig
     ) -> None:
         """Auto-apply DSE parameters from test configuration.
 

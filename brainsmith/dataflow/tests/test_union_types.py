@@ -74,7 +74,10 @@ def test_dimspec_tuple_shorthand():
         outputs=[
             OutputSchema(
                 name="output0",
-                block_tiling=[FULL_DIM, block_dim_tuple("input0", -1)],  # Derive from input's last block dim
+                block_tiling=[
+                    FULL_DIM,
+                    block_dim_tuple("input0", -1),
+                ],  # Derive from input's last block dim
                 stream_tiling=[1, "SIMD"],
             )
         ],
@@ -164,7 +167,10 @@ def test_dimspec_derive_dim_helper():
         outputs=[
             OutputSchema(
                 name="output0",
-                block_tiling=[FULL_DIM, derive_dim("input0", ShapeHierarchy.BLOCK, -1)],  # Helper with BLOCK hierarchy
+                block_tiling=[
+                    FULL_DIM,
+                    derive_dim("input0", ShapeHierarchy.BLOCK, -1),
+                ],  # Helper with BLOCK hierarchy
                 stream_tiling=[1, "SIMD"],
             )
         ],

@@ -22,10 +22,12 @@ from brainsmith.settings.schema import LoggingConfig
 # Test Utilities
 # ============================================================================
 
+
 def get_console_handlers(logger_name: str) -> list[logging.Handler]:
     """Get console handlers from a logger."""
     logger = logging.getLogger(logger_name)
     from rich.logging import RichHandler
+
     return [h for h in logger.handlers if isinstance(h, RichHandler)]
 
 
@@ -58,6 +60,7 @@ def clean_logging():
 # ============================================================================
 # CI/CD Test Suite: Logging Setup (9 tests)
 # ============================================================================
+
 
 class TestVerbosityLevels:
     """Test handler attachment at each verbosity level."""
@@ -158,7 +161,7 @@ class TestAdvancedFeatures:
             lineno=0,
             msg="Compiling module work.foo",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         record_no_match = logging.LogRecord(
@@ -168,7 +171,7 @@ class TestAdvancedFeatures:
             lineno=0,
             msg="Some other message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         # Filter should suppress matching record
@@ -177,13 +180,7 @@ class TestAdvancedFeatures:
 
     def test_per_tool_handlers(self, clean_logging):
         """Separate handlers created for each FINN tool."""
-        config = LoggingConfig(
-            level="verbose",
-            finn_tools={
-                "vivado": "WARNING",
-                "hls": "INFO"
-            }
-        )
+        config = LoggingConfig(level="verbose", finn_tools={"vivado": "WARNING", "hls": "INFO"})
 
         setup_logging(level="verbose", output_dir=None, config=config)
 

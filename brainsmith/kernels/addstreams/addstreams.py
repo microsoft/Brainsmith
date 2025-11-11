@@ -46,7 +46,9 @@ ADDSTREAMS_SCHEMA = df.KernelSchema(
         df.OutputSchema(
             name="output",
             block_tiling=FULL_SHAPE,  # Rank-agnostic: works with any tensor rank
-            stream_tiling=[derive_dim("input0", ShapeHierarchy.STREAM, -1)],  # Auto-pads to match rank
+            stream_tiling=[
+                derive_dim("input0", ShapeHierarchy.STREAM, -1)
+            ],  # Auto-pads to match rank
             datatype=add_datatype("input0", "input1"),  # INT8 + INT8 → INT9 (prevents overflow)
             required_layout="NHWC",  # Embedded layout requirement
         )
@@ -55,14 +57,11 @@ ADDSTREAMS_SCHEMA = df.KernelSchema(
         df.IsDynamic(("input0", "input1")),
         df.DatatypeInteger(("input0", "input1")),
         df.ShapesEqual(("input0", "input1")),
-    ]
+    ],
 )
 
 
-@kernel(
-    description="Element-wise addition of two integer streams",
-    author="FINN Team"
-)
+@kernel(description="Element-wise addition of two integer streams", author="FINN Team")
 class AddStreams(KernelOp):
     """Hardware kernel for element-wise addition of two streams."""
 
@@ -88,10 +87,7 @@ class AddStreams(KernelOp):
 
     @classmethod
     def infer_from(
-        cls,
-        node: NodeProto,
-        model: ModelWrapper,
-        insert_index: int
+        cls, node: NodeProto, model: ModelWrapper, insert_index: int
     ) -> df.TransformationResult:
         """Create AddStreams HW node from ONNX Add node.
 
@@ -112,7 +108,7 @@ class AddStreams(KernelOp):
             outputs=list(node.output),
             domain="brainsmith.kernels",
             backend="fpgadataflow",
-            name=f"AddStreams_{node.name}"
+            name=f"AddStreams_{node.name}",
         )
 
         return df.TransformationResult(

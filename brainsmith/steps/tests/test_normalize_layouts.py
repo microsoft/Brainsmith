@@ -54,8 +54,9 @@ def test_normalize_layouts_step_execution():
 
     # Verify transformation occurred
     assert transformed_model is not None
-    assert len(transformed_model.graph.node) > initial_node_count, \
-        "Should have added Transpose nodes"
+    assert (
+        len(transformed_model.graph.node) > initial_node_count
+    ), "Should have added Transpose nodes"
 
     # Find Transpose nodes
     transpose_nodes = [n for n in transformed_model.graph.node if n.op_type == "Transpose"]

@@ -19,6 +19,7 @@ from brainsmith.dataflow.dse_models import (
 # Test InterfaceDesignSpace
 # =============================================================================
 
+
 def test_invariant_interface_model_creation():
     """Test InterfaceDesignSpace can be created with required fields."""
     model = InterfaceDesignSpace(
@@ -83,6 +84,7 @@ def test_invariant_interface_model_weight_flag():
 # =============================================================================
 # Test KernelDesignSpace
 # =============================================================================
+
 
 def test_kernel_design_space_creation():
     """Test KernelDesignSpace can be created with all required fields."""

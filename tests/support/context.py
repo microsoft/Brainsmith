@@ -40,9 +40,7 @@ from tests.support.onnx_utils import get_onnx_tensor_type
 
 
 def make_execution_context_onnx(
-    model: ModelWrapper,
-    input_names: list[str],
-    seed: int | None = None
+    model: ModelWrapper, input_names: list[str], seed: int | None = None
 ) -> dict[str, np.ndarray]:
     """Create execution context from pure ONNX model (TensorProto types).
 
@@ -107,9 +105,7 @@ def make_execution_context_onnx(
 
 
 def make_execution_context_qonnx(
-    model: ModelWrapper,
-    op: HWCustomOp,
-    seed: int | None = None
+    model: ModelWrapper, op: HWCustomOp, seed: int | None = None
 ) -> dict[str, np.ndarray]:
     """Create execution context from QONNX model (DataType annotations).
 
@@ -177,7 +173,7 @@ def make_execution_context_qonnx(
                 data = np.random.randint(
                     max(dtype.min(), 0),  # Ensure non-negative
                     min(dtype.max() + 1, UNSIGNED_TEST_DATA_CAP),
-                    size=shape
+                    size=shape,
                 ).astype(np.float32)
             else:
                 # Signed type (e.g., INT8)
@@ -187,7 +183,7 @@ def make_execution_context_qonnx(
                 data = np.random.randint(
                     max(dtype.min(), SIGNED_TEST_DATA_MIN),
                     min(dtype.max() + 1, SIGNED_TEST_DATA_MAX),
-                    size=shape
+                    size=shape,
                 ).astype(np.float32)
 
             context[inp_name] = data
@@ -218,9 +214,7 @@ def make_execution_context_qonnx(
 
 
 def make_execution_context(
-    model: ModelWrapper,
-    op: HWCustomOp,
-    seed: int | None = None
+    model: ModelWrapper, op: HWCustomOp, seed: int | None = None
 ) -> dict[str, np.ndarray]:
     """[DEPRECATED] Use make_execution_context_qonnx() instead.
 
@@ -232,11 +226,12 @@ def make_execution_context(
     - Use make_execution_context_qonnx() for FINN execution (Stage 2+)
     """
     import warnings
+
     warnings.warn(
         "make_execution_context() is deprecated. "
         "Use make_execution_context_onnx() for golden reference or "
         "make_execution_context_qonnx() for FINN/Brainsmith execution.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
     return make_execution_context_qonnx(model, op, seed)

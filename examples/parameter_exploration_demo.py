@@ -43,8 +43,10 @@ from brainsmith.dataflow.utils import iter_valid_configurations
 # ANSI Color Codes
 # ============================================================================
 
+
 class Colors:
     """ANSI color codes for terminal output."""
+
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"
@@ -84,6 +86,7 @@ class Colors:
 # Model Creation
 # ============================================================================
 
+
 def create_layernorm_model(hidden_size: int = 64) -> ModelWrapper:
     """Create a simple ONNX model with LayerNorm for demonstration.
 
@@ -94,12 +97,8 @@ def create_layernorm_model(hidden_size: int = 64) -> ModelWrapper:
     Returns:
         ModelWrapper containing the LayerNorm model
     """
-    input_tensor = helper.make_tensor_value_info(
-        "input", TensorProto.FLOAT, [1, 1, hidden_size]
-    )
-    output_tensor = helper.make_tensor_value_info(
-        "output", TensorProto.FLOAT, [1, 1, hidden_size]
-    )
+    input_tensor = helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 1, hidden_size])
+    output_tensor = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, 1, hidden_size])
 
     node = helper.make_node(
         "LayerNorm",
@@ -110,15 +109,10 @@ def create_layernorm_model(hidden_size: int = 64) -> ModelWrapper:
         SIMD=1,  # Will be explored
         epsilon=1e-5,
         input0Datatype="FLOAT32",
-        output0Datatype="FLOAT32"
+        output0Datatype="FLOAT32",
     )
 
-    graph = helper.make_graph(
-        [node],
-        "layernorm_demo_graph",
-        [input_tensor],
-        [output_tensor]
-    )
+    graph = helper.make_graph([node], "layernorm_demo_graph", [input_tensor], [output_tensor])
 
     model = helper.make_model(graph)
     return ModelWrapper(model)
@@ -127,6 +121,7 @@ def create_layernorm_model(hidden_size: int = 64) -> ModelWrapper:
 # ============================================================================
 # ASCII Visualization Functions
 # ============================================================================
+
 
 def print_header(title: str, width: int = 80):
     """Print a fancy header banner."""
@@ -145,9 +140,7 @@ def print_section(title: str):
 
 
 def print_distribution_histogram(
-    param_name: str,
-    value_counts: dict[int, int],
-    max_width: int = 50
+    param_name: str, value_counts: dict[int, int], max_width: int = 50
 ):
     """Print ASCII histogram of parameter value distribution.
 
@@ -182,11 +175,7 @@ def print_distribution_histogram(
         print(f"  {value:4d} {color}{bar}{c.RESET} {count:,}")
 
 
-def print_parameter_grid(
-    configs: list[dict[str, int]],
-    param1: str,
-    param2: str = None
-):
+def print_parameter_grid(configs: list[dict[str, int]], param1: str, param2: str = None):
     """Print 2D grid visualization of parameter space.
 
     Args:
@@ -218,10 +207,7 @@ def print_parameter_grid(
             print(f"{c.DIM}  {v1:6d} │{c.RESET}", end="")
             for v2 in values2:
                 # Check if this combination exists
-                exists = any(
-                    cfg.get(param1) == v1 and cfg.get(param2) == v2
-                    for cfg in configs
-                )
+                exists = any(cfg.get(param1) == v1 and cfg.get(param2) == v2 for cfg in configs)
                 if exists:
                     print(f"{c.GREEN} ●  {c.RESET}", end="")
                 else:
@@ -238,9 +224,7 @@ def print_parameter_grid(
 
 
 def print_performance_heatmap(
-    configs: list[dict[str, int]],
-    scores: list[float],
-    param_name: str = "SIMD"
+    configs: list[dict[str, int]], scores: list[float], param_name: str = "SIMD"
 ):
     """Print performance heatmap (simulated performance scores).
 
@@ -292,15 +276,10 @@ def print_performance_heatmap(
             color = c.BG_RED + c.BLACK
             indicator = "██    "
 
-        print(f"  {param_name}={value:4d}  {color}{indicator}{c.RESET}  "
-              f"Score: {avg_score:.2f}")
+        print(f"  {param_name}={value:4d}  {color}{indicator}{c.RESET}  " f"Score: {avg_score:.2f}")
 
 
-def print_table(
-    headers: list[str],
-    rows: list[list],
-    title: str = None
-):
+def print_table(headers: list[str], rows: list[list], title: str = None):
     """Print ASCII table.
 
     Args:
@@ -390,6 +369,7 @@ def print_progress_bar(current: int, total: int, width: int = 50):
 # Main Demo
 # ============================================================================
 
+
 def simulate_performance_score(config: dict[str, int]) -> float:
     """Simulate a performance score for demonstration.
 
@@ -404,7 +384,7 @@ def simulate_performance_score(config: dict[str, int]) -> float:
     """
     simd = config.get("SIMD", 1)
     # Simulate: higher parallelism = better performance, with diminishing returns
-    return 100.0 * (1.0 - (1.0 / (simd ** 0.5)))
+    return 100.0 * (1.0 - (1.0 / (simd**0.5)))
 
 
 def main():
@@ -444,8 +424,10 @@ def main():
     print(f"  Parameters found: {c.BOLD}{', '.join(valid_ranges.keys())}{c.RESET}")
 
     for param_name, param_values in valid_ranges.items():
-        print(f"    {param_name}: {len(param_values)} values "
-              f"(range: {min(param_values)} - {max(param_values)})")
+        print(
+            f"    {param_name}: {len(param_values)} values "
+            f"(range: {min(param_values)} - {max(param_values)})"
+        )
 
     # Calculate total configs
     total_configs = 1
@@ -477,8 +459,10 @@ def main():
 
     elapsed = time.time() - start_time
 
-    print(f"\n\n  {c.GREEN}✓{c.RESET} Explored {len(configs):,} configurations in "
-          f"{c.BOLD}{elapsed:.3f}s{c.RESET}")
+    print(
+        f"\n\n  {c.GREEN}✓{c.RESET} Explored {len(configs):,} configurations in "
+        f"{c.BOLD}{elapsed:.3f}s{c.RESET}"
+    )
     print(f"  Average time per config: {c.BOLD}{elapsed*1000/len(configs):.2f}ms{c.RESET}")
 
     # Step 4: Visualizations
@@ -508,11 +492,7 @@ def main():
     print_section("Step 5: Top Configurations")
 
     # Sort by score (descending)
-    sorted_configs = sorted(
-        zip(configs, scores),
-        key=lambda x: x[1],
-        reverse=True
-    )
+    sorted_configs = sorted(zip(configs, scores), key=lambda x: x[1], reverse=True)
 
     # Build table data
     top_n = min(10, len(sorted_configs))

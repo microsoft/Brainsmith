@@ -28,12 +28,7 @@ def make_simple_add_model():
     add_node = helper.make_node("Add", ["in0", "in1"], ["out"], name="Add_0")
 
     # Create graph
-    graph = helper.make_graph(
-        [add_node],
-        "test_add",
-        [in0, in1],
-        [out]
-    )
+    graph = helper.make_graph([add_node], "test_add", [in0, in1], [out])
 
     # Create model
     model = helper.make_model(graph, producer_name="test")
@@ -46,6 +41,7 @@ def make_simple_add_model():
 
     # Set layout
     import qonnx.core.data_layout as DataLayout
+
     model.set_tensor_layout("in0", DataLayout.NHWC)
     model.set_tensor_layout("in1", DataLayout.NHWC)
     model.set_tensor_layout("out", DataLayout.NHWC)
@@ -131,6 +127,7 @@ def test_infer_kernel_statistics():
 
     # Set layout
     import qonnx.core.data_layout as DataLayout
+
     for tensor in ["in0", "in1", "mid", "out"]:
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 

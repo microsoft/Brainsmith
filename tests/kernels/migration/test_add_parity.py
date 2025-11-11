@@ -79,20 +79,10 @@ class TestAddParity(KernelParityTest):
         out = helper.make_tensor_value_info("output", TensorProto.FLOAT, shape0)
 
         # Create Add ONNX node
-        node = helper.make_node(
-            "Add",
-            ["input0", "input1"],
-            ["output"],
-            name="Add_0"
-        )
+        node = helper.make_node("Add", ["input0", "input1"], ["output"], name="Add_0")
 
         # Create graph and model
-        graph = helper.make_graph(
-            [node],
-            "test_elementwise_add_parity",
-            [inp0, inp1],
-            [out]
-        )
+        graph = helper.make_graph([node], "test_elementwise_add_parity", [inp0, inp1], [out])
 
         model = ModelWrapper(qonnx_make_model(graph))
 
@@ -145,13 +135,14 @@ class TestAddParity(KernelParityTest):
 
         # Find the ElementwiseAdd node by op_type (FINN doesn't preserve node name)
         nodes_by_op_type = model.get_nodes_by_op_type("ElementwiseAdd")
-        assert len(nodes_by_op_type) == 1, (
-            f"Expected exactly 1 ElementwiseAdd node, found {len(nodes_by_op_type)}"
-        )
+        assert (
+            len(nodes_by_op_type) == 1
+        ), f"Expected exactly 1 ElementwiseAdd node, found {len(nodes_by_op_type)}"
 
         # Get the ONNX node and wrap with custom op
         onnx_node = nodes_by_op_type[0]
         from qonnx.custom_op.registry import getCustomOp
+
         op = getCustomOp(onnx_node)
 
         return op, model
@@ -165,8 +156,8 @@ class TestAddParity(KernelParityTest):
         from finn.custom_op.fpgadataflow.hls.elementwise_binary_hls import (
             ElementwiseAdd_hls,
         )
-        return [ElementwiseAdd_hls]
 
+        return [ElementwiseAdd_hls]
 
     # No configure_kernel_reference() override needed - uses default auto_configure_from_fixture()
 
@@ -181,6 +172,7 @@ class TestAddParity(KernelParityTest):
             ElementwiseBinaryOp class
         """
         from brainsmith.kernels.elementwise_binary import ElementwiseBinaryOp
+
         return ElementwiseBinaryOp
 
     # Primary implementation uses inherited defaults from KernelTestBase:

@@ -20,15 +20,17 @@ SOFTMAX_SCHEMA = df.KernelSchema(
     inputs=[
         df.InputSchema(
             name="input",
-            block_tiling=[FULL_DIM],       # One Softmax op: (1, 1, channels)
-            stream_tiling=["SIMD"],        # Stream channels with SIMD parallelism
+            block_tiling=[FULL_DIM],  # One Softmax op: (1, 1, channels)
+            stream_tiling=["SIMD"],  # Stream channels with SIMD parallelism
         )
     ],
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[FULL_DIM],           # Same as input: (1, 1, channels)
-            stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],     # Output streams at same rate as input
+            block_tiling=[FULL_DIM],  # Same as input: (1, 1, channels)
+            stream_tiling=[
+                derive_dim("input", ShapeHierarchy.STREAM, -1)
+            ],  # Output streams at same rate as input
             datatype=constant_datatype("FLOAT32"),  # Always FLOAT32 (integer inputs upcast in HLS)
         )
     ],
@@ -36,14 +38,11 @@ SOFTMAX_SCHEMA = df.KernelSchema(
         # Input must be dynamic (no initializers)
         # Note: Integer inputs (e.g., INT4, INT8) are safely upcast to FLOAT32 in HLS
         df.IsDynamic("input"),
-    ]
+    ],
 )
 
 
-@kernel(
-    description="Float32 Softmax using Dataflow Modeling",
-    author="Shane Fleming"
-)
+@kernel(description="Float32 Softmax using Dataflow Modeling", author="Shane Fleming")
 class Softmax(KernelOp):
     """Abstraction layer for HW implementation of Softmax layers."""
 
@@ -60,7 +59,7 @@ class Softmax(KernelOp):
 
         Only accepts Softmax nodes operating on last axis (channel dimension).
         """
-        if node.op_type != "Softmax" or node.domain=="brainsmith.kernels":
+        if node.op_type != "Softmax" or node.domain == "brainsmith.kernels":
             return False
 
         # Check axis attribute (must be None or -1 for channel-wise softmax)
@@ -73,7 +72,9 @@ class Softmax(KernelOp):
         return axis == -1
 
     @classmethod
-    def infer_from(cls, node: NodeProto, model: ModelWrapper, insert_index: int) -> df.TransformationResult:
+    def infer_from(
+        cls, node: NodeProto, model: ModelWrapper, insert_index: int
+    ) -> df.TransformationResult:
         """Create Softmax Kernel node from ONNX Softmax node.
 
         NOTE: Softmax operates on the last dimension (axis=-1) and is layout-agnostic.
@@ -92,10 +93,7 @@ class Softmax(KernelOp):
             name=f"Softmax_{node.name}",
         )
 
-        return df.TransformationResult(
-            nodes_to_insert=[hw_node],
-            nodes_to_remove=[node]
-        )
+        return df.TransformationResult(nodes_to_insert=[hw_node], nodes_to_remove=[node])
 
     def execute_node(self, context, graph):
         node = self.onnx_node

@@ -125,7 +125,7 @@ def create_blueprint_file(
     name: str,
     clock_ns: float = 5.0,
     steps: list[str] | None = None,
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a blueprint YAML file from a template.
 
@@ -150,24 +150,19 @@ def create_blueprint_file(
         steps_yaml = steps
 
     # Handle kernel_backends formatting
-    if 'kernel_backends' in kwargs and isinstance(kwargs['kernel_backends'], list):
-        kwargs['kernel_backends'] = str(kwargs['kernel_backends'])
+    if "kernel_backends" in kwargs and isinstance(kwargs["kernel_backends"], list):
+        kwargs["kernel_backends"] = str(kwargs["kernel_backends"])
 
     # Handle step_operations formatting
-    if 'step_operations' in kwargs and isinstance(kwargs['step_operations'], list):
-        kwargs['step_operations'] = str(kwargs['step_operations'])
+    if "step_operations" in kwargs and isinstance(kwargs["step_operations"], list):
+        kwargs["step_operations"] = str(kwargs["step_operations"])
 
     # Handle kernels formatting
-    if 'kernels' in kwargs and isinstance(kwargs['kernels'], list):
-        kwargs['kernels'] = str(kwargs['kernels'])
+    if "kernels" in kwargs and isinstance(kwargs["kernels"], list):
+        kwargs["kernels"] = str(kwargs["kernels"])
 
     # Format the template
-    content = template.format(
-        name=name,
-        clock_ns=clock_ns,
-        steps=steps_yaml,
-        **kwargs
-    )
+    content = template.format(name=name, clock_ns=clock_ns, steps=steps_yaml, **kwargs)
 
     # Create file
     file_path = tmp_path / f"{name}.yaml"
@@ -197,7 +192,7 @@ def create_full_blueprint(
     output: str = "bitfile",
     board: str = "V80",
     target_fps: int | None = None,
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a full blueprint with all common fields.
 
@@ -224,7 +219,7 @@ def create_full_blueprint(
         output=output,
         board=board,
         target_fps=target_fps_yaml,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -233,7 +228,7 @@ def create_extends_blueprint(
     name: str = "test_child",
     extends: str = "parent.yaml",
     clock_ns: float | None = None,
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a blueprint that extends another (inheritance).
 
@@ -251,20 +246,12 @@ def create_extends_blueprint(
     clock_ns_yaml = f"\nclock_ns: {clock_ns}" if clock_ns is not None else ""
 
     return create_blueprint_file(
-        tmp_path,
-        EXTENDS_BLUEPRINT,
-        name,
-        extends=extends,
-        clock_ns=clock_ns_yaml,
-        **kwargs
+        tmp_path, EXTENDS_BLUEPRINT, name, extends=extends, clock_ns=clock_ns_yaml, **kwargs
     )
 
 
 def create_base_steps_blueprint(
-    tmp_path: Path,
-    name: str = "base",
-    steps: list[str] | None = None,
-    **kwargs
+    tmp_path: Path, name: str = "base", steps: list[str] | None = None, **kwargs
 ) -> Path:
     """Create a base blueprint for step operations testing.
 
@@ -280,13 +267,7 @@ def create_base_steps_blueprint(
     if steps is None:
         steps = ["custom:test_step", "custom:test_step1", "custom:test_step2"]
 
-    return create_blueprint_file(
-        tmp_path,
-        BASE_STEPS_BLUEPRINT,
-        name,
-        steps=steps,
-        **kwargs
-    )
+    return create_blueprint_file(tmp_path, BASE_STEPS_BLUEPRINT, name, steps=steps, **kwargs)
 
 
 def create_step_insert_after_blueprint(
@@ -295,7 +276,7 @@ def create_step_insert_after_blueprint(
     extends: str = "base.yaml",
     after_step: str = "custom:test_step",
     insert_step: str = "custom:test_identity_step",
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a blueprint with insert after operation.
 
@@ -317,7 +298,7 @@ def create_step_insert_after_blueprint(
         extends=extends,
         after_step=after_step,
         insert_step=insert_step,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -326,7 +307,7 @@ def create_step_insert_start_blueprint(
     name: str = "test_start",
     extends: str = "base.yaml",
     insert_step: str = "custom:test_transform_sequence_step",
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a blueprint with insert at start operation.
 
@@ -346,7 +327,7 @@ def create_step_insert_start_blueprint(
         name,
         extends=extends,
         insert_step=insert_step,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -355,7 +336,7 @@ def create_step_insert_end_blueprint(
     name: str = "test_end",
     extends: str = "base.yaml",
     insert_step: str = "custom:test_identity_step",
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a blueprint with insert at end operation.
 
@@ -375,7 +356,7 @@ def create_step_insert_end_blueprint(
         name,
         extends=extends,
         insert_step=insert_step,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -385,7 +366,7 @@ def create_step_replace_blueprint(
     extends: str = "base.yaml",
     replace_step: str = "custom:test_step1",
     with_step: str = "custom:test_identity_step",
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a blueprint with replace operation.
 
@@ -407,7 +388,7 @@ def create_step_replace_blueprint(
         extends=extends,
         replace_step=replace_step,
         with_step=with_step,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -416,7 +397,7 @@ def create_step_remove_blueprint(
     name: str = "test_remove",
     extends: str = "base.yaml",
     remove_step: str = "custom:test_step1",
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a blueprint with remove operation.
 
@@ -431,20 +412,11 @@ def create_step_remove_blueprint(
         Path to created blueprint file
     """
     return create_blueprint_file(
-        tmp_path,
-        STEP_REMOVE_BLUEPRINT,
-        name,
-        extends=extends,
-        remove_step=remove_step,
-        **kwargs
+        tmp_path, STEP_REMOVE_BLUEPRINT, name, extends=extends, remove_step=remove_step, **kwargs
     )
 
 
-def create_branch_points_blueprint(
-    tmp_path: Path,
-    name: str = "test_branches",
-    **kwargs
-) -> Path:
+def create_branch_points_blueprint(tmp_path: Path, name: str = "test_branches", **kwargs) -> Path:
     """Create a blueprint with branch points and skip operators.
 
     Args:
@@ -455,12 +427,7 @@ def create_branch_points_blueprint(
     Returns:
         Path to created blueprint file
     """
-    return create_blueprint_file(
-        tmp_path,
-        BRANCH_POINTS_BLUEPRINT,
-        name,
-        **kwargs
-    )
+    return create_blueprint_file(tmp_path, BRANCH_POINTS_BLUEPRINT, name, **kwargs)
 
 
 def create_inheritance_parent(
@@ -469,7 +436,7 @@ def create_inheritance_parent(
     steps: list[str] | None = None,
     kernels: list[str] | None = None,
     board: str | None = None,
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a parent blueprint for inheritance testing.
 
@@ -507,7 +474,7 @@ def create_inheritance_parent(
         steps=steps,
         board=board_yaml,
         kernels=kernels_yaml,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -516,7 +483,7 @@ def create_inheritance_grandparent(
     name: str = "grandparent",
     steps: list[str] | None = None,
     board: str | None = None,
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a grandparent blueprint for inheritance testing.
 
@@ -537,12 +504,7 @@ def create_inheritance_grandparent(
     board_yaml = f"\nboard: {board}" if board else ""
 
     return create_blueprint_file(
-        tmp_path,
-        INHERITANCE_GRANDPARENT_BLUEPRINT,
-        name,
-        steps=steps,
-        board=board_yaml,
-        **kwargs
+        tmp_path, INHERITANCE_GRANDPARENT_BLUEPRINT, name, steps=steps, board=board_yaml, **kwargs
     )
 
 
@@ -552,7 +514,7 @@ def create_step_range_blueprint(
     start_step: str | None = None,
     stop_step: str | None = None,
     steps: list[str] | None = None,
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create a blueprint with step range control.
 
@@ -584,7 +546,7 @@ def create_step_range_blueprint(
         start_step=start_step or "",
         stop_step=stop_step or "",
         steps=steps,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -597,31 +559,31 @@ def create_step_range_blueprint(
 # estimate_only_dataflow_steps (deps/finn/src/finn/builder/build_dataflow_config.py:132)
 
 FINN_PIPELINE_MINIMAL = [
-    'finn:streamline',  # Basic cleanup and optimization
-    'finn:tidy_up',     # Additional cleanup
+    "finn:streamline",  # Basic cleanup and optimization
+    "finn:tidy_up",  # Additional cleanup
 ]
 
 FINN_PIPELINE_ESTIMATES = [
     # Complete pipeline for resource/performance estimates
-    'finn:streamline',                    # Model optimization
-    'finn:convert_to_hw',                 # Convert to hardware layers
-    'finn:create_dataflow_partition',     # Create dataflow partitions
-    'finn:specialize_layers',             # Specialize to HLS/RTL variants
-    'finn:target_fps_parallelization',    # Auto-set PE/SIMD from target_fps
-    'finn:generate_estimate_reports',     # Generate resource estimates
+    "finn:streamline",  # Model optimization
+    "finn:convert_to_hw",  # Convert to hardware layers
+    "finn:create_dataflow_partition",  # Create dataflow partitions
+    "finn:specialize_layers",  # Specialize to HLS/RTL variants
+    "finn:target_fps_parallelization",  # Auto-set PE/SIMD from target_fps
+    "finn:generate_estimate_reports",  # Generate resource estimates
 ]
 
 FINN_PIPELINE_STITCHED_IP = [
     # Full pipeline for stitched IP generation (no synthesis)
-    'finn:streamline',
-    'finn:convert_to_hw',
-    'finn:create_dataflow_partition',
-    'finn:specialize_layers',
-    'finn:target_fps_parallelization',
-    'finn:hw_codegen',                    # Generate HLS code
-    'finn:hw_ipgen',                      # Generate IP
-    'finn:set_fifo_depths',               # Configure FIFOs
-    'finn:create_stitched_ip',            # Stitch IP together
+    "finn:streamline",
+    "finn:convert_to_hw",
+    "finn:create_dataflow_partition",
+    "finn:specialize_layers",
+    "finn:target_fps_parallelization",
+    "finn:hw_codegen",  # Generate HLS code
+    "finn:hw_ipgen",  # Generate IP
+    "finn:set_fifo_depths",  # Configure FIFOs
+    "finn:create_stitched_ip",  # Stitch IP together
 ]
 
 
@@ -631,7 +593,7 @@ def create_finn_blueprint(
     steps: list[str] | None = None,
     clock_ns: float = 5.0,
     target_fps: int = 100,  # Required for estimate pipelines
-    **kwargs
+    **kwargs,
 ) -> Path:
     """Create blueprint with FINN steps for integration tests.
 
@@ -690,7 +652,7 @@ def create_finn_blueprint(
         target_fps=target_fps,
         output="estimates",
         board="Pynq-Z1",  # Required for FINN
-        **kwargs
+        **kwargs,
     )
 
 
@@ -731,10 +693,7 @@ def minimal_blueprint(tmp_path, simple_onnx_model) -> Path:
         Path to minimal blueprint YAML file
     """
     return create_minimal_blueprint(
-        tmp_path,
-        name="minimal_dse",
-        steps=["test_step", "test_step1", "test_step2"],
-        clock_ns=5.0
+        tmp_path, name="minimal_dse", steps=["test_step", "test_step1", "test_step2"], clock_ns=5.0
     )
 
 
@@ -771,8 +730,8 @@ def rtl_blueprint(tmp_path, quantized_onnx_model) -> Path:
         description="RTL simulation blueprint (stub)",
         output="rtl",
         board="Pynq-Z1",  # Common FINN development board
-        clock_ns=10.0,    # Slower clock for RTL
-        steps=["test_step1", "test_step2"]  # Simplified for stub
+        clock_ns=10.0,  # Slower clock for RTL
+        steps=["test_step1", "test_step2"],  # Simplified for stub
     )
 
 
@@ -810,6 +769,6 @@ def bitfile_blueprint(tmp_path, quantized_onnx_model) -> Path:
         description="Bitfile generation blueprint (stub)",
         output="bitfile",
         board="Pynq-Z1",  # Common FINN deployment board
-        clock_ns=5.0,     # Target 200MHz
-        steps=["test_step1", "test_step2"]  # Simplified for stub
+        clock_ns=5.0,  # Target 200MHz
+        steps=["test_step1", "test_step2"],  # Simplified for stub
     )

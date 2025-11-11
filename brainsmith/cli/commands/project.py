@@ -25,7 +25,8 @@ if TYPE_CHECKING:
 
 
 def _generate_config_template(defaults) -> str:
-    return dedent("""\
+    return dedent(
+        """\
         # Brainsmith Configuration
         # Relative paths resolve to the directory containing the .brainsmith folder
 
@@ -41,7 +42,8 @@ def _generate_config_template(defaults) -> str:
         netron_port: 8080
         components_strict: true
         vendor_platform_paths: /opt/xilinx/platforms
-    """)
+    """
+    )
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -82,7 +84,7 @@ def info(ctx: ApplicationContext, finn: bool) -> None:
 
 
 @project.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.argument('path', type=click.Path(), default='.')
+@click.argument("path", type=click.Path(), default=".")
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing config.yaml")
 def init(path: str, force: bool) -> None:
     """Initialize a Brainsmith project with configuration and environment scripts.
@@ -125,6 +127,7 @@ def init(path: str, force: bool) -> None:
         else:
             # Generate and write config
             from brainsmith.settings import get_default_config
+
             defaults = get_default_config()
             yaml_content = _generate_config_template(defaults)
 
@@ -174,12 +177,7 @@ def allow_direnv(ctx: ApplicationContext) -> None:
 
     # Check if direnv is installed
     try:
-        result = subprocess.run(
-            ['direnv', 'version'],
-            capture_output=True,
-            text=True,
-            check=True
-        )
+        result = subprocess.run(["direnv", "version"], capture_output=True, text=True, check=True)
         console.print(f"[dim]Found direnv {result.stdout.strip()}[/dim]")
     except (subprocess.CalledProcessError, FileNotFoundError):
         raise ConfigurationError(
@@ -188,17 +186,17 @@ def allow_direnv(ctx: ApplicationContext) -> None:
             "  Ubuntu/Debian: sudo apt install direnv\n"
             "  macOS:         brew install direnv\n\n"
             "Then add to your shell config:\n"
-            "  ~/.bashrc: eval \"$(direnv hook bash)\"\n"
-            "  ~/.zshrc:  eval \"$(direnv hook zsh)\""
+            '  ~/.bashrc: eval "$(direnv hook bash)"\n'
+            '  ~/.zshrc:  eval "$(direnv hook zsh)"'
         )
 
     # Check if direnv hook is configured in shell
-    shell = os.environ.get('SHELL', '')
-    if 'bash' in shell:
-        rcfile = Path.home() / '.bashrc'
+    shell = os.environ.get("SHELL", "")
+    if "bash" in shell:
+        rcfile = Path.home() / ".bashrc"
         hook_line = 'eval "$(direnv hook bash)"'
-    elif 'zsh' in shell:
-        rcfile = Path.home() / '.zshrc'
+    elif "zsh" in shell:
+        rcfile = Path.home() / ".zshrc"
         hook_line = 'eval "$(direnv hook zsh)"'
     else:
         rcfile = None
@@ -230,18 +228,21 @@ def allow_direnv(ctx: ApplicationContext) -> None:
     if not envrc_path.exists():
         console.print("Generating .envrc file...")
         from brainsmith.settings.schema import generate_activation_scripts
+
         generate_activation_scripts()
         console.print()
 
     # Run direnv allow
     try:
-        subprocess.run(['direnv', 'allow'], check=True, cwd=Path.cwd())
+        subprocess.run(["direnv", "allow"], check=True, cwd=Path.cwd())
         success("✅ direnv enabled for this project")
         console.print()
-        console.print("[bold green]Environment will auto-load when you cd into this directory[/bold green]")
+        console.print(
+            "[bold green]Environment will auto-load when you cd into this directory[/bold green]"
+        )
 
         # Suggest quiet direnv if not configured
-        if 'DIRENV_LOG_FORMAT' not in os.environ:
+        if "DIRENV_LOG_FORMAT" not in os.environ:
             console.print()
             console.print("[dim]To reduce direnv output, add to your shell config:[/dim]")
             console.print('[dim]  export DIRENV_LOG_FORMAT=""[/dim]')

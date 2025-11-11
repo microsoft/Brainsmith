@@ -43,20 +43,25 @@ class MockModelWrapper:
 # Test build() Method
 # =============================================================================
 
+
 def test_build_basic():
     """Test build() creates KernelDesignSpace."""
     schema = KernelSchema(
         name="TestKernel",
-        inputs=[InputSchema(
-            name="input0",
-            block_tiling=[FULL_DIM],
-            stream_tiling=["SIMD"],
-        )],
-        outputs=[OutputSchema(
-            name="output0",
-            block_tiling=[FULL_DIM],
-            stream_tiling=["SIMD"],
-        )],
+        inputs=[
+            InputSchema(
+                name="input0",
+                block_tiling=[FULL_DIM],
+                stream_tiling=["SIMD"],
+            )
+        ],
+        outputs=[
+            OutputSchema(
+                name="output0",
+                block_tiling=[FULL_DIM],
+                stream_tiling=["SIMD"],
+            )
+        ],
     )
 
     nodeattrs = {}
@@ -111,16 +116,20 @@ def test_build_multi_parameter():
 
     schema = KernelSchema(
         name="TestKernel",
-        inputs=[InputSchema(
-            name="input0",
-            block_tiling=[FULL_DIM, FULL_DIM],
-            stream_tiling=["MW", "MH"],
-        )],
-        outputs=[OutputSchema(
-            name="output0",
-            block_tiling=[FULL_DIM, FULL_DIM],
-            stream_tiling=["MW", "MH"],
-        )],
+        inputs=[
+            InputSchema(
+                name="input0",
+                block_tiling=[FULL_DIM, FULL_DIM],
+                stream_tiling=["MW", "MH"],
+            )
+        ],
+        outputs=[
+            OutputSchema(
+                name="output0",
+                block_tiling=[FULL_DIM, FULL_DIM],
+                stream_tiling=["MW", "MH"],
+            )
+        ],
     )
 
     nodeattrs = {}
@@ -142,18 +151,20 @@ def test_build_multi_parameter():
     assert "MW" in design_space.parameters
     assert "MH" in design_space.parameters
     assert len(design_space.parameters["MW"]) == 18  # divisors of 768
-    assert len(design_space.parameters["MH"]) == 7   # divisors of 64
+    assert len(design_space.parameters["MH"]) == 7  # divisors of 64
 
 
 def test_build_no_stream_tiling():
     """Test build() with no stream tiling."""
     schema = KernelSchema(
         name="TestKernel",
-        inputs=[InputSchema(
-            name="input0",
-            block_tiling=[FULL_DIM],
-            stream_tiling=None,  # No stream tiling
-        )],
+        inputs=[
+            InputSchema(
+                name="input0",
+                block_tiling=[FULL_DIM],
+                stream_tiling=None,  # No stream tiling
+            )
+        ],
         outputs=[],
     )
 
@@ -181,20 +192,25 @@ def test_build_no_stream_tiling():
 # Test Constraint Splitting
 # =============================================================================
 
+
 def test_constraint_splitting():
     """Test constraints are correctly split into structural vs parametric."""
     schema = KernelSchema(
         name="TestKernel",
-        inputs=[InputSchema(
-            name="input0",
-            block_tiling=[FULL_DIM],
-            stream_tiling=["SIMD"],
-        )],
-        outputs=[OutputSchema(
-            name="output0",
-            block_tiling=[FULL_DIM],
-            stream_tiling=["SIMD"],
-        )],
+        inputs=[
+            InputSchema(
+                name="input0",
+                block_tiling=[FULL_DIM],
+                stream_tiling=["SIMD"],
+            )
+        ],
+        outputs=[
+            OutputSchema(
+                name="output0",
+                block_tiling=[FULL_DIM],
+                stream_tiling=["SIMD"],
+            )
+        ],
         constraints=[
             # Structural: no hierarchy
             DatatypeInteger(("input0", "output0")),
@@ -225,7 +241,7 @@ def test_constraint_splitting():
     # Verify constraint splitting
     # Note: Structural constraints (3 total: DatatypeInteger + 2 ShapesEqual)
     # are validated during build() but not stored in the model
-    assert len(design_space.optimization_constraints) == 1    # ShapesEqual(STREAM)
+    assert len(design_space.optimization_constraints) == 1  # ShapesEqual(STREAM)
 
     # Verify optimization constraint is the STREAM one
     assert design_space.optimization_constraints[0].hierarchy == ShapeHierarchy.STREAM
@@ -235,24 +251,25 @@ def test_evaluation_phase_classification():
     """Test constraint evaluation_phase property classification logic."""
     # Constraint without hierarchy: structural
     c1 = DatatypeInteger(("input0",))
-    assert c1.evaluation_phase == 'structural'
+    assert c1.evaluation_phase == "structural"
 
     # Constraint with TENSOR hierarchy: structural
     c2 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.TENSOR)
-    assert c2.evaluation_phase == 'structural'
+    assert c2.evaluation_phase == "structural"
 
     # Constraint with BLOCK hierarchy: structural
     c3 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.BLOCK)
-    assert c3.evaluation_phase == 'structural'
+    assert c3.evaluation_phase == "structural"
 
     # Constraint with STREAM hierarchy: parametric
     c4 = ShapesEqual(("input0", "output0"), hierarchy=ShapeHierarchy.STREAM)
-    assert c4.evaluation_phase == 'optimization'
+    assert c4.evaluation_phase == "optimization"
 
 
 # =============================================================================
 # Test DesignSpaceValidationContext
 # =============================================================================
+
 
 def test_design_space_validation_context_datatype():
     """Test DesignSpaceValidationContext get_datatype() in design space context."""

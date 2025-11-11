@@ -43,7 +43,9 @@ def xsim(ctx, force: bool, remove: bool, yes: bool) -> None:
 
         confirm_or_abort("\nAre you sure you want to remove these dependencies?", skip=yes)
 
-        with progress_spinner("Removing Xilinx simulation dependencies...", no_progress=ctx.no_progress):
+        with progress_spinner(
+            "Removing Xilinx simulation dependencies...", no_progress=ctx.no_progress
+        ):
             results = deps_mgr.remove_group("xsim")
             # remove_group returns Dict[str, Optional[Exception]] where None = success
             failed = [k for k, v in results.items() if v is not None]
@@ -60,15 +62,17 @@ def xsim(ctx, force: bool, remove: bool, yes: bool) -> None:
                 "Please set up Vivado and update your configuration.",
                 "Set Vivado path using:",
                 "  - Environment variable: export BSMITH_XILINX__VIVADO_PATH=/path/to/vivado",
-                "  - Config file: Add xilinx_path to brainsmith.yaml"
-            ]
+                "  - Config file: Add xilinx_path to brainsmith.yaml",
+            ],
         )
 
     if not force and _is_finnxsim_built():
         warning("finn-xsim already built (use --force to rebuild)")
         return
 
-    with progress_spinner("Setting up Xilinx simulation dependencies...", no_progress=ctx.no_progress):
+    with progress_spinner(
+        "Setting up Xilinx simulation dependencies...", no_progress=ctx.no_progress
+    ):
         try:
             # First install oh-my-xilinx (raises exception on failure)
             deps_mgr.install("oh-my-xilinx", force=force)
@@ -81,8 +85,8 @@ def xsim(ctx, force: bool, remove: bool, yes: bool) -> None:
                 details=[
                     "Verify Vivado is properly installed",
                     "Ensure you have the required Vivado license",
-                    "Check that the Vivado path in your configuration is correct"
-                ]
+                    "Check that the Vivado path in your configuration is correct",
+                ],
             )
 
     success("Xilinx simulation dependencies installed successfully")

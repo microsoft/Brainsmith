@@ -235,9 +235,7 @@ def insert_input_quant_nodes(
     return model
 
 
-def _insert_int_quant(
-    model: ModelWrapper, input_name: str, datatype: DataType
-) -> None:
+def _insert_int_quant(model: ModelWrapper, input_name: str, datatype: DataType) -> None:
     """Insert IntQuant node for INT*/UINT*/BINARY types.
 
     Args:
@@ -282,9 +280,7 @@ def _insert_int_quant(
     model.set_tensor_datatype(input_name, datatype)
 
 
-def _insert_float_quant(
-    model: ModelWrapper, input_name: str, datatype: ArbPrecFloatType
-) -> None:
+def _insert_float_quant(model: ModelWrapper, input_name: str, datatype: ArbPrecFloatType) -> None:
     """Insert FloatQuant node for FLOAT<exp,mant,bias> types.
 
     Args:
@@ -312,9 +308,7 @@ def _insert_float_quant(
     model.set_initializer(exp_bitwidth_name, np.array(float(exp_bitwidth), dtype=np.float32))
 
     mant_bitwidth_name = model.make_new_valueinfo_name()
-    model.set_initializer(
-        mant_bitwidth_name, np.array(float(mant_bitwidth), dtype=np.float32)
-    )
+    model.set_initializer(mant_bitwidth_name, np.array(float(mant_bitwidth), dtype=np.float32))
 
     bias_name = model.make_new_valueinfo_name()
     model.set_initializer(bias_name, np.array(float(exp_bias), dtype=np.float32))

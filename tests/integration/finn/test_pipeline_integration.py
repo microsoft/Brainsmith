@@ -39,7 +39,7 @@ class TestPipelineIntegration:
             tmp_path,
             name="full_pipeline",
             clock_ns=10.0,
-            target_fps=100  # Low target FPS for fast test execution
+            target_fps=100,  # Low target FPS for fast test execution
         )
 
         # Execute full pipeline
@@ -47,7 +47,7 @@ class TestPipelineIntegration:
         result = explore_design_space(
             blueprint_path=str(blueprint_path),
             model_path=str(brevitas_fc_model),
-            output_dir=str(output_dir)
+            output_dir=str(output_dir),
         )
 
         # Verify execution completed
@@ -55,8 +55,7 @@ class TestPipelineIntegration:
 
         # Verify at least one successful path
         completed = [
-            seg for seg in result.segment_results.values()
-            if seg.status == SegmentStatus.COMPLETED
+            seg for seg in result.segment_results.values() if seg.status == SegmentStatus.COMPLETED
         ]
         assert len(completed) > 0, "At least one segment should complete successfully"
 
@@ -88,26 +87,17 @@ class TestPipelineIntegration:
 
         # Create blueprint for testing intermediate model saving
         blueprint_path = create_finn_blueprint(
-            tmp_path,
-            name="intermediate",
-            steps=['finn:streamline', 'finn:tidy_up'],
-            clock_ns=10.0
+            tmp_path, name="intermediate", steps=["finn:streamline", "finn:tidy_up"], clock_ns=10.0
         )
 
         # Parse blueprint
-        design_space, config = parse_blueprint(
-            str(blueprint_path),
-            str(brevitas_fc_model)
-        )
+        design_space, config = parse_blueprint(str(blueprint_path), str(brevitas_fc_model))
 
         # Execute pipeline
         tree = build_tree(design_space, config)
         output_dir = test_workspace / "intermediate"
         result = execute_tree(
-            tree=tree,
-            model_path=str(brevitas_fc_model),
-            config=config,
-            output_dir=str(output_dir)
+            tree=tree, model_path=str(brevitas_fc_model), config=config, output_dir=str(output_dir)
         )
 
         # Verify intermediate models exist
@@ -123,6 +113,7 @@ class TestPipelineIntegration:
 
                 # Verify at least one ONNX file is valid (can be loaded)
                 import onnx
+
                 valid_models = []
                 for onnx_file in onnx_files:
                     try:
@@ -132,7 +123,9 @@ class TestPipelineIntegration:
                         # Some files might be partial/intermediate
                         pass
 
-                assert len(valid_models) > 0, f"Segment {seg_id} should have at least one valid ONNX model"
+                assert (
+                    len(valid_models) > 0
+                ), f"Segment {seg_id} should have at least one valid ONNX model"
 
     @pytest.mark.finn_build
     @pytest.mark.timeout(600)
@@ -161,10 +154,7 @@ design_space:
         blueprint_path.write_text(blueprint_yaml)
 
         # Parse blueprint (steps preserved, range controls passed to config)
-        design_space, config = parse_blueprint(
-            str(blueprint_path),
-            str(brevitas_fc_model)
-        )
+        design_space, config = parse_blueprint(str(blueprint_path), str(brevitas_fc_model))
 
         # Verify all steps are preserved (no slicing)
         assert len(design_space.steps) == 3, "Should preserve all steps"
@@ -180,10 +170,7 @@ design_space:
         tree = build_tree(design_space, config)
         output_dir = test_workspace / "step_range"
         result = execute_tree(
-            tree=tree,
-            model_path=str(brevitas_fc_model),
-            config=config,
-            output_dir=str(output_dir)
+            tree=tree, model_path=str(brevitas_fc_model), config=config, output_dir=str(output_dir)
         )
 
         # Verify execution occurred
@@ -219,7 +206,7 @@ design_space:
             tmp_path,
             name="estimates",
             clock_ns=10.0,
-            target_fps=100  # Low target FPS for fast test execution
+            target_fps=100,  # Low target FPS for fast test execution
         )
 
         # Execute pipeline
@@ -227,7 +214,7 @@ design_space:
         result = explore_design_space(
             blueprint_path=str(blueprint_path),
             model_path=str(brevitas_fc_model),
-            output_dir=str(output_dir)
+            output_dir=str(output_dir),
         )
 
         # Find estimate reports
@@ -262,7 +249,7 @@ design_space:
                             # Check for common resource fields
                             has_resources = any(
                                 resource in report_str
-                                for resource in ['lut', 'ff', 'bram', 'dsp', 'resource']
+                                for resource in ["lut", "ff", "bram", "dsp", "resource"]
                             )
 
                             if has_resources:

@@ -25,7 +25,7 @@ def parse_blueprint(
     blueprint_path: str,
     model_path: str,
     start_step: str | None = None,
-    stop_step: str | None = None
+    stop_step: str | None = None,
 ) -> tuple[GlobalDesignSpace, DSEConfig]:
     """Parse blueprint YAML to design space and configuration.
 
@@ -69,11 +69,11 @@ def parse_blueprint(
 
     # Parse steps from THIS blueprint only (not inherited steps)
     # Use raw_data to get only the steps defined in this file
-    steps_data = raw_data.get('design_space', {}).get('steps', [])
+    steps_data = raw_data.get("design_space", {}).get("steps", [])
     steps = parse_steps(steps_data, parent_steps=parent_steps)
 
     # Parse kernels (use merged data to inherit kernels)
-    kernel_backends = parse_kernels(merged_data.get('design_space', {}).get('kernels', []))
+    kernel_backends = parse_kernels(merged_data.get("design_space", {}).get("kernels", []))
 
     # Get max_combinations from environment or use default
     max_combinations = int(os.environ.get("BRAINSMITH_MAX_COMBINATIONS", "100000"))
@@ -82,10 +82,9 @@ def parse_blueprint(
         model_path=model_path,
         steps=steps,
         kernel_backends=kernel_backends,
-        max_combinations=max_combinations
+        max_combinations=max_combinations,
     )
     return design_space, blueprint_config
 
 
-__all__ = ['parse_blueprint']
-
+__all__ = ["parse_blueprint"]

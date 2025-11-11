@@ -24,12 +24,13 @@ logger = logging.getLogger(__name__)
 
 # Current source context (set during plugin discovery)
 # Using ContextVar for thread-safe source tracking
-_current_source: ContextVar[str | None] = ContextVar('current_source', default=None)
+_current_source: ContextVar[str | None] = ContextVar("current_source", default=None)
 
 
 # ============================================================================
 # Source Detection
 # ============================================================================
+
 
 def _detect_source(obj: Any) -> str:
     """Detect component source with priority: context > discovered sources > custom.
@@ -83,27 +84,30 @@ def _detect_source(obj: Any) -> str:
     # Check all discovered sources (from entrypoints and component_sources)
     for source in _discovered_sources:
         # Match both standard (source.category) and unique (source__category) patterns
-        if module_name.startswith(f'{source}.') or module_name.startswith(f'{source}__'):
+        if module_name.startswith(f"{source}.") or module_name.startswith(f"{source}__"):
             logger.debug(f"Detected source '{source}' for {obj.__name__} via discovered sources")
             return source
 
     # 3. Unknown/custom (ephemeral)
-    logger.debug(f"No source match for {obj.__name__} (module={module_name}), defaulting to 'custom'")
-    return 'custom'
+    logger.debug(
+        f"No source match for {obj.__name__} (module={module_name}), defaulting to 'custom'"
+    )
+    return "custom"
 
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
 
+
 def _convert_lazy_import_spec(spec: str | dict | type | None) -> dict | type | None:
     """Convert 'module:ClassName' string to {'module': ..., 'class_name': ...}.
 
     Passes through None, class references, or dicts unchanged.
     """
-    if isinstance(spec, str) and ':' in spec:
-        module_path, class_name = spec.split(':', 1)
-        return {'module': module_path, 'class_name': class_name}
+    if isinstance(spec, str) and ":" in spec:
+        module_path, class_name = spec.split(":", 1)
+        return {"module": module_path, "class_name": class_name}
     return spec
 
 
@@ -111,20 +115,21 @@ def _convert_lazy_import_spec(spec: str | dict | type | None) -> dict | type | N
 # Registration Functions (Internal API)
 # ============================================================================
 
+
 def _register_step(
     func_or_class: Callable | type,
     *,
     name: str | None = None,
-    **kwargs  # Accept and ignore extra parameters (category, description, etc.) for backwards compat
+    **kwargs,  # Accept and ignore extra parameters (category, description, etc.) for backwards compat
 ) -> Callable | type:
     """Register step in global component index."""
-    if 'source' in kwargs:
+    if "source" in kwargs:
         raise ValueError(
             "'source' parameter not supported. Use source_context() or configure component_sources in brainsmith.yaml"
         )
 
     source = _detect_source(func_or_class)
-    name = name or getattr(func_or_class, 'name', None) or func_or_class.__name__
+    name = name or getattr(func_or_class, "name", None) or func_or_class.__name__
 
     full_name = f"{source}:{name}"
 
@@ -148,16 +153,13 @@ def _register_step(
     # New registration (no manifest entry exists)
     # Create index entry for standalone decorator usage
     logger.debug(f"Registering step: {full_name}")
-    import_spec = ImportSpec(
-        module=func_or_class.__module__,
-        attr=func_or_class.__name__
-    )
+    import_spec = ImportSpec(module=func_or_class.__module__, attr=func_or_class.__name__)
     _component_index[full_name] = ComponentMetadata(
         name=name,
         source=source,
         component_type=ComponentType.STEP,
         import_spec=import_spec,
-        loaded_obj=func_or_class  # Already loaded
+        loaded_obj=func_or_class,  # Already loaded
     )
 
     # Attach registry name to function/class for O(1) reverse lookup
@@ -172,16 +174,16 @@ def _register_kernel(
     name: str | None = None,
     infer_transform: type | None = None,
     is_infrastructure: bool = False,  # True for topology-based kernels (DuplicateStreams, FIFO)
-    **kwargs  # Accept and ignore extra parameters (e.g., op_type, domain) for backwards compat
+    **kwargs,  # Accept and ignore extra parameters (e.g., op_type, domain) for backwards compat
 ) -> type:
     """Register kernel in global component index."""
-    if 'source' in kwargs:
+    if "source" in kwargs:
         raise ValueError(
             "'source' parameter not supported. Use source_context() or configure component_sources in brainsmith.yaml"
         )
 
     source = _detect_source(cls)
-    name = name or getattr(cls, 'op_type', None) or cls.__name__
+    name = name or getattr(cls, "op_type", None) or cls.__name__
 
     full_name = f"{source}:{name}"
 
@@ -199,7 +201,7 @@ def _register_kernel(
 
         # Extract infer_transform from decorator parameters or class attribute
         if infer_transform is None:
-            infer_transform = getattr(cls, 'infer_transform', None)
+            infer_transform = getattr(cls, "infer_transform", None)
         infer_transform = _convert_lazy_import_spec(infer_transform)
 
         # Update the existing metadata
@@ -216,17 +218,14 @@ def _register_kernel(
     # Supports both class references and string-based lazy import specs
     # Note: infer_transform is optional - not all kernels need it (e.g., test kernels)
     if infer_transform is None:
-        infer_transform = getattr(cls, 'infer_transform', None)
+        infer_transform = getattr(cls, "infer_transform", None)
 
     # Handle string-based lazy import specs (format: 'module.path:ClassName')
     infer_transform = _convert_lazy_import_spec(infer_transform)
 
     # Create index entry for standalone decorator usage
     logger.debug(f"Registering kernel: {full_name}")
-    import_spec = ImportSpec(
-        module=cls.__module__,
-        attr=cls.__name__
-    )
+    import_spec = ImportSpec(module=cls.__module__, attr=cls.__name__)
     _component_index[full_name] = ComponentMetadata(
         name=name,
         source=source,
@@ -254,10 +253,10 @@ def _register_backend(
     target_kernel: str | None = None,
     language: str | None = None,
     variant: str | None = None,
-    **kwargs  # Accept and ignore extra parameters (e.g., author, description) for backwards compat
+    **kwargs,  # Accept and ignore extra parameters (e.g., author, description) for backwards compat
 ) -> type:
     """Register backend in global component index."""
-    if 'source' in kwargs:
+    if "source" in kwargs:
         raise ValueError(
             "'source' parameter not supported. Use source_context() or configure component_sources in brainsmith.yaml"
         )
@@ -280,8 +279,8 @@ def _register_backend(
         logger.debug(f"Updating existing backend registration: {full_name}")
 
         # Extract metadata - parameters override class attributes
-        target = target_kernel or getattr(cls, 'target_kernel', None)
-        lang = language or getattr(cls, 'language', None)
+        target = target_kernel or getattr(cls, "target_kernel", None)
+        lang = language or getattr(cls, "language", None)
 
         # Validate required fields
         if not target:
@@ -290,7 +289,7 @@ def _register_backend(
             raise ValueError(f"Backend {full_name} missing 'language' attribute")
 
         # Normalize unqualified target to backend's source
-        if ':' not in target:
+        if ":" not in target:
             target = f"{source}:{target}"
 
         # Update the existing metadata
@@ -312,8 +311,8 @@ def _register_backend(
 
     # New registration (no manifest entry exists)
     # Extract metadata - parameters override class attributes
-    target = target_kernel or getattr(cls, 'target_kernel', None)
-    lang = language or getattr(cls, 'language', None)
+    target = target_kernel or getattr(cls, "target_kernel", None)
+    lang = language or getattr(cls, "language", None)
 
     # Validate required fields
     if not target:
@@ -322,21 +321,18 @@ def _register_backend(
         raise ValueError(f"Backend {full_name} missing 'language' attribute")
 
     # Normalize unqualified target to backend's source
-    if ':' not in target:
+    if ":" not in target:
         target = f"{source}:{target}"
 
     # Create index entry for standalone decorator usage
     logger.debug(f"Registering backend: {full_name} (target={target}, lang={lang})")
-    import_spec = ImportSpec(
-        module=cls.__module__,
-        attr=cls.__name__
-    )
+    import_spec = ImportSpec(module=cls.__module__, attr=cls.__name__)
     _component_index[full_name] = ComponentMetadata(
         name=name,
         source=source,
         component_type=ComponentType.BACKEND,
         import_spec=import_spec,
-        loaded_obj=cls  # Already loaded
+        loaded_obj=cls,  # Already loaded
     )
 
     # Populate type-specific metadata (always works now)
@@ -361,6 +357,7 @@ def _register_backend(
 # ============================================================================
 # Public Decorator API ===
 # Direct decorator implementations (no factory needed)
+
 
 def step(obj=None, **kwargs):
     """Register a pipeline transformation step.
@@ -388,10 +385,12 @@ def step(obj=None, **kwargs):
         ... def complex_transform(model, config):
         ...     return model
     """
+
     def register(func_or_class):
-        kwargs.setdefault('name', func_or_class.__name__)
+        kwargs.setdefault("name", func_or_class.__name__)
         _register_step(func_or_class, **kwargs)
         return func_or_class
+
     return register(obj) if obj is not None else register
 
 
@@ -423,10 +422,12 @@ def kernel(obj=None, **kwargs):
         ... class FIFO(HWCustomOp):
         ...     pass
     """
+
     def register(cls):
-        kwargs.setdefault('name', getattr(cls, 'op_type', cls.__name__))
+        kwargs.setdefault("name", getattr(cls, "op_type", cls.__name__))
         _register_kernel(cls, **kwargs)
         return cls
+
     return register(obj) if obj is not None else register
 
 
@@ -463,10 +464,12 @@ def backend(obj=None, **kwargs):
         ... class MVAU_rtl_fast:
         ...     pass
     """
+
     def register(cls):
-        kwargs.setdefault('name', cls.__name__)
+        kwargs.setdefault("name", cls.__name__)
         _register_backend(cls, **kwargs)
         return cls
+
     return register(obj) if obj is not None else register
 
 
@@ -498,4 +501,4 @@ class source_context:
 
 
 # Export decorators for public API
-__all__ = ['source_context', 'step', 'kernel', 'backend']
+__all__ = ["source_context", "step", "kernel", "backend"]

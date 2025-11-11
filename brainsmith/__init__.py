@@ -41,43 +41,40 @@ from .registry import backend, kernel, step
 
 _LAZY_MODULES = {
     # DSE module
-    'explore_design_space': 'dse',
-    'build_tree': 'dse',
-    'execute_tree': 'dse',
-    'GlobalDesignSpace': 'dse',
-    'DSEConfig': 'dse',
-    'DSETree': 'dse',
-    'DSESegment': 'dse',
-    'SegmentRunner': 'dse',
-    'TreeExecutionResult': 'dse',
-    'SegmentResult': 'dse',
-    'SegmentStatus': 'dse',
-    'OutputType': 'dse',
-    'ExecutionError': 'dse',
-
+    "explore_design_space": "dse",
+    "build_tree": "dse",
+    "execute_tree": "dse",
+    "GlobalDesignSpace": "dse",
+    "DSEConfig": "dse",
+    "DSETree": "dse",
+    "DSESegment": "dse",
+    "SegmentRunner": "dse",
+    "TreeExecutionResult": "dse",
+    "SegmentResult": "dse",
+    "SegmentStatus": "dse",
+    "OutputType": "dse",
+    "ExecutionError": "dse",
     # Registry module (component lookup)
-    'get_kernel': 'registry',
-    'get_step': 'registry',
-    'get_kernel_infer': 'registry',
-    'get_backend': 'registry',
-    'get_backend_metadata': 'registry',
-    'list_kernels': 'registry',
-    'list_steps': 'registry',
-    'list_backends_for_kernel': 'registry',
-    'list_backends': 'registry',
-    'has_step': 'registry',
-
+    "get_kernel": "registry",
+    "get_step": "registry",
+    "get_kernel_infer": "registry",
+    "get_backend": "registry",
+    "get_backend_metadata": "registry",
+    "list_kernels": "registry",
+    "list_steps": "registry",
+    "list_backends_for_kernel": "registry",
+    "list_backends": "registry",
+    "has_step": "registry",
     # Dataflow module
-    'KernelDefinition': 'dataflow',
-    'KernelModel': 'dataflow',
-    'InputInterface': 'dataflow',
-    'OutputInterface': 'dataflow',
-    'TilingStrategy': 'dataflow',
-    'TilingSpec': 'dataflow',
-
+    "KernelDefinition": "dataflow",
+    "KernelModel": "dataflow",
+    "InputInterface": "dataflow",
+    "OutputInterface": "dataflow",
+    "TilingStrategy": "dataflow",
+    "TilingSpec": "dataflow",
     # Settings module
-    'SystemConfig': 'settings',
-    'get_config': 'settings',
+    "SystemConfig": "settings",
+    "get_config": "settings",
 }
 
 _lazy_loader = LazyModuleLoader(_LAZY_MODULES, package=__name__)
@@ -94,7 +91,8 @@ def __getattr__(name):
 
 def __dir__():
     """Support for dir() and tab completion."""
-    return _lazy_loader.dir() + ['__version__']
+    return _lazy_loader.dir() + ["__version__"]
+
 
 # __all__ is generated from lazy modules to avoid duplication
-__all__ = list(_LAZY_MODULES.keys()) + ['__version__', 'step', 'kernel', 'backend']
+__all__ = list(_LAZY_MODULES.keys()) + ["__version__", "step", "kernel", "backend"]

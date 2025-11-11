@@ -27,8 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def normalize_template(
-    template: list[int | str | type] | type,
-    reference_shape: tuple[int, ...]
+    template: list[int | str | type] | type, reference_shape: tuple[int, ...]
 ) -> list[int | str | type]:
     """Normalize template structure to match reference rank (no value resolution).
 
@@ -103,11 +102,7 @@ def _resolve_full_dim(ref_dim: int) -> int:
     return ref_dim
 
 
-def _resolve_parameter(
-    param_name: str,
-    ref_dim: int,
-    param_getter: Callable[[str], Any]
-) -> int:
+def _resolve_parameter(param_name: str, ref_dim: int, param_getter: Callable[[str], Any]) -> int:
     """Resolve parameter name to value with divisibility validation.
 
     Args:
@@ -128,8 +123,7 @@ def _resolve_parameter(
 
     if ref_dim % value != 0:
         raise ValueError(
-            f"parameter '{param_name}' value {value} does not divide "
-            f"parent dimension {ref_dim}"
+            f"parameter '{param_name}' value {value} does not divide " f"parent dimension {ref_dim}"
         )
     return value
 
@@ -159,7 +153,7 @@ def _resolve_callable(
     interfaces: dict[str, Any],
     param_getter: Callable,
     model: Any | None,
-    tensor_name: str | None
+    tensor_name: str | None,
 ) -> int:
     """Execute custom dimension computation function.
 
@@ -186,8 +180,7 @@ def _resolve_callable(
 
     if not isinstance(value, int) or value < 1:
         raise ValueError(
-            f"Callable dimension function returned invalid value {value} "
-            f"(must be positive int)"
+            f"Callable dimension function returned invalid value {value} " f"(must be positive int)"
         )
     return value
 
@@ -198,7 +191,7 @@ def resolve_template(
     param_getter: Callable[[str], Any],
     interfaces: dict[str, Any] | None = None,
     model: Any | None = None,
-    tensor_name: str | None = None
+    tensor_name: str | None = None,
 ) -> tuple[int, ...]:
     """Resolve template dimensions to concrete shape.
 
@@ -260,4 +253,4 @@ def resolve_template(
     return result
 
 
-__all__ = ['resolve_template', 'normalize_template']
+__all__ = ["resolve_template", "normalize_template"]

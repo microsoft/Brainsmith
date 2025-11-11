@@ -23,6 +23,7 @@ class GlobalDesignSpace:
 
     Validates size on initialization and provides kernel summary formatting.
     """
+
     model_path: str
     steps: list[str | list[str | None]]  # Direct steps with variations
 
@@ -33,7 +34,7 @@ class GlobalDesignSpace:
     kernel_backends: list[tuple[str, list[type]]]
 
     max_combinations: int = 100000  # Maximum allowed design space combinations
-    
+
     def __post_init__(self):
         """Validate design space after initialization."""
         self._validate_size()
@@ -51,7 +52,7 @@ class GlobalDesignSpace:
                 f"Design space too large: {combination_count:,} combinations exceeds "
                 f"limit of {self.max_combinations:,}"
             )
-    
+
     def get_kernel_summary(self) -> str:
         """Get human-readable summary of kernels and backends."""
         lines = []
@@ -59,7 +60,7 @@ class GlobalDesignSpace:
             backend_names = [cls.__name__ for cls in backend_classes]
             lines.append(f"  {kernel_name}: {', '.join(backend_names)}")
         return "\n".join(lines)
-    
+
     def __str__(self) -> str:
         """Human-readable representation."""
         return (

@@ -29,22 +29,18 @@ def mvau(simd: int, pe: int, runtime_writeable: int) -> dict:
         "ram_style": "auto",
         "resType": "auto",
         "mem_mode": "internal_decoupled",
-        "runtime_writeable_weights": runtime_writeable
+        "runtime_writeable_weights": runtime_writeable,
     }
 
 
 def dupstreams(pe: int) -> dict:
     """Generate DuplicateStreams configuration."""
-    return {
-        "PE": pe
-    }
+    return {"PE": pe}
 
 
 def shuffle(simd: int) -> dict:
     """Generate Shuffle configuration."""
-    return {
-        "SIMD": simd
-    }
+    return {"SIMD": simd}
 
 
 def thresholding(pe: int, runtime_writeable: int) -> dict:
@@ -53,48 +49,33 @@ def thresholding(pe: int, runtime_writeable: int) -> dict:
         "PE": pe,
         "runtime_writeable_weights": runtime_writeable,
         "depth_trigger_uram": 0,
-        "depth_trigger_bram": 0
+        "depth_trigger_bram": 0,
     }
 
 
 def dynmvu(pe: int, simd: int) -> dict:
     """Generate DynMVU (Dynamic Matrix-Vector Unit) configuration."""
-    return {
-        "PE": pe,
-        "SIMD": simd,
-        "ram_style": "auto",
-        "resType": "auto"
-        }
+    return {"PE": pe, "SIMD": simd, "ram_style": "auto", "resType": "auto"}
 
 
 def eltwiseadd(pe: int) -> dict:
     """Generate ElementwiseAdd configuration."""
-    return {
-        "PE": pe,
-        "ram_style": "auto"
-    }
+    return {"PE": pe, "ram_style": "auto"}
 
 
 def eltwisemul(pe: int) -> dict:
     """Generate ElementwiseMul configuration."""
-    return {
-        "PE": pe,
-        "ram_style": "auto"
-    }
+    return {"PE": pe, "ram_style": "auto"}
 
 
 def softmax(simd: int) -> dict:
     """Generate Softmax configuration."""
-    return {
-        'SIMD': simd
-    }
+    return {"SIMD": simd}
 
 
 def layernorm(simd: int) -> dict:
     """Generate LayerNorm configuration."""
-    return {
-        'SIMD': simd
-    }
+    return {"SIMD": simd}
 
 
 def generate_config(args) -> dict:
@@ -113,9 +94,9 @@ def generate_config(args) -> dict:
             # dyn mvau
             elif m == 3 or m == 4:
                 if args.simd % 3 == 0:
-                    d = dynmvu(args.pe, int(args.simd/3))
+                    d = dynmvu(args.pe, int(args.simd / 3))
                 elif args.simd % 4 == 0:
-                    d = dynmvu(args.pe, int(args.simd/4))
+                    d = dynmvu(args.pe, int(args.simd / 4))
                 else:
                     d = dynmvu(args.pe, args.simd)
             else:
@@ -161,36 +142,44 @@ def generate_config(args) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Generate folding configurations for BERT model'
-    )
+    parser = argparse.ArgumentParser(description="Generate folding configurations for BERT model")
 
     # Output configuration
-    parser.add_argument('-o', '--output',
-                       help='Output JSON config file path',
-                       default='config.json')
+    parser.add_argument(
+        "-o", "--output", help="Output JSON config file path", default="config.json"
+    )
 
     # MVAU configuration
-    parser.add_argument('-s', '--simd', type=int, default=48,
-                       help='SIMD setting for MVAU layers')
-    parser.add_argument('-p', '--pe', type=int, default=32,
-                       help='PE setting for MVAU layers')
+    parser.add_argument("-s", "--simd", type=int, default=48, help="SIMD setting for MVAU layers")
+    parser.add_argument("-p", "--pe", type=int, default=32, help="PE setting for MVAU layers")
 
     # Other operators configuration
-    parser.add_argument('-t', '--other', type=int, default=4,
-                       help='SIMD/PE for other operators between MVAUs')
+    parser.add_argument(
+        "-t", "--other", type=int, default=4, help="SIMD/PE for other operators between MVAUs"
+    )
 
     # Model configuration
-    parser.add_argument('-n', '--num_layers', type=int, default=3,
-                       help='Number of BERT hidden layers')
+    parser.add_argument(
+        "-n", "--num_layers", type=int, default=3, help="Number of BERT hidden layers"
+    )
 
     # Runtime configuration
-    parser.add_argument('-w', '--runtime_writeable_weights', type=int, default=0,
-                       help='Make MVAU weights runtime writeable (0 or 1)')
+    parser.add_argument(
+        "-w",
+        "--runtime_writeable_weights",
+        type=int,
+        default=0,
+        help="Make MVAU weights runtime writeable (0 or 1)",
+    )
 
     # Unused in modern version but kept for compatibility
-    parser.add_argument('-f', '--shuffleb', type=bool, default=False,
-                       help='(Deprecated) ShuffleB parallelization flag')
+    parser.add_argument(
+        "-f",
+        "--shuffleb",
+        type=bool,
+        default=False,
+        help="(Deprecated) ShuffleB parallelization flag",
+    )
 
     args = parser.parse_args()
 

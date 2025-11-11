@@ -51,7 +51,7 @@ def make_fanout_model(fanout=2):
         "test_fanout",
         [inp],
         outputs,
-        value_info=[tensor_x]  # Add intermediate tensor to value_info
+        value_info=[tensor_x],  # Add intermediate tensor to value_info
     )
 
     # Create model
@@ -89,12 +89,7 @@ def make_linear_model():
     mul = helper.make_node("Mul", ["t2", "scale"], ["outp"], name="Mul_0")
 
     # Create graph
-    graph = helper.make_graph(
-        [conv, add, mul],
-        "test_linear",
-        [inp],
-        [outp]
-    )
+    graph = helper.make_graph([conv, add, mul], "test_linear", [inp], [outp])
 
     # Create model
     model = helper.make_model(graph, producer_name="test")
@@ -249,7 +244,7 @@ class TestInsertDuplicateStreams:
             "test_multi_fanout",
             [inp],
             [out1, out3, out4],
-            value_info=[t1, t2]  # Add intermediates to value_info
+            value_info=[t1, t2],  # Add intermediates to value_info
         )
 
         model = helper.make_model(graph, producer_name="test")
@@ -289,7 +284,9 @@ class TestInsertDuplicateStreamsIntegration:
         # Get node indices
         node_names = [n.name for n in model_new.graph.node]
         conv_idx = node_names.index("Conv_0")
-        dup_idx = [i for i, n in enumerate(model_new.graph.node) if n.op_type == "DuplicateStreams"][0]
+        dup_idx = [
+            i for i, n in enumerate(model_new.graph.node) if n.op_type == "DuplicateStreams"
+        ][0]
         add_idx = node_names.index("Add_0")
         mul_idx = node_names.index("Mul_1")
 
@@ -329,17 +326,12 @@ class TestInsertDuplicateStreamsIntegration:
             inputs=["t1"],
             outputs=["t1_clone0", "t1_clone1"],
             domain="brainsmith.kernels",
-            name="DuplicateStreams_0"
+            name="DuplicateStreams_0",
         )
         add = helper.make_node("Add", ["t1_clone0", "b"], ["out1"], name="Add_0")
         mul = helper.make_node("Mul", ["t1_clone1", "s"], ["out2"], name="Mul_0")
 
-        graph = helper.make_graph(
-            [conv, dup, add, mul],
-            "test_existing_dup",
-            [inp],
-            [out1, out2]
-        )
+        graph = helper.make_graph([conv, dup, add, mul], "test_existing_dup", [inp], [out1, out2])
 
         model = helper.make_model(graph, producer_name="test")
         model = ModelWrapper(model)

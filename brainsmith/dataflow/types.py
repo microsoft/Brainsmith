@@ -22,6 +22,7 @@ ShapeExpr = int | str
 ShapeSpec = list[ShapeExpr]
 """Complete shape specification: [1, 784] or ['N', 768]"""
 
+
 # Sentinel for "copy full dimension" in tiling specs
 class _FullDimType:
     """Singleton sentinel for FULL_DIM constant.
@@ -32,10 +33,12 @@ class _FullDimType:
     Example:
         block_tiling=[FULL_DIM, FULL_DIM]  # Use complete tensor dimensions
     """
+
     __slots__ = ()  # No instance dict, true singleton
 
     def __repr__(self):
         return "FULL_DIM"
+
 
 FULL_DIM = _FullDimType()
 
@@ -54,15 +57,18 @@ class _FullShapeType:
         block_tiling=FULL_SHAPE  # For 4D tensor → [FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM]
         stream_tiling=FULL_SHAPE  # Copies resolved block_shape
     """
+
     __slots__ = ()  # No instance dict, true singleton
 
     def __repr__(self):
         return "FULL_SHAPE"
 
+
 FULL_SHAPE = _FullShapeType()
 
 
 # === Enums ===
+
 
 class ShapeHierarchy(Enum):
     """Shape hierarchy level for constraints and relationships.
@@ -72,6 +78,7 @@ class ShapeHierarchy(Enum):
         BLOCK: Block shape (tiling dimensions)
         TENSOR: Tensor shape (full logical dimensions)
     """
+
     STREAM = "stream"
     BLOCK = "block"
     TENSOR = "tensor"
@@ -79,6 +86,7 @@ class ShapeHierarchy(Enum):
 
 class ProtocolType(Enum):
     """Supported hardware protocols for kernel interfaces."""
+
     AXI_STREAM = "axi_stream"
     AXI_LITE = "axi_lite"
     CONTROL = "control"
@@ -86,6 +94,7 @@ class ProtocolType(Enum):
 
 class Direction(Enum):
     """Direction of ports."""
+
     INPUT = "input"
     OUTPUT = "output"
     INOUT = "inout"
@@ -110,8 +119,10 @@ DimSpec = (
     int  # Literal (1 only)
     | str  # Parameter name
     | tuple[str, int]  # Derive from interface (context hierarchy)
-    | tuple[str, int, 'ShapeHierarchy']  # Derive with explicit hierarchy
-    | Callable[[dict[str, Any], Callable, Any, str | None], int]  # Custom computation (unified signature)
+    | tuple[str, int, "ShapeHierarchy"]  # Derive with explicit hierarchy
+    | Callable[
+        [dict[str, Any], Callable, Any, str | None], int
+    ]  # Custom computation (unified signature)
     | type(FULL_DIM)  # Copy full dimension
 )
 
@@ -136,19 +147,23 @@ if TYPE_CHECKING:
 # Sentinel for value-optimized datatype derivation
 class _ValueOptimizedType:
     """Sentinel type for VALUE_OPTIMIZED constant."""
+
     def __repr__(self):
         return "VALUE_OPTIMIZED"
+
     __str__ = __repr__
+
 
 VALUE_OPTIMIZED = _ValueOptimizedType()
 
 
 class InterfaceType(Enum):
     """Fundamental interface types for all kernels."""
-    INPUT = "input"      # AXI-Stream input for activation data
-    OUTPUT = "output"    # AXI-Stream output for result data
-    WEIGHT = "weight"    # AXI-Stream input for weight/parameter data
-    CONFIG = "config"    # AXI-Lite for runtime configuration
+
+    INPUT = "input"  # AXI-Stream input for activation data
+    OUTPUT = "output"  # AXI-Stream output for result data
+    WEIGHT = "weight"  # AXI-Stream input for weight/parameter data
+    CONFIG = "config"  # AXI-Lite for runtime configuration
     CONTROL = "control"  # Global control signals (clk, rst, etc.)
     UNKNOWN = "unknown"  # Unknown interface type
 
@@ -178,9 +193,10 @@ class InterfaceType(Enum):
         }
         return direction_map[self]
 
+
 # === Utility Functions ===
+
 
 def prod(shape: Shape) -> int:
     """Compute product of shape dimensions"""
     return functools.reduce(lambda a, b: a * b, shape, 1)
-

@@ -32,12 +32,7 @@ def make_mixed_model():
     matmul_node = helper.make_node("MatMul", ["mid", "weights"], ["out"], name="MatMul_0")
 
     # Create graph
-    graph = helper.make_graph(
-        [add_node, matmul_node],
-        "test_mixed",
-        [in0, in1, weights],
-        [out]
-    )
+    graph = helper.make_graph([add_node, matmul_node], "test_mixed", [in0, in1, weights], [out])
 
     model = ModelWrapper(helper.make_model(graph))
 
@@ -49,6 +44,7 @@ def make_mixed_model():
 
     # Set layout
     import qonnx.core.data_layout as DataLayout
+
     for tensor in ["in0", "in1", "mid", "out"]:
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
@@ -76,6 +72,7 @@ def test_infer_kernels_single_kernelop():
     for tensor in ["in0", "in1", "out"]:
         model.set_tensor_datatype(tensor, DataType["INT8"])
         import qonnx.core.data_layout as DataLayout
+
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
     # Apply InferKernels with single kernel
@@ -101,6 +98,7 @@ def test_infer_kernels_backward_compatible():
     for tensor in ["in0", "in1", "out"]:
         model.set_tensor_datatype(tensor, DataType["INT8"])
         import qonnx.core.data_layout as DataLayout
+
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
     # Apply InferKernels with None (should infer all registered KernelOp kernels)
@@ -123,6 +121,7 @@ def test_infer_kernels_filters_infrastructure():
     @kernel(name="TestInfraKernel", is_infrastructure=True)
     class TestInfraKernel(KernelOp):
         """Mock infrastructure kernel for testing."""
+
         @classmethod
         def can_infer_from(cls, node, model):
             return node.op_type == "TestOp"
@@ -144,8 +143,9 @@ def test_infer_kernels_filters_infrastructure():
     model, modified = transform.apply(model)
 
     # Infrastructure kernel should be skipped, so node should remain as TestOp
-    assert model.graph.node[0].op_type == "TestOp", \
-        "Infrastructure kernel should be skipped by InferKernels"
+    assert (
+        model.graph.node[0].op_type == "TestOp"
+    ), "Infrastructure kernel should be skipped by InferKernels"
     # Since no computational kernel matches TestOp, modified should be False
     assert modified is False
 
@@ -171,6 +171,7 @@ def test_infer_kernels_legacy_transform():
     for tensor in ["in0", "in1", "out"]:
         model.set_tensor_datatype(tensor, DataType["INT8"])
         import qonnx.core.data_layout as DataLayout
+
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
     # Apply InferKernels with FINN HWCustomOp class
@@ -263,6 +264,7 @@ def test_infer_kernels_logging():
     for tensor in ["in0", "in1", "out"]:
         model.set_tensor_datatype(tensor, DataType["INT8"])
         import qonnx.core.data_layout as DataLayout
+
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
     # Capture logs

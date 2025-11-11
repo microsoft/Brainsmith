@@ -96,46 +96,38 @@ from .validation import (
 __all__ = [
     # === Core Public API ===
     # Main classes
-    'KernelOp',
-    'KernelOpError',
-    'KernelSchema',
-    'InputSchema',
-    'OutputSchema',
-    'ParameterSpec',
-
+    "KernelOp",
+    "KernelOpError",
+    "KernelSchema",
+    "InputSchema",
+    "OutputSchema",
+    "ParameterSpec",
     # Builder (for DSE and kernel construction)
-    'DesignSpaceBuilder',
-    'BuildContext',
-
+    "DesignSpaceBuilder",
+    "BuildContext",
     # Immutable models (design space exploration)
-    'KernelDesignSpace',
-    'KernelDesignPoint',
-    'InterfaceDesignSpace',
-    'InterfaceDesignPoint',
-    'OrderedParameter',  # For ordered parameter navigation
-
+    "KernelDesignSpace",
+    "KernelDesignPoint",
+    "InterfaceDesignSpace",
+    "InterfaceDesignPoint",
+    "OrderedParameter",  # For ordered parameter navigation
     # Validation
-    'Constraint',
-    'ValidationError',
-    'DesignSpaceValidationContext',
-    'ConfigurationValidationContext',
-
+    "Constraint",
+    "ValidationError",
+    "DesignSpaceValidationContext",
+    "ConfigurationValidationContext",
     # Transformation
-    'TransformationResult',
-
+    "TransformationResult",
     # Inference helpers
-    'lift_scalar_to_rank1',  # For scalar input normalization in kernel inference
-
+    "lift_scalar_to_rank1",  # For scalar input normalization in kernel inference
     # Essential types
-    'Shape',
-    'ShapeHierarchy',
-    'FULL_DIM',
-    'FULL_SHAPE',
-
+    "Shape",
+    "ShapeHierarchy",
+    "FULL_DIM",
+    "FULL_SHAPE",
     # QONNX type re-exports (for convenience)
-    'DataType',
-    'BaseDataType',
-
+    "DataType",
+    "BaseDataType",
     # === Advanced API ===
     # For advanced users - specific constraint classes require explicit import:
     #   from brainsmith.dataflow.constraints import DatatypeInteger, ShapesEqual, ...

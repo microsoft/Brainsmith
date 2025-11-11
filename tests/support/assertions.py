@@ -40,6 +40,7 @@ from tests.support.constants import (
 # Base Assertion Helper (from tests/common/assertions.py)
 # =============================================================================
 
+
 class AssertionHelper:
     """Base class for all test assertion helpers.
 
@@ -49,10 +50,7 @@ class AssertionHelper:
 
     @staticmethod
     def format_mismatch(
-        description: str,
-        expected: Any,
-        actual: Any,
-        formatter: Callable[[Any], str] | None = None
+        description: str, expected: Any, actual: Any, formatter: Callable[[Any], str] | None = None
     ) -> str:
         """Format standard mismatch error message.
 
@@ -79,7 +77,7 @@ class AssertionHelper:
         lines = [
             f"{description} mismatch:",
             f"  Expected: {fmt(expected)}",
-            f"  Actual:   {fmt(actual)}"
+            f"  Actual:   {fmt(actual)}",
         ]
 
         return "\n".join(lines)
@@ -91,7 +89,7 @@ class AssertionHelper:
         value_b: Any,
         label_a: str = "A",
         label_b: str = "B",
-        formatter: Callable[[Any], str] | None = None
+        formatter: Callable[[Any], str] | None = None,
     ) -> str:
         """Format comparison error message (for parity testing).
 
@@ -121,17 +119,14 @@ class AssertionHelper:
         lines = [
             f"{description} mismatch:",
             f"  {label_a}: {fmt(value_a)}",
-            f"  {label_b}: {fmt(value_b)}"
+            f"  {label_b}: {fmt(value_b)}",
         ]
 
         return "\n".join(lines)
 
     @staticmethod
     def assert_equal(
-        expected: Any,
-        actual: Any,
-        description: str,
-        formatter: Callable[[Any], str] | None = None
+        expected: Any, actual: Any, description: str, formatter: Callable[[Any], str] | None = None
     ) -> None:
         """Assert values are equal with consistent error formatting.
 
@@ -154,9 +149,7 @@ class AssertionHelper:
               Actual:   7
         """
         if expected != actual:
-            msg = AssertionHelper.format_mismatch(
-                description, expected, actual, formatter
-            )
+            msg = AssertionHelper.format_mismatch(description, expected, actual, formatter)
             raise AssertionError(msg)
 
     @staticmethod
@@ -166,7 +159,7 @@ class AssertionHelper:
         description: str,
         label_a: str = "A",
         label_b: str = "B",
-        formatter: Callable[[Any], str] | None = None
+        formatter: Callable[[Any], str] | None = None,
     ) -> None:
         """Assert two values match (for parity testing).
 
@@ -193,6 +186,7 @@ class AssertionHelper:
 # Parity Testing: Manual vs Auto Implementation Comparison
 # =============================================================================
 
+
 class ParityAssertion(AssertionHelper):
     """Parity-specific assertion helper.
 
@@ -205,7 +199,7 @@ class ParityAssertion(AssertionHelper):
         description: str,
         manual_value: Any,
         auto_value: Any,
-        formatter: Callable[[Any], str] | None = None
+        formatter: Callable[[Any], str] | None = None,
     ) -> str:
         """Format parity mismatch error message (Manual vs Auto).
 
@@ -228,8 +222,12 @@ class ParityAssertion(AssertionHelper):
               Auto:   (1, 769)
         """
         return AssertionHelper.format_comparison(
-            description, manual_value, auto_value,
-            label_a="Manual", label_b="Auto", formatter=formatter
+            description,
+            manual_value,
+            auto_value,
+            label_a="Manual",
+            label_b="Auto",
+            formatter=formatter,
         )
 
     @staticmethod
@@ -237,7 +235,7 @@ class ParityAssertion(AssertionHelper):
         manual_value: Any,
         auto_value: Any,
         description: str,
-        formatter: Callable[[Any], str] | None = None
+        formatter: Callable[[Any], str] | None = None,
     ) -> None:
         """Assert parity between manual and auto implementations.
 
@@ -251,8 +249,12 @@ class ParityAssertion(AssertionHelper):
             AssertionError: If values differ
         """
         AssertionHelper.assert_comparison(
-            manual_value, auto_value, description,
-            label_a="Manual", label_b="Auto", formatter=formatter
+            manual_value,
+            auto_value,
+            description,
+            label_a="Manual",
+            label_b="Auto",
+            formatter=formatter,
         )
 
 
@@ -260,11 +262,9 @@ class ParityAssertion(AssertionHelper):
 # Specialized Assertion Helpers for Kernel Testing
 # -----------------------------------------------------------------------------
 
+
 def assert_shapes_match(
-    manual_shape: tuple[int, ...],
-    auto_shape: tuple[int, ...],
-    index: int,
-    kind: str
+    manual_shape: tuple[int, ...], auto_shape: tuple[int, ...], index: int, kind: str
 ) -> None:
     """Assert tensor shapes match between implementations.
 
@@ -297,22 +297,17 @@ def assert_shapes_match(
     # Convert to tuple for comparison to handle FINN's inconsistent return types
     if tuple(manual_shape) != tuple(auto_shape):
         # Capitalize first letter if kind starts with direction
-        if kind.lower().startswith(('input', 'output')):
+        if kind.lower().startswith(("input", "output")):
             description = f"{kind.capitalize()} {index} shape"
         else:
             description = f"Index {index} {kind} shape"
 
-        msg = ParityAssertion.format_mismatch(
-            description, manual_shape, auto_shape
-        )
+        msg = ParityAssertion.format_mismatch(description, manual_shape, auto_shape)
         raise AssertionError(msg)
 
 
 def assert_datatypes_match(
-    manual_datatype: DataType,
-    auto_datatype: DataType,
-    index: int,
-    direction: str
+    manual_datatype: DataType, auto_datatype: DataType, index: int, direction: str
 ) -> None:
     """Assert datatypes match between implementations.
 
@@ -341,6 +336,7 @@ def assert_datatypes_match(
           Auto:   INT16 (16 bits)
     """
     if manual_datatype != auto_datatype:
+
         def format_dt(dt: DataType) -> str:
             if dt is None:
                 return "None"
@@ -354,11 +350,7 @@ def assert_datatypes_match(
 
 
 def assert_widths_match(
-    manual_width: int,
-    auto_width: int,
-    index: int,
-    direction: str,
-    unit: str = "bits"
+    manual_width: int, auto_width: int, index: int, direction: str, unit: str = "bits"
 ) -> None:
     """Assert stream widths match between implementations.
 
@@ -382,13 +374,12 @@ def assert_widths_match(
           Auto:   32 bits
     """
     if manual_width != auto_width:
+
         def format_width(width: int) -> str:
             return f"{width} {unit}"
 
         description = f"{direction} {index} stream width"
-        msg = ParityAssertion.format_mismatch(
-            description, manual_width, auto_width, format_width
-        )
+        msg = ParityAssertion.format_mismatch(description, manual_width, auto_width, format_width)
         raise AssertionError(msg)
 
 
@@ -396,7 +387,7 @@ def assert_values_match(
     manual_value: Any,
     auto_value: Any,
     description: str,
-    formatter: Callable[[Any], str] | None = None
+    formatter: Callable[[Any], str] | None = None,
 ) -> None:
     """Generic assertion for any value comparison.
 
@@ -418,9 +409,7 @@ def assert_values_match(
           Manual: 42
           Auto:   43
     """
-    ParityAssertion.assert_equal(
-        manual_value, auto_value, description, formatter
-    )
+    ParityAssertion.assert_equal(manual_value, auto_value, description, formatter)
 
 
 def assert_arrays_close(
@@ -428,7 +417,7 @@ def assert_arrays_close(
     auto_array: np.ndarray,
     description: str,
     rtol: float = 1e-5,
-    atol: float = 1e-6
+    atol: float = 1e-6,
 ) -> None:
     """Assert numpy arrays are numerically close.
 
@@ -485,15 +474,12 @@ def assert_arrays_close(
             f"1. Datatype handling (accumulator precision, rounding)\n"
             f"2. Algorithm implementation (order of operations)\n"
             f"3. Parallelization effects (SIMD/PE folding)\n"
-        )
+        ),
     )
 
 
 def assert_model_tensors_match(
-    manual_model: ModelWrapper,
-    auto_model: ModelWrapper,
-    tensor_name: str,
-    description: str
+    manual_model: ModelWrapper, auto_model: ModelWrapper, tensor_name: str, description: str
 ) -> None:
     """Assert tensors in model graphs match.
 
@@ -512,14 +498,12 @@ def assert_model_tensors_match(
     auto_dt = auto_model.get_tensor_datatype(tensor_name)
 
     if manual_dt != auto_dt:
+
         def format_dt(dt):
             return f"{dt.name if dt else 'None'}"
 
         msg = ParityAssertion.format_mismatch(
-            f"{description} ({tensor_name}) datatype in model",
-            manual_dt,
-            auto_dt,
-            format_dt
+            f"{description} ({tensor_name}) datatype in model", manual_dt, auto_dt, format_dt
         )
         raise AssertionError(msg)
 
@@ -533,9 +517,11 @@ def assert_model_tensors_match(
 # Data Classes for Expected Values
 # -----------------------------------------------------------------------------
 
+
 @dataclass
 class ExpectedTreeStructure:
     """Expected structure for tree validation."""
+
     total_nodes: int
     total_leaves: int
     total_paths: int
@@ -546,6 +532,7 @@ class ExpectedTreeStructure:
 @dataclass
 class ExpectedExecutionLevel:
     """Expected execution level for validation."""
+
     level: int
     nodes: list[str]
 
@@ -553,6 +540,7 @@ class ExpectedExecutionLevel:
 @dataclass
 class ExpectedExecutionStats:
     """Expected execution statistics."""
+
     total: int
     successful: int
     failed: int = 0
@@ -563,6 +551,7 @@ class ExpectedExecutionStats:
 # -----------------------------------------------------------------------------
 # TreeAssertions - DSE Tree Structure Validation
 # -----------------------------------------------------------------------------
+
 
 class TreeAssertions(AssertionHelper):
     """Helper class for DSE tree assertions.
@@ -580,20 +569,25 @@ class TreeAssertions(AssertionHelper):
             expected: Expected structure properties
         """
         stats = tree.get_statistics()
-        assert stats['total_segments'] == expected.total_nodes, \
-            f"Expected {expected.total_nodes} nodes, got {stats['total_segments']}"
+        assert (
+            stats["total_segments"] == expected.total_nodes
+        ), f"Expected {expected.total_nodes} nodes, got {stats['total_segments']}"
 
-        assert stats['total_paths'] == expected.total_leaves, \
-            f"Expected {expected.total_leaves} leaves, got {stats['total_paths']}"
-        assert stats['total_paths'] == expected.total_paths, \
-            f"Expected {expected.total_paths} paths, got {stats['total_paths']}"
+        assert (
+            stats["total_paths"] == expected.total_leaves
+        ), f"Expected {expected.total_leaves} leaves, got {stats['total_paths']}"
+        assert (
+            stats["total_paths"] == expected.total_paths
+        ), f"Expected {expected.total_paths} paths, got {stats['total_paths']}"
 
-        assert stats['total_segments'] == expected.total_segments, \
-            f"Expected {expected.total_segments} segments, got {stats['total_segments']}"
+        assert (
+            stats["total_segments"] == expected.total_segments
+        ), f"Expected {expected.total_segments} segments, got {stats['total_segments']}"
 
         if expected.segment_efficiency is not None:
-            assert stats['segment_efficiency'] == expected.segment_efficiency, \
-                f"Expected efficiency {expected.segment_efficiency}%, got {stats['segment_efficiency']}%"
+            assert (
+                stats["segment_efficiency"] == expected.segment_efficiency
+            ), f"Expected efficiency {expected.segment_efficiency}%, got {stats['segment_efficiency']}%"
 
     @staticmethod
     def assert_execution_order_structure(execution_order: list, tree: DSETree):
@@ -604,11 +598,11 @@ class TreeAssertions(AssertionHelper):
             tree: The DSE tree
         """
         # Root should be first
-        assert execution_order[0] == tree.root, \
-            "Root node should be first in execution order"
+        assert execution_order[0] == tree.root, "Root node should be first in execution order"
 
-        assert execution_order[0].segment_id == "root", \
-            f"Root segment_id should be 'root', got '{execution_order[0].segment_id}'"
+        assert (
+            execution_order[0].segment_id == "root"
+        ), f"Root segment_id should be 'root', got '{execution_order[0].segment_id}'"
 
     @staticmethod
     def assert_parent_child_relationships(tree: DSETree):
@@ -617,16 +611,17 @@ class TreeAssertions(AssertionHelper):
         Args:
             tree: The DSE tree to validate
         """
+
         def _check_node_relationships(node, expected_parent=None):
             """Recursively check relationships."""
             if expected_parent is not None:
-                assert node.parent == expected_parent, \
-                    f"Node {node.segment_id} has incorrect parent"
+                assert (
+                    node.parent == expected_parent
+                ), f"Node {node.segment_id} has incorrect parent"
 
             # Check all children
             for child in node.children.values():
-                assert child.parent == node, \
-                    f"Child {child.segment_id} has incorrect parent"
+                assert child.parent == node, f"Child {child.segment_id} has incorrect parent"
                 _check_node_relationships(child, node)
 
         # Start from root (which has no parent)
@@ -639,15 +634,17 @@ class TreeAssertions(AssertionHelper):
         Args:
             tree: The DSE tree to validate
         """
+
         def _check_leaf_consistency(node):
             """Check leaf property consistency."""
             has_children = bool(node.children)
             is_leaf_property = node.is_leaf
 
             # Leaf property should match absence of children
-            assert (not has_children) == is_leaf_property, \
-                f"Node {node.segment_id} leaf property ({is_leaf_property}) " \
+            assert (not has_children) == is_leaf_property, (
+                f"Node {node.segment_id} leaf property ({is_leaf_property}) "
                 f"inconsistent with children ({has_children})"
+            )
 
             # Recursively check children
             for child in node.children.values():
@@ -662,15 +659,17 @@ class TreeAssertions(AssertionHelper):
         Args:
             tree: The DSE tree to validate
         """
+
         def _check_branch_consistency(node):
             """Check branch point consistency."""
             has_multiple_children = len(node.children) > MIN_CHILDREN_FOR_BRANCH
             is_branch_property = node.is_branch_point
 
             # Branch point property should match multiple children
-            assert has_multiple_children == is_branch_property, \
-                f"Node {node.segment_id} branch property ({is_branch_property}) " \
+            assert has_multiple_children == is_branch_property, (
+                f"Node {node.segment_id} branch property ({is_branch_property}) "
                 f"inconsistent with children count ({len(node.children)})"
+            )
 
             # Recursively check children
             for child in node.children.values():
@@ -698,8 +697,9 @@ class TreeAssertions(AssertionHelper):
 
         # Execution order basics
         execution_order = tree.get_execution_order()
-        assert len(execution_order) == expected.total_nodes, \
-            f"Execution order length {len(execution_order)} != total nodes {expected.total_nodes}"
+        assert (
+            len(execution_order) == expected.total_nodes
+        ), f"Execution order length {len(execution_order)} != total nodes {expected.total_nodes}"
 
         TreeAssertions.assert_execution_order_structure(execution_order, tree)
 
@@ -707,6 +707,7 @@ class TreeAssertions(AssertionHelper):
 # -----------------------------------------------------------------------------
 # ExecutionAssertions - DSE Execution Result Validation
 # -----------------------------------------------------------------------------
+
 
 class ExecutionAssertions(AssertionHelper):
     """Helper class for DSE execution result assertions.
@@ -716,10 +717,7 @@ class ExecutionAssertions(AssertionHelper):
     """
 
     @staticmethod
-    def assert_execution_stats(
-        result: TreeExecutionResult,
-        expected: ExpectedExecutionStats
-    ):
+    def assert_execution_stats(result: TreeExecutionResult, expected: ExpectedExecutionStats):
         """Assert execution statistics match expected values.
 
         Args:
@@ -728,26 +726,29 @@ class ExecutionAssertions(AssertionHelper):
         """
         stats = result.compute_stats()
 
-        assert stats['total'] == expected.total, \
-            f"Expected {expected.total} total segments, got {stats['total']}"
+        assert (
+            stats["total"] == expected.total
+        ), f"Expected {expected.total} total segments, got {stats['total']}"
 
-        assert stats['successful'] == expected.successful, \
-            f"Expected {expected.successful} successful segments, got {stats['successful']}"
+        assert (
+            stats["successful"] == expected.successful
+        ), f"Expected {expected.successful} successful segments, got {stats['successful']}"
 
-        assert stats['failed'] == expected.failed, \
-            f"Expected {expected.failed} failed segments, got {stats['failed']}"
+        assert (
+            stats["failed"] == expected.failed
+        ), f"Expected {expected.failed} failed segments, got {stats['failed']}"
 
-        assert stats['cached'] == expected.cached, \
-            f"Expected {expected.cached} cached segments, got {stats['cached']}"
+        assert (
+            stats["cached"] == expected.cached
+        ), f"Expected {expected.cached} cached segments, got {stats['cached']}"
 
-        assert stats['skipped'] == expected.skipped, \
-            f"Expected {expected.skipped} skipped segments, got {stats['skipped']}"
+        assert (
+            stats["skipped"] == expected.skipped
+        ), f"Expected {expected.skipped} skipped segments, got {stats['skipped']}"
 
     @staticmethod
     def assert_segment_status(
-        result: TreeExecutionResult,
-        segment_id: str,
-        expected_status: SegmentStatus
+        result: TreeExecutionResult, segment_id: str, expected_status: SegmentStatus
     ):
         """Assert specific segment has expected status.
 
@@ -758,13 +759,15 @@ class ExecutionAssertions(AssertionHelper):
         """
         segment_result = result.segment_results.get(segment_id)
 
-        assert segment_result is not None, \
-            f"Segment '{segment_id}' not found in execution results. " \
+        assert segment_result is not None, (
+            f"Segment '{segment_id}' not found in execution results. "
             f"Available segments: {list(result.segment_results.keys())}"
+        )
 
-        assert segment_result.status == expected_status, \
-            f"Segment '{segment_id}' expected status {expected_status.value}, " \
+        assert segment_result.status == expected_status, (
+            f"Segment '{segment_id}' expected status {expected_status.value}, "
             f"got {segment_result.status.value}"
+        )
 
     @staticmethod
     def assert_execution_success(result: TreeExecutionResult):
@@ -777,17 +780,15 @@ class ExecutionAssertions(AssertionHelper):
             AssertionError: If no successful or cached builds exist
         """
         stats = result.compute_stats()
-        valid_builds = stats['successful'] + stats['cached']
+        valid_builds = stats["successful"] + stats["cached"]
 
-        assert valid_builds > 0, \
-            f"Expected at least one successful build, but got 0 successful and 0 cached. " \
+        assert valid_builds > 0, (
+            f"Expected at least one successful build, but got 0 successful and 0 cached. "
             f"Failed: {stats['failed']}, Skipped: {stats['skipped']}"
+        )
 
     @staticmethod
-    def assert_all_paths_executed(
-        result: TreeExecutionResult,
-        tree: DSETree
-    ):
+    def assert_all_paths_executed(result: TreeExecutionResult, tree: DSETree):
         """Assert all leaf paths were executed.
 
         Args:
@@ -799,15 +800,13 @@ class ExecutionAssertions(AssertionHelper):
 
         # Total executed should at least equal number of paths
         # (may be more if non-leaf segments are included)
-        assert execution_stats['total'] >= tree_stats['total_paths'], \
-            f"Expected at least {tree_stats['total_paths']} executed segments, " \
+        assert execution_stats["total"] >= tree_stats["total_paths"], (
+            f"Expected at least {tree_stats['total_paths']} executed segments, "
             f"got {execution_stats['total']}"
+        )
 
     @staticmethod
-    def assert_segment_output_exists(
-        result: TreeExecutionResult,
-        segment_id: str
-    ):
+    def assert_segment_output_exists(result: TreeExecutionResult, segment_id: str):
         """Assert segment produced output model or directory.
 
         Args:
@@ -816,16 +815,13 @@ class ExecutionAssertions(AssertionHelper):
         """
         segment_result = result.segment_results.get(segment_id)
 
-        assert segment_result is not None, \
-            f"Segment '{segment_id}' not found in execution results"
+        assert segment_result is not None, f"Segment '{segment_id}' not found in execution results"
 
         has_output = (
-            segment_result.output_model is not None or
-            segment_result.output_dir is not None
+            segment_result.output_model is not None or segment_result.output_dir is not None
         )
 
-        assert has_output, \
-            f"Segment '{segment_id}' has no output_model or output_dir"
+        assert has_output, f"Segment '{segment_id}' has no output_model or output_dir"
 
     @staticmethod
     def assert_no_failed_segments(result: TreeExecutionResult):
@@ -836,14 +832,11 @@ class ExecutionAssertions(AssertionHelper):
         """
         stats = result.compute_stats()
 
-        assert stats['failed'] == 0, \
-            f"Expected 0 failed segments, got {stats['failed']}"
+        assert stats["failed"] == 0, f"Expected 0 failed segments, got {stats['failed']}"
 
     @staticmethod
     def assert_segment_execution_time(
-        result: TreeExecutionResult,
-        segment_id: str,
-        min_time: float = 0.0
+        result: TreeExecutionResult, segment_id: str, min_time: float = 0.0
     ):
         """Assert segment execution time is within expected range.
 
@@ -854,17 +847,18 @@ class ExecutionAssertions(AssertionHelper):
         """
         segment_result = result.segment_results.get(segment_id)
 
-        assert segment_result is not None, \
-            f"Segment '{segment_id}' not found in execution results"
+        assert segment_result is not None, f"Segment '{segment_id}' not found in execution results"
 
-        assert segment_result.execution_time >= min_time, \
-            f"Segment '{segment_id}' execution time {segment_result.execution_time}s " \
+        assert segment_result.execution_time >= min_time, (
+            f"Segment '{segment_id}' execution time {segment_result.execution_time}s "
             f"less than minimum {min_time}s"
+        )
 
 
 # -----------------------------------------------------------------------------
 # BlueprintAssertions - Blueprint Parsing Validation
 # -----------------------------------------------------------------------------
+
 
 class BlueprintAssertions(AssertionHelper):
     """Helper class for blueprint parsing assertions.
@@ -878,7 +872,7 @@ class BlueprintAssertions(AssertionHelper):
         design_space: GlobalDesignSpace,
         expected_steps: list[str | list[str]],
         expected_kernel_count: int | None = None,
-        expected_model_path: str | None = None
+        expected_model_path: str | None = None,
     ):
         """Assert design space has expected structure.
 
@@ -888,24 +882,27 @@ class BlueprintAssertions(AssertionHelper):
             expected_kernel_count: Expected number of kernel backends
             expected_model_path: Expected model path
         """
-        assert design_space.steps == expected_steps, \
-            f"Expected steps {expected_steps}, got {design_space.steps}"
+        assert (
+            design_space.steps == expected_steps
+        ), f"Expected steps {expected_steps}, got {design_space.steps}"
 
         if expected_kernel_count is not None:
             actual_count = len(design_space.kernel_backends)
-            assert actual_count == expected_kernel_count, \
-                f"Expected {expected_kernel_count} kernel backends, got {actual_count}"
+            assert (
+                actual_count == expected_kernel_count
+            ), f"Expected {expected_kernel_count} kernel backends, got {actual_count}"
 
         if expected_model_path is not None:
-            assert design_space.model_path == expected_model_path, \
-                f"Expected model path '{expected_model_path}', got '{design_space.model_path}'"
+            assert (
+                design_space.model_path == expected_model_path
+            ), f"Expected model path '{expected_model_path}', got '{design_space.model_path}'"
 
     @staticmethod
     def assert_config_values(
         config: DSEConfig,
         expected_clock_ns: float | None = None,
         expected_board: str | None = None,
-        expected_output: OutputType | None = None
+        expected_output: OutputType | None = None,
     ):
         """Assert DSEConfig has expected values.
 
@@ -916,22 +913,23 @@ class BlueprintAssertions(AssertionHelper):
             expected_output: Expected output type
         """
         if expected_clock_ns is not None:
-            assert config.clock_ns == expected_clock_ns, \
-                f"Expected clock_ns {expected_clock_ns}, got {config.clock_ns}"
+            assert (
+                config.clock_ns == expected_clock_ns
+            ), f"Expected clock_ns {expected_clock_ns}, got {config.clock_ns}"
 
         if expected_board is not None:
-            assert config.board == expected_board, \
-                f"Expected board '{expected_board}', got '{config.board}'"
+            assert (
+                config.board == expected_board
+            ), f"Expected board '{expected_board}', got '{config.board}'"
 
         if expected_output is not None:
-            assert config.output == expected_output, \
-                f"Expected output {expected_output.value}, got {config.output.value}"
+            assert (
+                config.output == expected_output
+            ), f"Expected output {expected_output.value}, got {config.output.value}"
 
     @staticmethod
     def assert_step_sequence(
-        design_space: GlobalDesignSpace,
-        expected_sequence: list[str],
-        ignore_branches: bool = False
+        design_space: GlobalDesignSpace, expected_sequence: list[str], ignore_branches: bool = False
     ):
         """Assert steps appear in expected sequence.
 
@@ -952,14 +950,13 @@ class BlueprintAssertions(AssertionHelper):
                     flattened.append(step)
             actual = flattened
 
-        assert actual == expected_sequence, \
-            f"Expected step sequence {expected_sequence}, got {actual}"
+        assert (
+            actual == expected_sequence
+        ), f"Expected step sequence {expected_sequence}, got {actual}"
 
     @staticmethod
     def assert_branch_point(
-        design_space: GlobalDesignSpace,
-        index: int,
-        expected_options: list[str]
+        design_space: GlobalDesignSpace, index: int, expected_options: list[str]
     ):
         """Assert specific index contains branch point with expected options.
 
@@ -968,22 +965,23 @@ class BlueprintAssertions(AssertionHelper):
             index: Index of the branch point in steps
             expected_options: Expected branch options (including "~" if present)
         """
-        assert index < len(design_space.steps), \
-            f"Index {index} out of range for steps (length {len(design_space.steps)})"
+        assert index < len(
+            design_space.steps
+        ), f"Index {index} out of range for steps (length {len(design_space.steps)})"
 
         step = design_space.steps[index]
 
-        assert isinstance(step, list), \
-            f"Expected branch point at index {index}, got single step '{step}'"
+        assert isinstance(
+            step, list
+        ), f"Expected branch point at index {index}, got single step '{step}'"
 
-        assert set(step) == set(expected_options), \
-            f"Expected branch options {set(expected_options)}, got {set(step)}"
+        assert set(step) == set(
+            expected_options
+        ), f"Expected branch options {set(expected_options)}, got {set(step)}"
 
     @staticmethod
     def assert_inheritance_applied(
-        child_config: DSEConfig,
-        parent_values: dict[str, Any],
-        child_overrides: dict[str, Any]
+        child_config: DSEConfig, parent_values: dict[str, Any], child_overrides: dict[str, Any]
     ):
         """Assert inheritance correctly merged parent and child values.
 
@@ -996,22 +994,21 @@ class BlueprintAssertions(AssertionHelper):
         for key, expected_value in parent_values.items():
             if key not in child_overrides:
                 actual_value = getattr(child_config, key)
-                assert actual_value == expected_value, \
-                    f"Expected inherited value for '{key}': {expected_value}, " \
+                assert actual_value == expected_value, (
+                    f"Expected inherited value for '{key}': {expected_value}, "
                     f"got {actual_value}"
+                )
 
         # Check child overrides
         for key, expected_value in child_overrides.items():
             actual_value = getattr(child_config, key)
-            assert actual_value == expected_value, \
-                f"Expected child override for '{key}': {expected_value}, " \
-                f"got {actual_value}"
+            assert actual_value == expected_value, (
+                f"Expected child override for '{key}': {expected_value}, " f"got {actual_value}"
+            )
 
     @staticmethod
     def assert_step_operation_applied(
-        design_space: GlobalDesignSpace,
-        operation_type: str,
-        expected_result: list[str]
+        design_space: GlobalDesignSpace, operation_type: str, expected_result: list[str]
     ):
         """Assert step operation produced expected result.
 
@@ -1028,18 +1025,19 @@ class BlueprintAssertions(AssertionHelper):
             else:
                 actual_steps.append(step)
 
-        assert actual_steps == expected_result, \
-            f"Step operation '{operation_type}' failed. " \
+        assert actual_steps == expected_result, (
+            f"Step operation '{operation_type}' failed. "
             f"Expected {expected_result}, got {actual_steps}"
+        )
 
 
 # -----------------------------------------------------------------------------
 # Helper Functions
 # -----------------------------------------------------------------------------
 
+
 def calculate_segment_efficiency(
-    total_steps_with_segments: int,
-    total_steps_without_segments: int
+    total_steps_with_segments: int, total_steps_without_segments: int
 ) -> float:
     """Calculate expected segment efficiency.
 

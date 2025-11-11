@@ -80,7 +80,7 @@ SINGLE_BRANCH_EFFICIENCY_WITHOUT_SEGMENTS: Final[int] = 6
 # Multi-level tree structure
 MULTI_LEVEL_TOTAL_NODES: Final[int] = 7  # root + 2 first + 4 second level
 MULTI_LEVEL_TOTAL_LEAVES: Final[int] = 4  # 2×2 second level branches
-MULTI_LEVEL_TOTAL_PATHS: Final[int] = 4   # 2 branches × 2 sub-branches
+MULTI_LEVEL_TOTAL_PATHS: Final[int] = 4  # 2 branches × 2 sub-branches
 MULTI_LEVEL_LEVEL_2_START_INDEX: Final[int] = 3  # For execution_order[3:]
 
 # Tree efficiency metrics

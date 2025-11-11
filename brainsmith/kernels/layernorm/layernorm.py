@@ -22,19 +22,20 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     inputs=[
         df.InputSchema(
             name="input",
-            block_tiling=[FULL_DIM],         # (1, 1, channels) - process full spatial dims
-            stream_tiling=["SIMD"],          # Stream channels with SIMD parallelism
-            required_layout="NHWC",          # Hardware requires NHWC layout
+            block_tiling=[FULL_DIM],  # (1, 1, channels) - process full spatial dims
+            stream_tiling=["SIMD"],  # Stream channels with SIMD parallelism
+            required_layout="NHWC",  # Hardware requires NHWC layout
         )
     ],
-
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[FULL_DIM],         # (1, 1, channels)
-            stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],   # Output streams at same rate as input
-            datatype=df.constant_datatype("FLOAT32"),                # Output datatype same as input
-            required_layout="NHWC",          # Hardware produces NHWC layout
+            block_tiling=[FULL_DIM],  # (1, 1, channels)
+            stream_tiling=[
+                derive_dim("input", ShapeHierarchy.STREAM, -1)
+            ],  # Output streams at same rate as input
+            datatype=df.constant_datatype("FLOAT32"),  # Output datatype same as input
+            required_layout="NHWC",  # Hardware produces NHWC layout
         )
     ],
     kernel_params={
@@ -47,10 +48,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
 )
 
 
-@kernel(
-    description="Hardware LayerNorm w/out Bias/Scale",
-    author="Shane Fleming"
-)
+@kernel(description="Hardware LayerNorm w/out Bias/Scale", author="Shane Fleming")
 class LayerNorm(KernelOp):
     """Abstraction layer for HW implementation of the LayerNorm layer."""
 
@@ -76,7 +74,9 @@ class LayerNorm(KernelOp):
         return axis_attr is None or axis_attr.i == -1
 
     @classmethod
-    def infer_from(cls, node: NodeProto, model: ModelWrapper, insert_index: int) -> df.TransformationResult:
+    def infer_from(
+        cls, node: NodeProto, model: ModelWrapper, insert_index: int
+    ) -> df.TransformationResult:
         """Create LayerNorm HW node from FuncLayerNorm node.
 
         Args:
@@ -105,10 +105,7 @@ class LayerNorm(KernelOp):
             epsilon=epsilon,
         )
 
-        return df.TransformationResult(
-            nodes_to_insert=[hw_node],
-            nodes_to_remove=[node]
-        )
+        return df.TransformationResult(nodes_to_insert=[hw_node], nodes_to_remove=[node])
 
     def execute_node(self, context, graph):
         node = self.onnx_node

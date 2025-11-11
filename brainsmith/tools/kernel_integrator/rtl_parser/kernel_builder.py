@@ -33,15 +33,15 @@ logger = logging.getLogger(__name__)
 
 class KernelBuilder:
     """Builds KernelMetadata from extracted module components.
-    
+
     This class handles:
     - Interface building and validation (via ProtocolScanner)
     - KernelMetadata assembly from extracted components
     """
-    
+
     def __init__(self, ast_parser: ASTParser, debug: bool = False):
         """Initialize the kernel builder.
-        
+
         Args:
             ast_parser: ASTParser instance for node traversal utilities.
             debug: Enable debug logging.
@@ -49,7 +49,7 @@ class KernelBuilder:
         self.ast_parser = ast_parser
         self.scanner = ProtocolScanner(debug=debug)
         self.debug = debug
-    
+
     def build(self, parsed_module: ParsedModule) -> KernelMetadata:
         """Build complete `KernelMetadata` from a ParsedModule.
 
@@ -87,7 +87,9 @@ class KernelBuilder:
         if ProtocolType.CONTROL in interfaces_by_protocol:
             control_candidates = interfaces_by_protocol[ProtocolType.CONTROL]
             if len(control_candidates) != 1:
-                raise ValueError(f"Expected exactly one control interface, found {len(control_candidates)}")
+                raise ValueError(
+                    f"Expected exactly one control interface, found {len(control_candidates)}"
+                )
             control_interface = control_candidates[0]
         else:
             raise ValueError("No control interface found")
@@ -117,23 +119,25 @@ class KernelBuilder:
             inputs=input_interfaces,
             outputs=output_interfaces,
             config=config_interfaces,
-            parameters=parameters
+            parameters=parameters,
         )
 
-    def scan_and_build_interfaces(self, ports: list[Port]) -> dict[ProtocolType, list[InterfaceMetadata]]:
+    def scan_and_build_interfaces(
+        self, ports: list[Port]
+    ) -> dict[ProtocolType, list[InterfaceMetadata]]:
         """Scan ports for protocol patterns and build validated interface metadata.
-        
+
         This method:
         1. Scans ports to detect protocol groups using regex patterns
         2. Validates each group against protocol requirements
         3. Builds appropriate metadata objects (ControlMetadata, AXIStreamMetadata, etc.)
-        
+
         Args:
             ports: List of Port objects to organize into interfaces.
-            
+
         Returns:
             Dictionary mapping ProtocolType to list of InterfaceMetadata objects.
-            
+
         Raises:
             ValueError: If any ports cannot be assigned to a valid interface.
         """
@@ -150,7 +154,9 @@ class KernelBuilder:
         for protocol_type, prefix_interfaces in port_groups.items():
             for prefix, interface in prefix_interfaces.items():
                 if self.debug:
-                    logger.debug(f"Validating group with prefix '{prefix}' and protocol '{protocol_type}'")
+                    logger.debug(
+                        f"Validating group with prefix '{prefix}' and protocol '{protocol_type}'"
+                    )
 
                 # Build appropriate metadata based on protocol type
                 if protocol_type == ProtocolType.CONTROL:
@@ -161,9 +167,9 @@ class KernelBuilder:
                     metadata = self.build_axi_lite(interface)
                 else:
                     raise ValueError(f"Invalid protocol type: {protocol_type}")
-                
+
                 validated_interfaces[protocol_type].append(metadata)
-        
+
         return validated_interfaces
 
     def build_global_control(self, interface: InterfaceMetadata) -> ControlMetadata:
@@ -186,25 +192,21 @@ class KernelBuilder:
         # Validate direction alignment
         direction = self.scanner.check_direction(interface, ProtocolType.AXI_STREAM)
 
-        return AXIStreamMetadata(
-            name=interface.name,
-            ports=interface.ports,
-            direction=direction
-        )
+        return AXIStreamMetadata(name=interface.name, ports=interface.ports, direction=direction)
 
     def build_axi_lite(self, interface: InterfaceMetadata) -> AXILiteMetadata:
         """Validate an AXI-Lite interface group."""
         # Check against required & expected signals
         metadata = self.scanner.check_signals(interface, ProtocolType.AXI_LITE)
-        
+
         # Validate direction alignment
         direction = self.scanner.check_direction(interface, ProtocolType.AXI_LITE)
         if direction != Direction.INPUT:
             raise ValueError(f"AXI-Lite Interface {interface.name}: Invalid direction: {direction}")
-        
+
         return AXILiteMetadata(
             name=interface.name,
             ports=interface.ports,
-            has_write=metadata['has_write'],
-            has_read=metadata['has_read']
+            has_write=metadata["has_write"],
+            has_read=metadata["has_read"],
         )

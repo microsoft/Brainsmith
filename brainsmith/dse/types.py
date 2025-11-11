@@ -26,6 +26,7 @@ class SegmentStatus(Enum):
         FAILED: Segment execution failed
         SKIPPED: Segment skipped due to parent failure
     """
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -41,6 +42,7 @@ class OutputType(Enum):
         RTL: RTL simulation and IP generation
         BITFILE: Full bitstream generation (slowest)
     """
+
     ESTIMATES = "estimates"
     RTL = "rtl"
     BITFILE = "bitfile"
@@ -50,7 +52,7 @@ class OutputType(Enum):
         return {
             OutputType.ESTIMATES: ["estimates"],
             OutputType.RTL: ["rtl_sim", "ip_gen"],
-            OutputType.BITFILE: ["bitfile"]
+            OutputType.BITFILE: ["bitfile"],
         }[self]
 
     def to_finn_outputs(self) -> list[str]:
@@ -59,9 +61,12 @@ class OutputType(Enum):
             OutputType.ESTIMATES: ["estimate_reports"],
             OutputType.RTL: ["estimate_reports", "rtlsim_performance", "stitched_ip"],
             OutputType.BITFILE: [
-                "estimate_reports", "rtlsim_performance",
-                "stitched_ip", "bitfile", "deployment_package"
-            ]
+                "estimate_reports",
+                "rtlsim_performance",
+                "stitched_ip",
+                "bitfile",
+                "deployment_package",
+            ],
         }[self]
 
     @classmethod
@@ -90,8 +95,7 @@ class OutputType(Enum):
         # Product not found - create helpful error message
         all_products = [p for ot in cls for p in ot.to_finn_products()]
         raise ValueError(
-            f"Unknown FINN product '{product}'. "
-            f"Valid products: {', '.join(all_products)}"
+            f"Unknown FINN product '{product}'. " f"Valid products: {', '.join(all_products)}"
         )
 
 
@@ -108,6 +112,7 @@ class SegmentResult:
         execution_time: Execution time in seconds
         cached: Whether result was retrieved from cache
     """
+
     segment_id: str
     status: SegmentStatus
     output_model: Path | None = None
@@ -127,6 +132,7 @@ class TreeExecutionResult:
         design_space: Original design space (if available)
         dse_tree: Execution tree structure (if available)
     """
+
     segment_results: dict[str, SegmentResult]
     total_time: float
     design_space: GlobalDesignSpace | None = None
@@ -153,11 +159,11 @@ class TreeExecutionResult:
                 skipped += 1
 
         return {
-            'total': total,
-            'successful': successful,
-            'failed': failed,
-            'cached': cached,
-            'skipped': skipped
+            "total": total,
+            "successful": successful,
+            "failed": failed,
+            "cached": cached,
+            "skipped": skipped,
         }
 
     def validate_success(self, output_dir: Path) -> None:
@@ -170,7 +176,7 @@ class TreeExecutionResult:
             ExecutionError: If no valid builds exist
         """
         stats = self.compute_stats()
-        valid_builds = stats['successful'] + stats['cached']
+        valid_builds = stats["successful"] + stats["cached"]
 
         if valid_builds == 0:
             raise ExecutionError(
@@ -181,7 +187,7 @@ class TreeExecutionResult:
                 f"  Run with --log-level debug for detailed output"
             )
 
-        if stats['successful'] == 0 and stats['cached'] > 0:
+        if stats["successful"] == 0 and stats["cached"] > 0:
             logger.warning(
                 f"All builds used cached results ({stats['cached']} cached). "
                 f"No new builds were executed."
@@ -190,5 +196,5 @@ class TreeExecutionResult:
 
 class ExecutionError(Exception):
     """Exception raised during DSE execution failures."""
-    pass
 
+    pass

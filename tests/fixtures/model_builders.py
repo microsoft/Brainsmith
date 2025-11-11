@@ -119,7 +119,7 @@ class OnnxModelBuilder:
         self._domain: str = ""  # Standard ONNX domain
         self._node_name: str = None
 
-    def op_type(self, op_type: str) -> 'OnnxModelBuilder':
+    def op_type(self, op_type: str) -> "OnnxModelBuilder":
         """Set operation type (e.g., 'Add', 'Softmax').
 
         Args:
@@ -131,7 +131,7 @@ class OnnxModelBuilder:
         self._op_type = op_type
         return self
 
-    def inputs(self, inputs: list[str]) -> 'OnnxModelBuilder':
+    def inputs(self, inputs: list[str]) -> "OnnxModelBuilder":
         """Set input tensor names.
 
         Args:
@@ -143,7 +143,7 @@ class OnnxModelBuilder:
         self._inputs = inputs
         return self
 
-    def outputs(self, outputs: list[str]) -> 'OnnxModelBuilder':
+    def outputs(self, outputs: list[str]) -> "OnnxModelBuilder":
         """Set output tensor names.
 
         Args:
@@ -155,7 +155,7 @@ class OnnxModelBuilder:
         self._outputs = outputs
         return self
 
-    def shape(self, shape: list[int]) -> 'OnnxModelBuilder':
+    def shape(self, shape: list[int]) -> "OnnxModelBuilder":
         """Set default shape for all inputs/outputs.
 
         Args:
@@ -167,7 +167,7 @@ class OnnxModelBuilder:
         self._shape = shape
         return self
 
-    def input_shape(self, name: str, shape: list[int]) -> 'OnnxModelBuilder':
+    def input_shape(self, name: str, shape: list[int]) -> "OnnxModelBuilder":
         """Override shape for specific input.
 
         Args:
@@ -180,7 +180,7 @@ class OnnxModelBuilder:
         self._input_shapes[name] = shape
         return self
 
-    def datatype(self, datatype: DataType) -> 'OnnxModelBuilder':
+    def datatype(self, datatype: DataType) -> "OnnxModelBuilder":
         """Set datatype for all tensors.
 
         Args:
@@ -193,11 +193,8 @@ class OnnxModelBuilder:
         return self
 
     def static_input(
-        self,
-        name: str,
-        shape: list[int] | int = None,
-        values: np.ndarray = None
-    ) -> 'OnnxModelBuilder':
+        self, name: str, shape: list[int] | int = None, values: np.ndarray = None
+    ) -> "OnnxModelBuilder":
         """Mark input as static (initializer) with optional shape/values.
 
         Args:
@@ -237,7 +234,7 @@ class OnnxModelBuilder:
 
         return self
 
-    def domain(self, domain: str) -> 'OnnxModelBuilder':
+    def domain(self, domain: str) -> "OnnxModelBuilder":
         """Set custom domain (default is standard ONNX).
 
         Args:
@@ -249,7 +246,7 @@ class OnnxModelBuilder:
         self._domain = domain
         return self
 
-    def name(self, name: str) -> 'OnnxModelBuilder':
+    def name(self, name: str) -> "OnnxModelBuilder":
         """Set node name.
 
         Args:
@@ -272,6 +269,7 @@ class OnnxModelBuilder:
         """
         # Use QONNX convention (FLOAT containers with DataType annotations)
         from tests.fixtures.model_annotation import tensorproto_for_datatype
+
         tensorproto_type = tensorproto_for_datatype(self._datatype)
 
         # Create input value infos (non-static only)
@@ -287,12 +285,7 @@ class OnnxModelBuilder:
         initializers = []
         for name, shape in self._static_inputs.items():
             values = self._initializer_values.get(name, np.zeros(shape))
-            init = helper.make_tensor(
-                name,
-                tensorproto_type,
-                shape,
-                values.flatten().tolist()
-            )
+            init = helper.make_tensor(name, tensorproto_type, shape, values.flatten().tolist())
             initializers.append(init)
 
         # Create output value info
@@ -315,13 +308,7 @@ class OnnxModelBuilder:
         node = helper.make_node(self._op_type, **node_args)
 
         # Create graph
-        graph = helper.make_graph(
-            [node],
-            "test_graph",
-            dynamic_inputs,
-            outputs_info,
-            initializers
-        )
+        graph = helper.make_graph([node], "test_graph", dynamic_inputs, outputs_info, initializers)
 
         # Create model
         model_proto = qonnx_make_model(graph)
@@ -340,13 +327,14 @@ class OnnxModelBuilder:
 # Convenience Functions for Common Patterns
 # =============================================================================
 
+
 def make_binary_op_model(
     op_type: str,
     shape: list[int] = None,
     input0: str = "in0",
     input1: str = "in1",
     output: str = "output",
-    datatype: DataType = DataType["INT8"]
+    datatype: DataType = DataType["INT8"],
 ) -> tuple[ModelWrapper, NodeProto]:
     """Create binary operation model (Add, Mul, etc.) with two dynamic inputs.
 
@@ -377,11 +365,13 @@ def make_binary_op_model(
         ...     input1="stream1"
         ... )
     """
-    builder = (OnnxModelBuilder()
+    builder = (
+        OnnxModelBuilder()
         .op_type(op_type)
         .inputs([input0, input1])
         .outputs([output])
-        .datatype(datatype))
+        .datatype(datatype)
+    )
 
     if shape:
         builder.shape(shape)
@@ -396,7 +386,7 @@ def make_parametric_op_model(
     shape: list[int] = None,
     param_shape: list[int] | int = None,
     datatype: DataType = DataType["INT8"],
-    input_order: str = "dynamic_first"
+    input_order: str = "dynamic_first",
 ) -> tuple[ModelWrapper, NodeProto]:
     """Create parametric operation model (one dynamic, one static input).
 
@@ -448,11 +438,13 @@ def make_parametric_op_model(
     else:
         inputs = [param_input, dynamic_input]
 
-    builder = (OnnxModelBuilder()
+    builder = (
+        OnnxModelBuilder()
         .op_type(op_type)
         .inputs(inputs)
         .static_input(param_input, shape=param_shape)
-        .datatype(datatype))
+        .datatype(datatype)
+    )
 
     if shape:
         builder.shape(shape)
@@ -465,7 +457,7 @@ def make_unary_op_model(
     input_name: str = "input",
     output: str = "output",
     shape: list[int] = None,
-    datatype: DataType = DataType["INT8"]
+    datatype: DataType = DataType["INT8"],
 ) -> tuple[ModelWrapper, NodeProto]:
     """Create unary operation model (Softmax, LayerNorm, etc.).
 
@@ -495,11 +487,13 @@ def make_unary_op_model(
         ...     shape=[1, 12, 768]
         ... )
     """
-    builder = (OnnxModelBuilder()
+    builder = (
+        OnnxModelBuilder()
         .op_type(op_type)
         .inputs([input_name])
         .outputs([output])
-        .datatype(datatype))
+        .datatype(datatype)
+    )
 
     if shape:
         builder.shape(shape)
@@ -511,6 +505,7 @@ def make_unary_op_model(
 # Specialized Helper Functions for Complex Kernel Patterns
 # =============================================================================
 
+
 def make_multithreshold_model(
     shape: list[int] = [1, 28, 28, 128],
     input_dtype: str = "INT8",
@@ -518,7 +513,7 @@ def make_multithreshold_model(
     output_dtype: str = "UINT4",
     out_scale: float = 1.0,
     out_bias: int = 0,
-    num_thresholds: int | None = None
+    num_thresholds: int | None = None,
 ) -> tuple[ModelWrapper, NodeProto]:
     """Create MultiThreshold operation model with automatic threshold generation.
 
@@ -574,14 +569,16 @@ def make_multithreshold_model(
         inputs=["inp", "thresh"],
         outputs=["outp"],
         domain="qonnx.custom_op.general",
-        name="MultiThreshold_0"
+        name="MultiThreshold_0",
     )
 
-    node.attribute.extend([
-        helper.make_attribute("out_scale", float(out_scale)),
-        helper.make_attribute("out_bias", float(out_bias)),
-        helper.make_attribute("out_dtype", output_dtype)
-    ])
+    node.attribute.extend(
+        [
+            helper.make_attribute("out_scale", float(out_scale)),
+            helper.make_attribute("out_bias", float(out_bias)),
+            helper.make_attribute("out_dtype", output_dtype),
+        ]
+    )
 
     # Generate evenly-spaced threshold values (sorted ascending)
     thresh_vals = np.linspace(-10, 10, num_thresholds, dtype=np.float32)
@@ -593,7 +590,11 @@ def make_multithreshold_model(
         "multithreshold_test",
         [inp],
         [outp],
-        [helper.make_tensor("thresh", TensorProto.FLOAT, thresh_shape, thresh_vals.flatten().tolist())]
+        [
+            helper.make_tensor(
+                "thresh", TensorProto.FLOAT, thresh_shape, thresh_vals.flatten().tolist()
+            )
+        ],
     )
 
     model = ModelWrapper(qonnx_make_model(graph))
@@ -612,7 +613,7 @@ def make_funclayernorm_model(
     epsilon: float = 1e-5,
     axis: int = -1,
     input_name: str = "inp",
-    output_name: str = "out"
+    output_name: str = "out",
 ) -> tuple[ModelWrapper, NodeProto]:
     """Create FuncLayerNorm operation model for BERT-style normalization.
 
@@ -648,11 +649,7 @@ def make_funclayernorm_model(
     out = helper.make_tensor_value_info(output_name, TensorProto.FLOAT, shape)
 
     node = helper.make_node(
-        "FuncLayerNorm",
-        [input_name],
-        [output_name],
-        axis=axis,
-        epsilon=epsilon
+        "FuncLayerNorm", [input_name], [output_name], axis=axis, epsilon=epsilon
     )
 
     graph = helper.make_graph([node], "funclayernorm_test", [inp], [out])
@@ -680,7 +677,7 @@ def make_vvau_model(
     PE: int = 4,
     SIMD: int = 3,
     no_activation: int = 1,
-    mode: str = "vvau_node"
+    mode: str = "vvau_node",
 ) -> tuple[ModelWrapper, NodeProto]:
     """Create VVAU (Vector-Vector Activation) model with depthwise sparse weights.
 
@@ -744,25 +741,15 @@ def make_vvau_model(
     if mode == "matmul_with_sparsity":
         # Create MatMul node for inference testing
         node = helper.make_node(
-            "MatMul",
-            inputs=["input", "weights"],
-            outputs=["output"],
-            name="MatMul_0"
+            "MatMul", inputs=["input", "weights"], outputs=["output"], name="MatMul_0"
         )
 
         weight_init = helper.make_tensor(
-            "weights",
-            TensorProto.FLOAT,
-            weight_shape,
-            W_sparse.flatten().tolist()
+            "weights", TensorProto.FLOAT, weight_shape, W_sparse.flatten().tolist()
         )
 
         graph = helper.make_graph(
-            [node],
-            "vvau_matmul_test",
-            [input_tensor],
-            [output_tensor],
-            [weight_init]
+            [node], "vvau_matmul_test", [input_tensor], [output_tensor], [weight_init]
         )
 
         model = ModelWrapper(qonnx_make_model(graph))
@@ -794,18 +781,11 @@ def make_vvau_model(
         )
 
         weight_init = helper.make_tensor(
-            "weights",
-            TensorProto.FLOAT,
-            weight_shape,
-            W_sparse.flatten().tolist()
+            "weights", TensorProto.FLOAT, weight_shape, W_sparse.flatten().tolist()
         )
 
         graph = helper.make_graph(
-            [node],
-            "vvau_test",
-            [input_tensor],
-            [output_tensor],
-            [weight_init]
+            [node], "vvau_test", [input_tensor], [output_tensor], [weight_init]
         )
 
         model = ModelWrapper(qonnx_make_model(graph))
@@ -825,7 +805,7 @@ def make_broadcast_model(
     datatype: str = "INT8",
     lhs_name: str = "lhs",
     rhs_name: str = "rhs",
-    output_name: str = "output"
+    output_name: str = "output",
 ) -> tuple[ModelWrapper, NodeProto]:
     """Create binary operation model with broadcasting semantics.
 
@@ -871,10 +851,7 @@ def make_broadcast_model(
 
     # Create ONNX node
     node = helper.make_node(
-        operation,
-        [lhs_name, rhs_name],
-        [output_name],
-        name=f"{operation}_broadcast_test"
+        operation, [lhs_name, rhs_name], [output_name], name=f"{operation}_broadcast_test"
     )
 
     # Build graph and model
@@ -902,7 +879,7 @@ def make_duplicate_streams_model(
     PE: int | None = None,
     input_name: str = "inp",
     output_prefix: str = "out",
-    mode: str = "duplicate_node"
+    mode: str = "duplicate_node",
 ) -> tuple[ModelWrapper, NodeProto]:
     """Create DuplicateStreams model with variable-arity outputs.
 
@@ -955,8 +932,7 @@ def make_duplicate_streams_model(
 
     # Create output tensor infos (all same shape as input)
     outputs_info = [
-        helper.make_tensor_value_info(name, TensorProto.FLOAT, shape)
-        for name in output_names
+        helper.make_tensor_value_info(name, TensorProto.FLOAT, shape) for name in output_names
     ]
 
     if mode == "fanout_graph":
@@ -967,7 +943,7 @@ def make_duplicate_streams_model(
             "weight",
             TensorProto.FLOAT,
             weight_shape,
-            np.random.rand(*weight_shape).flatten().tolist()
+            np.random.rand(*weight_shape).flatten().tolist(),
         )
 
         # Intermediate tensor that fans out
@@ -991,10 +967,7 @@ def make_duplicate_streams_model(
 
             # Create parameter
             param_init = helper.make_tensor(
-                param_name,
-                TensorProto.FLOAT,
-                [channels],
-                np.ones(channels).flatten().tolist()
+                param_name, TensorProto.FLOAT, [channels], np.ones(channels).flatten().tolist()
             )
 
             node = helper.make_node(op, ["tensor_x", param_name], [out_name], name=f"{op}_{i}")
@@ -1003,13 +976,7 @@ def make_duplicate_streams_model(
         all_nodes = [conv] + [c[0] for c in consumers]
         all_inits = [weight_init] + [c[1] for c in consumers]
 
-        graph = helper.make_graph(
-            all_nodes,
-            "fanout_graph",
-            [inp],
-            outputs_info,
-            all_inits
-        )
+        graph = helper.make_graph(all_nodes, "fanout_graph", [inp], outputs_info, all_inits)
 
         model = ModelWrapper(qonnx_make_model(graph))
 
@@ -1034,7 +1001,7 @@ def make_duplicate_streams_model(
             PE=PE,
             NumOutputStreams=num_outputs,
             inputDataType=datatype,
-            numInputVectors=shape[1:-1]  # Spatial dimensions
+            numInputVectors=shape[1:-1],  # Spatial dimensions
         )
 
         graph = helper.make_graph([node], "duplicate_streams_test", [inp], outputs_info)

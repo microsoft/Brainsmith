@@ -47,7 +47,7 @@ def pytest_addoption(parser):
         action="store",
         default=42,
         type=int,
-        help="Random seed for deterministic test data generation (default: 42)"
+        help="Random seed for deterministic test data generation (default: 42)",
     )
 
 
@@ -70,9 +70,7 @@ def pytest_configure(config):
         "markers",
         "certification: Comprehensive test sweep across all supported configurations (v5.0)",
     )
-    config.addinivalue_line(
-        "markers", "validation_v5: Tactical corner case tests for CI/CD (v5.0)"
-    )
+    config.addinivalue_line("markers", "validation_v5: Tactical corner case tests for CI/CD (v5.0)")
 
 
 # ============================================================================
@@ -209,13 +207,15 @@ def isolated_env(tmp_path, monkeypatch):
 
     # Write real config file
     config_file = project_dir / "brainsmith.yaml"
-    config_file.write_text("""
+    config_file.write_text(
+        """
 cache_components: true
 component_sources: {}
-""")
+"""
+    )
 
     # Set environment (monkeypatch auto-cleans on teardown)
-    monkeypatch.setenv('BSMITH_PROJECT_DIR', str(project_dir))
+    monkeypatch.setenv("BSMITH_PROJECT_DIR", str(project_dir))
 
     # Clear registry and config state using public API
     reset_registry()
@@ -249,13 +249,15 @@ def empty_env(tmp_path, monkeypatch):
 
     # Empty config - no component sources
     config_file = project_dir / "brainsmith.yaml"
-    config_file.write_text("""
+    config_file.write_text(
+        """
 cache_components: false
 component_sources: {}
-""")
+"""
+    )
 
     # Set environment
-    monkeypatch.setenv('BSMITH_PROJECT_DIR', str(project_dir))
+    monkeypatch.setenv("BSMITH_PROJECT_DIR", str(project_dir))
 
     # Clear state using public API
     reset_registry()

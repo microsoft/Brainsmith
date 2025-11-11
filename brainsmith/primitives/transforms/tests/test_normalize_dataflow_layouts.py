@@ -28,12 +28,7 @@ def make_nchw_model():
     relu_node = helper.make_node("Relu", ["in0"], ["out"], name="Relu_0")
 
     # Create graph
-    graph = helper.make_graph(
-        [relu_node],
-        "test_nchw",
-        [in0],
-        [out]
-    )
+    graph = helper.make_graph([relu_node], "test_nchw", [in0], [out])
 
     # Create model
     model = helper.make_model(graph, producer_name="test")
@@ -71,10 +66,7 @@ def make_mixed_layout_model():
 
     # Create graph
     graph = helper.make_graph(
-        [relu_node, add_node],
-        "test_mixed",
-        [in_nchw, in_nhwc],
-        [relu_out, add_out]
+        [relu_node, add_node], "test_mixed", [in_nchw, in_nhwc], [relu_out, add_out]
     )
 
     # Create model
@@ -115,10 +107,7 @@ def make_multi_stage_nchw_model():
 
     # Create graph
     graph = helper.make_graph(
-        [relu1_node, relu2_node, relu3_node],
-        "test_multi_stage",
-        [in0],
-        [out]
+        [relu1_node, relu2_node, relu3_node], "test_multi_stage", [in0], [out]
     )
 
     # Create model

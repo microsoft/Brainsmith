@@ -34,7 +34,7 @@ class ApplicationContext:
         build_dir_override: Path | None,
         log_level: str,
         no_progress: bool,
-        cli_name: str
+        cli_name: str,
     ) -> ApplicationContext:
         """Create context from CLI arguments and perform all initialization.
 
@@ -78,7 +78,7 @@ class ApplicationContext:
         # Pydantic handles validation and priority (CLI overrides > env > file > defaults)
         self.config = load_config(
             project_file=self.config_file,
-            **self.overrides  # Pass overrides directly to Pydantic
+            **self.overrides,  # Pass overrides directly to Pydantic
         )
 
     def get_effective_config(self) -> SystemConfig:

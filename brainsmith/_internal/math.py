@@ -1,7 +1,6 @@
 """Mathematical utilities for brainsmith."""
 
 
-
 def divisors(n: int) -> set[int]:
     """Return all divisors of n.
 
@@ -35,4 +34,4 @@ def divisors(n: int) -> set[int]:
     return result
 
 
-__all__ = ['divisors']
+__all__ = ["divisors"]

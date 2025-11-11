@@ -55,6 +55,7 @@ class KernelOpError(Exception):
         node: ONNX node that caused the error
         message: Error message
     """
+
     def __init__(self, node, message):
         self.node = node
         super().__init__(f"{node.name}: {message}")
@@ -80,7 +81,9 @@ class KernelOp(HWCustomOp, ABC):
 
         # Design space caching for DSE performance
         # Design points are regenerated on each access to ensure consistency with nodeattrs
-        self._design_space: "KernelDesignSpace" | None = None  # Cached, call invalidate() to rebuild
+        self._design_space: "KernelDesignSpace" | None = (
+            None  # Cached, call invalidate() to rebuild
+        )
 
     @classmethod
     @abstractmethod
@@ -126,7 +129,9 @@ class KernelOp(HWCustomOp, ABC):
         return False
 
     @classmethod
-    def infer_from(cls, node: NodeProto, model: ModelWrapper, insert_index: int) -> TransformationResult:
+    def infer_from(
+        cls, node: NodeProto, model: ModelWrapper, insert_index: int
+    ) -> TransformationResult:
         """Transform ONNX node to hardware kernel node(s)."""
         raise NotImplementedError(f"{cls.__name__}.infer_from()")
 
@@ -156,15 +161,22 @@ class KernelOp(HWCustomOp, ABC):
 
         # Add implementation attribute for backend selection
         # Replaces domain mutation used by FINN's SpecializeLayers
-        base_attrs.update({
-            "implementation": ("s", False, "", {
-                "",              # Not yet specialized
-                "vitis_hls",     # Vitis HLS (2020.1+)
-                "verilog",       # Verilog RTL
-                "systemverilog", # SystemVerilog RTL
-                "static_ip",     # Pre-generated IP core
-            }),
-        })
+        base_attrs.update(
+            {
+                "implementation": (
+                    "s",
+                    False,
+                    "",
+                    {
+                        "",  # Not yet specialized
+                        "vitis_hls",  # Vitis HLS (2020.1+)
+                        "verilog",  # Verilog RTL
+                        "systemverilog",  # SystemVerilog RTL
+                        "static_ip",  # Pre-generated IP core
+                    },
+                ),
+            }
+        )
 
         try:
             base_attrs.update(self.kernel_schema.build_nodeattr_registry())
@@ -292,7 +304,7 @@ class KernelOp(HWCustomOp, ABC):
                 node_outputs=list(self.onnx_node.output),
                 param_getter=self.get_nodeattr,
                 param_setter=self.set_nodeattr,
-                node_name=self.onnx_node.name
+                node_name=self.onnx_node.name,
             )
 
             try:
@@ -303,6 +315,7 @@ class KernelOp(HWCustomOp, ABC):
 
             # Auto-populate missing parameter values from auto-computed defaults
             from qonnx.util.basic import get_by_name
+
             for param_name, param in self._design_space.parameters.items():
                 # Check if attribute is actually set in ONNX node (not just has a default)
                 if get_by_name(self.onnx_node.attribute, param_name) is None:
@@ -375,7 +388,9 @@ class KernelOp(HWCustomOp, ABC):
         # Delegate to existing lazy initialization
         self._ensure_ready(model_w)
 
-    def get_valid_ranges(self, model_w: ModelWrapper) -> dict[str, Union['OrderedParameter', frozenset]]:
+    def get_valid_ranges(
+        self, model_w: ModelWrapper
+    ) -> dict[str, Union["OrderedParameter", frozenset]]:
         """Valid parameter values for DSE (tiling + resource).
 
         Returns:
@@ -486,12 +501,11 @@ class KernelOp(HWCustomOp, ABC):
                 "Split",
                 inputs=[self.onnx_node.input[0]],
                 outputs=list(self.onnx_node.output),
-                axis=-1
+                axis=-1,
             )
 
         if num_out == 1:
-            input_shapes = [tuple(model_w.get_tensor_shape(inp))
-                           for inp in self.onnx_node.input]
+            input_shapes = [tuple(model_w.get_tensor_shape(inp)) for inp in self.onnx_node.input]
 
             if len(set(input_shapes)) == 1:
                 return super().make_const_shape_op(input_shapes[0])
@@ -526,7 +540,7 @@ class KernelOp(HWCustomOp, ABC):
                 self._design_space = None
             # else: Runtime attributes and dimension changes don't invalidate cache
 
-    def apply_design_point(self, point: 'KernelDesignPoint') -> None:
+    def apply_design_point(self, point: "KernelDesignPoint") -> None:
         """Apply chosen design point to nodeattrs (persist to ONNX).
 
         Syncs design point configuration back to node attributes.

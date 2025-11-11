@@ -43,7 +43,7 @@ from brainsmith.registry import backend
     name="ChannelwiseOpHLS",
     target_kernel="brainsmith:ChannelwiseOp",
     language="hls",
-    author="FINN Team"
+    author="FINN Team",
 )
 class ChannelwiseOp_hls(ChannelwiseOp, HLSBackend):
     """HLS backend for ChannelwiseOp (KernelOp-based)."""
@@ -115,9 +115,7 @@ class ChannelwiseOp_hls(ChannelwiseOp, HLSBackend):
         parameter_tensor = self.get_hls_compatible_parameter_tensor(parameters)
         pdt = DataType[self.get_input_datatype(1).name]
 
-        parameters_hls_code = numpy_to_hls_code(
-            parameter_tensor, pdt, "parameters", False, True
-        )
+        parameters_hls_code = numpy_to_hls_code(parameter_tensor, pdt, "parameters", False, True)
 
         # Get datatypes
         idt = self.get_input_datatype(0)
@@ -194,7 +192,7 @@ class ChannelwiseOp_hls(ChannelwiseOp, HLSBackend):
 
         self.code_gen_dict["$READNPYDATA$"] = []
         self.code_gen_dict["$READNPYDATA$"].append(
-            f'npy2apintstream<{packed_hls_type}, {elem_hls_type}, {elem_bits}, '
+            f"npy2apintstream<{packed_hls_type}, {elem_hls_type}, {elem_bits}, "
             f'{npy_type}>("{npy_in}", in0_V, false);'
         )
 
@@ -235,7 +233,7 @@ class ChannelwiseOp_hls(ChannelwiseOp, HLSBackend):
         shape_cpp_str = str(shape).replace("(", "{").replace(")", "}")
 
         self.code_gen_dict["$DATAOUTSTREAM$"] = [
-            f'apintstream2npy<{packed_hls_type}, {elem_hls_type}, {elem_bits}, '
+            f"apintstream2npy<{packed_hls_type}, {elem_hls_type}, {elem_bits}, "
             f'{npy_type}>(out0_V, {shape_cpp_str}, "{npy_out}", false);'
         ]
 

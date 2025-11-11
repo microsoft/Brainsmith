@@ -67,19 +67,19 @@ class DSETree:
             is_last = i == len(child_items) - 1
             new_indent = indent + extension if node.segment_id != "root" else indent
             self._format_node(child, new_indent, is_last, lines)
-    
+
     def get_all_segments(self) -> list[DSESegment]:
         """Get all segments in the tree."""
         all_segments = []
-        
+
         def collect_segments(node: DSESegment):
             all_segments.append(node)
             for child in node.children.values():
                 collect_segments(child)
-        
+
         collect_segments(self.root)
         return all_segments
-    
+
     def get_execution_order(self) -> list[DSESegment]:
         """Get breadth-first execution order for the tree.
 
@@ -99,26 +99,20 @@ class DSETree:
             queue.extend(node.children.values())
 
         return order
-    
+
     def get_statistics(self) -> dict[str, Any]:
         """Get statistics about the DSE tree."""
-        stats = {
-            'nodes': 0,
-            'leaves': 0,
-            'max_depth': 0,
-            'total_steps': 0,
-            'leaf_steps': []
-        }
+        stats = {"nodes": 0, "leaves": 0, "max_depth": 0, "total_steps": 0, "leaf_steps": []}
 
         def traverse(node: DSESegment, depth: int = 0):
-            stats['nodes'] += 1
-            stats['total_steps'] += len(node.steps)
-            stats['max_depth'] = max(stats['max_depth'], depth)
+            stats["nodes"] += 1
+            stats["total_steps"] += len(node.steps)
+            stats["max_depth"] = max(stats["max_depth"], depth)
 
             if not node.children:
                 # Leaf node
-                stats['leaves'] += 1
-                stats['leaf_steps'].append(len(node.get_all_steps()))
+                stats["leaves"] += 1
+                stats["leaf_steps"].append(len(node.get_all_steps()))
             else:
                 for child in node.children.values():
                     traverse(child, depth + 1)
@@ -126,22 +120,19 @@ class DSETree:
         traverse(self.root)
 
         # Calculate efficiency
-        steps_without_segments = sum(stats['leaf_steps'])
+        steps_without_segments = sum(stats["leaf_steps"])
         segment_efficiency = (
-            1 - stats['total_steps'] / steps_without_segments
-            if steps_without_segments
-            else 0
+            1 - stats["total_steps"] / steps_without_segments if steps_without_segments else 0
         )
 
         return {
-            'total_paths': stats['leaves'],
-            'total_segments': stats['nodes'],
-            'max_depth': stats['max_depth'],
-            'total_steps': stats['total_steps'],
-            'steps_without_segments': steps_without_segments,
-            'segment_efficiency': round(segment_efficiency * 100, 1),
-            'avg_steps_per_segment': (
-                round(stats['total_steps'] / stats['nodes'], 1)
-                if stats['nodes'] > 0 else 0
-            )
+            "total_paths": stats["leaves"],
+            "total_segments": stats["nodes"],
+            "max_depth": stats["max_depth"],
+            "total_steps": stats["total_steps"],
+            "steps_without_segments": steps_without_segments,
+            "segment_efficiency": round(segment_efficiency * 100, 1),
+            "avg_steps_per_segment": (
+                round(stats["total_steps"] / stats["nodes"], 1) if stats["nodes"] > 0 else 0
+            ),
         }

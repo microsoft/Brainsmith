@@ -34,7 +34,9 @@ def _validate_components(names: list, getter) -> dict:
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed component information")
-@click.option("--rebuild", "-r", is_flag=True, help="Rebuild cache and validate all components (slower)")
+@click.option(
+    "--rebuild", "-r", is_flag=True, help="Rebuild cache and validate all components (slower)"
+)
 @click.pass_obj
 def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     """Shows all registered components (steps, kernels, backends) organized by source:
@@ -79,11 +81,13 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     backends_by_source = group_by_source(all_backends)
 
     # Get all sources
-    all_sources = sorted(set(
-        list(steps_by_source.keys()) +
-        list(kernels_by_source.keys()) +
-        list(backends_by_source.keys())
-    ))
+    all_sources = sorted(
+        set(
+            list(steps_by_source.keys())
+            + list(kernels_by_source.keys())
+            + list(backends_by_source.keys())
+        )
+    )
 
     # Show all component sources (configured + discovered)
     sources_table = Table(title="Component Sources")
@@ -93,18 +97,19 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     sources_table.add_column("Status", justify="center")
 
     # Add core namespace (brainsmith)
-    brainsmith_path = config.bsmith_dir / 'brainsmith'
+    brainsmith_path = config.bsmith_dir / "brainsmith"
     sources_table.add_row(
         "brainsmith",
         "core",
         str(brainsmith_path),
-        "[green]✓[/green]" if brainsmith_path.exists() else "[red]✗[/red]"
+        "[green]✓[/green]" if brainsmith_path.exists() else "[red]✗[/red]",
     )
 
     # Add discovered entry points
     try:
         from importlib.metadata import entry_points
-        eps = entry_points(group='brainsmith.plugins')
+
+        eps = entry_points(group="brainsmith.plugins")
         for ep in eps:
             # Entry point path is typically in deps_dir but could be anywhere
             # Show "auto-discovered" instead of guessing path
@@ -148,18 +153,10 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
         total_kernels += kernels_count
         total_backends += backends_count
 
-        summary_table.add_row(
-            source,
-            str(steps_count),
-            str(kernels_count),
-            str(backends_count)
-        )
+        summary_table.add_row(source, str(steps_count), str(kernels_count), str(backends_count))
 
     summary_table.add_row(
-        "[bold]Total",
-        f"[bold]{total_steps}",
-        f"[bold]{total_kernels}",
-        f"[bold]{total_backends}"
+        "[bold]Total", f"[bold]{total_steps}", f"[bold]{total_kernels}", f"[bold]{total_backends}"
     )
 
     console.print(summary_table)
@@ -169,7 +166,9 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     if rebuild:
         from brainsmith.registry import get_backend, get_kernel, get_step
 
-        with progress_spinner("Validating components...", transient=False, no_progress=ctx.no_progress):
+        with progress_spinner(
+            "Validating components...", transient=False, no_progress=ctx.no_progress
+        ):
             validation_errors.update(_validate_components(all_kernels, get_kernel))
             validation_errors.update(_validate_components(all_backends, get_backend))
             validation_errors.update(_validate_components(all_steps, get_step))
@@ -215,7 +214,9 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
 
                     try:
                         meta = all_metadata.get(full_name)
-                        has_infer = "[green]✓[/green]" if meta and meta.kernel_infer else "[red]✗[/red]"
+                        has_infer = (
+                            "[green]✓[/green]" if meta and meta.kernel_infer else "[red]✗[/red]"
+                        )
                         console.print(f"    • {name:30} (infer={has_infer}){validation_marker}")
                     except Exception as e:
                         console.print(f"    • {name:30} [red](error: {e})[/red]")
