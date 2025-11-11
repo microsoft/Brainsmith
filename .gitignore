@@ -2,11 +2,18 @@
 # Licensed under the MIT License.
 
 # Brainsmith specific
-demos/*/output/
-demos/*/results/
-demos/*/checkpoints/
-demos/*/logs/
-demos/*/configs/
+.brainsmith
+.envrc
+.python-version
+/brainsmith.yaml
+*.onnx
+
+# Brainsmith examples
+examples/*/output/
+examples/*/results/
+examples/*/checkpoints/
+examples/*/logs/
+examples/*/configs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -54,6 +61,7 @@ htmlcov/
 .coverage.*
 .cache
 nosetests.xml
+coverage.json
 coverage.xml
 *.cover
 *.py,cover
@@ -110,7 +118,7 @@ ipython_config.py
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
 #   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
+poetry.lock
 
 # pdm
 #   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
@@ -410,11 +418,6 @@ workspace/
 local.*
 !local.example.*
 
-# Generated documentation
-docs/api/
-docs/generated/
-site/
-
 # Benchmarking results
 benchmarks/results/
 *.bench
@@ -431,8 +434,7 @@ temp/
 staging/
 
 # Output directories
-output/
-outputs/
+builds/
 results/
 !tests/expected_results/
 
@@ -493,4 +495,5 @@ test_reports/
 !*settings*.xml
 
 # AI coding configuration
-CLAUDE.md 
+CLAUDE.md
+.ignore

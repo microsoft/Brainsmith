@@ -2,26 +2,35 @@
 name: "BERT Demo"
 description: "Hugging face BERT model"
 
-extends: "../../brainsmith/blueprints/bert.yaml"
+extends: "${BSMITH_DIR}/examples/blueprints/bert.yaml"
 
 # Configuration overrides
 clock_ns: 5.0                       # Target clock period in nanoseconds
 output: "bitfile"                   # estimates | rtl | bitfile
 board: "V80"                        # Target FPGA board
-save_intermediate_models: true      # Save intermediate ONNX models
+
+# Direct override FINN configuration options
+finn_config:
+  standalone_thresholds: true
+  target_fps: 3000                  # Target inference FPS (auto-determines PE/SIMD)
+  fifosim_n_inferences: 2           # Speed up FIFO simulation
+  folding_config_file: null         # Path to manual folding config JSON (optional)
+  split_large_fifos: true
 
 design_space:
-  # Inherit kernels from parent blueprint (don't override with empty list)
-  # kernels are defined in parent bert.yaml
+  # Inherit kernels from parent blueprint
 
-  # Add pre/post-processing steps to standard BERT blueprint   
+  # Add pre/post-processing steps to standard BERT blueprint
   steps:
     - at_start:
-        insert: 
-          - "bert_cleanup"
-          - "remove_head"
-          - "remove_tail"
-          - "generate_reference_io"
+        insert:
+          # Core brainsmith step:
+          - "bert_cleanup"           # brainsmith.steps.bert_custom_steps
+          # Local example steps (from custom_steps.py):
+          - "remove_head"            # Remove model head up to first LayerNorm
+          - "remove_tail"            # Remove model tail after second output
+          - "generate_reference_io"  # Generate reference I/O for validation
 
     - at_end:
-        insert: "shell_metadata_handover"
+        # Core brainsmith step:
+        insert: "shell_metadata_handover"  # brainsmith.steps.bert_custom_steps

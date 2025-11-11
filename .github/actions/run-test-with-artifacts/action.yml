@@ -38,7 +38,7 @@ runs:
   steps:
     - name: Execute test
       id: test-execution
-      uses: ./.github/actions/smithy-exec
+      uses: ./.github/actions/docker-exec
       with:
         command: ${{ inputs.command }}
         timeout-minutes: ${{ inputs.timeout-minutes }}
