@@ -89,6 +89,27 @@
 }
 
 /* ============================================
+   GRID CARD ICON SIZING
+   ============================================ */
+
+/* Fix for Material icons in grid cards - prevents massive icon sizes */
+.md-typeset .grid.cards > :is(ul, ol) > li :is(.twemoji, .lg, .middle) svg {
+    width: 2.4rem;
+    height: 2.4rem;
+}
+
+/* Large icons in grid cards */
+.md-typeset .grid.cards > :is(ul, ol) > li .lg svg {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* Ensure icons are aligned properly */
+.md-typeset .grid.cards > :is(ul, ol) > li .middle {
+    vertical-align: middle;
+}
+
+/* ============================================
    DARK MODE IMAGE FIXES
    ============================================ */
 
