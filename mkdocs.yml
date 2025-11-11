@@ -1,9 +1,7 @@
 site_name: Brainsmith
 site_description: From PyTorch to RTL - FPGA Accelerator Compiler for AI
 site_author: Microsoft
-# TEMPORARY: Set to root for VS Code port forwarding during dev
-# site_url: https://microsoft.github.io/brainsmith/
-site_url: http://127.0.0.1:8000/
+site_url: https://microsoft.github.io/brainsmith/
 
 repo_name: microsoft/brainsmith
 repo_url: https://github.com/microsoft/brainsmith
