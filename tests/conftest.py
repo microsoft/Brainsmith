@@ -16,6 +16,9 @@ ensure_environment_sourced()
 
 # Import test components - these register @step, @kernel, @backend decorators
 # Available for tests that need globally-registered test components
+import tests.fixtures.components.backends  # noqa: F401 - Registers test backends via @backend decorator
+import tests.fixtures.components.kernels  # noqa: F401 - Registers test kernels via @kernel decorator
+import tests.fixtures.components.steps  # noqa: F401 - Registers test steps via @step decorator
 from tests.fixtures.dse.blueprints import *  # noqa: F403
 from tests.fixtures.dse.design_spaces import *  # noqa: F403
 
