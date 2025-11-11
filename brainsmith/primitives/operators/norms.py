@@ -23,7 +23,7 @@ from qonnx.custom_op.base import CustomOp
 
 class FuncLayerNorm(CustomOp):
     """Functional LayerNorm custom operator for ONNX processing.
-    
+
     This operator performs LayerNormalization without learnable parameters,
     computing only the normalization component: (input - mean) / std_dev.
     The affine transformation (scale and bias) is handled separately.
@@ -60,7 +60,7 @@ class FuncLayerNorm(CustomOp):
         node = self.onnx_node
         dtype = DataType[self.get_nodeattr("OutputDataType")]
         model.set_tensor_datatype(node.output[0], dtype)
-    
+
     def execute_node(self, context: dict[str, np.ndarray], graph: Any) -> None:
         node = self.onnx_node
         in_act = context[node.input[0]]

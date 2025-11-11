@@ -5,12 +5,11 @@
 
 """Tests for InferKernels meta-transform."""
 
-import pytest
 import numpy as np
-from onnx import helper, TensorProto
-
-from qonnx.core.modelwrapper import ModelWrapper
+import pytest
+from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.primitives.transforms.infer_kernels import InferKernels
 
@@ -25,7 +24,7 @@ def make_mixed_model():
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64])
     in1 = helper.make_tensor_value_info("in1", TensorProto.FLOAT, [1, 64])
     weights = helper.make_tensor_value_info("weights", TensorProto.FLOAT, [64, 32])
-    mid = helper.make_tensor_value_info("mid", TensorProto.FLOAT, [1, 64])
+    helper.make_tensor_value_info("mid", TensorProto.FLOAT, [1, 64])
     out = helper.make_tensor_value_info("out", TensorProto.FLOAT, [1, 32])
 
     # Create nodes
@@ -33,12 +32,7 @@ def make_mixed_model():
     matmul_node = helper.make_node("MatMul", ["mid", "weights"], ["out"], name="MatMul_0")
 
     # Create graph
-    graph = helper.make_graph(
-        [add_node, matmul_node],
-        "test_mixed",
-        [in0, in1, weights],
-        [out]
-    )
+    graph = helper.make_graph([add_node, matmul_node], "test_mixed", [in0, in1, weights], [out])
 
     model = ModelWrapper(helper.make_model(graph))
 
@@ -50,6 +44,7 @@ def make_mixed_model():
 
     # Set layout
     import qonnx.core.data_layout as DataLayout
+
     for tensor in ["in0", "in1", "mid", "out"]:
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
@@ -77,6 +72,7 @@ def test_infer_kernels_single_kernelop():
     for tensor in ["in0", "in1", "out"]:
         model.set_tensor_datatype(tensor, DataType["INT8"])
         import qonnx.core.data_layout as DataLayout
+
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
     # Apply InferKernels with single kernel
@@ -102,6 +98,7 @@ def test_infer_kernels_backward_compatible():
     for tensor in ["in0", "in1", "out"]:
         model.set_tensor_datatype(tensor, DataType["INT8"])
         import qonnx.core.data_layout as DataLayout
+
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
     # Apply InferKernels with None (should infer all registered KernelOp kernels)
@@ -114,14 +111,17 @@ def test_infer_kernels_backward_compatible():
 
 def test_infer_kernels_filters_infrastructure():
     """Test that InferKernels skips infrastructure kernels in backward compatible mode."""
-    from brainsmith.registry import kernel, reset_registry, discover_components
-    from brainsmith.registry import get_component_metadata
     from brainsmith.dataflow import KernelOp
+    from brainsmith.registry import (
+        get_component_metadata,
+        kernel,
+    )
 
     # Create a mock infrastructure kernel for testing
     @kernel(name="TestInfraKernel", is_infrastructure=True)
     class TestInfraKernel(KernelOp):
         """Mock infrastructure kernel for testing."""
+
         @classmethod
         def can_infer_from(cls, node, model):
             return node.op_type == "TestOp"
@@ -143,8 +143,9 @@ def test_infer_kernels_filters_infrastructure():
     model, modified = transform.apply(model)
 
     # Infrastructure kernel should be skipped, so node should remain as TestOp
-    assert model.graph.node[0].op_type == "TestOp", \
-        "Infrastructure kernel should be skipped by InferKernels"
+    assert (
+        model.graph.node[0].op_type == "TestOp"
+    ), "Infrastructure kernel should be skipped by InferKernels"
     # Since no computational kernel matches TestOp, modified should be False
     assert modified is False
 
@@ -170,6 +171,7 @@ def test_infer_kernels_legacy_transform():
     for tensor in ["in0", "in1", "out"]:
         model.set_tensor_datatype(tensor, DataType["INT8"])
         import qonnx.core.data_layout as DataLayout
+
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
     # Apply InferKernels with FINN HWCustomOp class
@@ -244,9 +246,10 @@ def test_infer_kernels_error_handling():
 
 def test_infer_kernels_logging():
     """Test that InferKernels logs appropriately."""
-    from brainsmith.kernels.addstreams import AddStreams
     import logging
     from io import StringIO
+
+    from brainsmith.kernels.addstreams import AddStreams
 
     # Create Add model
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64])
@@ -261,6 +264,7 @@ def test_infer_kernels_logging():
     for tensor in ["in0", "in1", "out"]:
         model.set_tensor_datatype(tensor, DataType["INT8"])
         import qonnx.core.data_layout as DataLayout
+
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 
     # Capture logs

@@ -118,15 +118,17 @@ nav:
   - Developer Guide:
     - Overview: developer-guide/index.md
     - Hardware Kernels: developer-guide/hardware-kernels.md
+    - Component Registry: developer-guide/registry.md
     - Blueprint Schema: developer-guide/blueprint-schema.md
-    - Component Registry: developer-guide/registry-user-guide.md
+    - Dataflow Modeling: developer-guide/dataflow-modeling.md
+    - Multi-Layer Offload: developer-guide/multi-layer-offload.md
   - API Reference:
     - Overview: api/index.md
-    - Design Space Exploration: api/dse.md
-    - Component Registry: api/registry.md
-    - Dataflow Modeling: api/dataflow.md
-    - Settings: api/settings.md
     - CLI: api/cli.md
+    - Design Space Exploration: api/dse.md
+    - Dataflow Modeling: api/dataflow.md
+    - Component Registry: api/registry.md
+    - Settings: api/settings.md
   - Tutorials (Coming Soon): tutorials/index.md
 
 extra_css:

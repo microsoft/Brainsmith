@@ -2,7 +2,6 @@
 
 This guide explains the core concepts behind Brainsmith's kernel architecture. If you're new to FPGA accelerators or wondering why Brainsmith models hardware the way it does, start here. For implementation details and code examples, see [Kernels](../3-reference/kernels.md) and [Kernel Modeling](../2-core-systems/kernel-modeling.md).
 
----
 
 ## Prerequisites
 
@@ -13,7 +12,6 @@ You should understand:
 
 No prior hardware design experience required.
 
----
 
 ## Part 1: The Hardware Context
 
@@ -65,7 +63,6 @@ Example: Computing `(a × b) + (c × d)` repeatedly:
 
 Spatial computing trades flexibility for throughput.
 
----
 
 ## Part 2: Kernels as Building Blocks
 
@@ -119,7 +116,6 @@ Unlike software functions with runtime parameters, hardware kernels have **compi
 
 Changing these parameters changes the hardware—different silicon layout, different resource usage, different performance. This is why we can't just "try different settings" at runtime; we must explore the space at design time.
 
----
 
 ## Part 3: Parallelism and Resource Tradeoffs
 
@@ -183,7 +179,6 @@ The hardware computes 32 outputs per cycle, then reuses those same 32 computatio
 
 Folding is deterministic time-sharing—not like CPU context switching (unpredictable), but like a precise clockwork mechanism that processes chunks in sequence.
 
----
 
 ## Part 4: Shape Hierarchy—Three Views of Data
 
@@ -237,7 +232,6 @@ They answer different questions:
 
 You can't make good hardware decisions without understanding all three perspectives.
 
----
 
 ## Part 5: The Design Space
 
@@ -271,7 +265,6 @@ Evaluating each configuration requires synthesis—compiling the hardware design
 
 Exploring thousands of configurations naively would take weeks. We need a smarter approach.
 
----
 
 ## Part 6: Modeling for Exploration
 
@@ -320,7 +313,6 @@ Constraints catch errors early:
 
 They're the type system for hardware configurations.
 
----
 
 ## Part 7: Two-Phase Construction
 
@@ -376,7 +368,6 @@ You don't rebuild the map for each query. You build it once, then navigate effic
 
 Design space construction is building the map. Configuration is querying it.
 
----
 
 ## Part 8: Immutability and Navigation
 
@@ -424,7 +415,6 @@ This is **navigation**—moving through the design space by creating new points.
 
 Navigation is exploration without mutation.
 
----
 
 ## Part 9: Performance Without Synthesis
 
@@ -477,7 +467,6 @@ LUTs = ~500 × PE (empirical approximation)
 
 Fast iteration enables optimization. Slow iteration forces guesswork.
 
----
 
 ## Part 10: HLS vs RTL—The Control-Productivity Tradeoff
 
@@ -519,7 +508,6 @@ Example: LayerNorm kernel
 
 Is 40% resource savings worth 5× more development time? Depends on your constraints.
 
----
 
 ## Part 11: Putting It Together
 
@@ -573,7 +561,6 @@ Brainsmith's modeling system enables fast exploration through:
 
 The faster you can iterate, the better your final design.
 
----
 
 ## Summary: Key Takeaways
 
@@ -597,7 +584,6 @@ The faster you can iterate, the better your final design.
 
 10. **Configuration converts constraints into optimization opportunities**. The better you can explore, the better your final design.
 
----
 
 ## Next Steps
 

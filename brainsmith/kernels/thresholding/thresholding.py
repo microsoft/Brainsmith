@@ -16,25 +16,25 @@
 # - Trusts the dataflow system instead of manual reimplementation
 ############################################################################
 
-import numpy as np
-import warnings
-from typing import Callable, List
-from onnx import helper
 
+import numpy as np
+from onnx import NodeProto, helper
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.custom_op.general.multithreshold import multithreshold
 from qonnx.util.basic import interleave_matrix_outer_dim_from_partitions
-import qonnx.core.data_layout as DataLayout
 
-from brainsmith.dataflow import KernelOp, FULL_DIM
+import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_DIM, KernelOp
+from brainsmith.dataflow.constraints import (
+    DatatypeInteger,
+    DimensionDivisible,
+    IsDynamic,
+    IsStatic,
+)
 from brainsmith.dataflow.spec_helpers import derive_dim
 from brainsmith.dataflow.types import VALUE_OPTIMIZED, ShapeHierarchy
 from brainsmith.registry import kernel
-import brainsmith.dataflow as df
-from typing import Optional
-from onnx import NodeProto
-
 
 # =============================================================================
 # Thresholding Schema
@@ -45,9 +45,9 @@ THRESHOLDING_SCHEMA = df.KernelSchema(
     inputs=[
         df.InputSchema(
             name="input",
-            block_tiling=[FULL_DIM],       # Process full spatial dimensions
-            stream_tiling=["PE"],           # Parallel channels with PE
-            required_layout="NHWC",         # Hardware requires NHWC layout
+            block_tiling=[FULL_DIM],  # Process full spatial dimensions
+            stream_tiling=["PE"],  # Parallel channels with PE
+            required_layout="NHWC",  # Hardware requires NHWC layout
         ),
         df.InputSchema(
             name="thresholds",
@@ -58,44 +58,36 @@ THRESHOLDING_SCHEMA = df.KernelSchema(
             datatype=VALUE_OPTIMIZED,  # Optimize from actual values
         ),
     ],
-
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[FULL_DIM],          # Same as input
-            stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],    # Match input PE
+            block_tiling=[FULL_DIM],  # Same as input
+            stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],  # Match input PE
             datatype=None,  # Datatype comes from ONNX graph (set via node attrs)
             required_layout="NHWC",
         )
     ],
-
     # =========================================================================
     # KERNEL PARAMETERS: Threshold-specific configuration
     # =========================================================================
-
     kernel_params={
-        "num_steps": ("i", True, 1),       # Number of threshold steps (required)
-        "act_val": ("i", False, 0),        # Activation bias value (ActVal)
+        "num_steps": ("i", True, 1),  # Number of threshold steps (required)
+        "act_val": ("i", False, 0),  # Activation bias value (ActVal)
         "num_input_vectors": ("ints", False, [1]),  # Batch/spatial dims (legacy)
         "runtime_writeable_weights": ("i", False, 0),  # AXI-lite writable (1/0)
     },
-
     # =========================================================================
     # VALIDATION: Constraints
     # =========================================================================
-
     constraints=[
         # Input must be dynamic, thresholds must be static
-        df.IsDynamic(("input",)),
-        df.IsStatic(("thresholds",)),
-
+        IsDynamic(("input",)),
+        IsStatic(("thresholds",)),
         # PE must divide number of channels
-        df.DimensionDivisible("input", -1, "PE", hierarchy=df.ShapeHierarchy.STREAM),
-
+        DimensionDivisible("input", -1, "PE", hierarchy=df.ShapeHierarchy.STREAM),
         # Datatypes must be integer (enforced in can_infer_from)
-        df.DatatypeInteger(("input", "output")),
+        DatatypeInteger(("input", "output")),
     ],
-
     # Parallelization
 )
 
@@ -104,9 +96,10 @@ THRESHOLDING_SCHEMA = df.KernelSchema(
 # Thresholding Kernel Implementation
 # =============================================================================
 
+
 @kernel(
     description="Hardware multi-threshold activation (KernelOp-based)",
-    author="Microsoft Corporation"
+    author="Microsoft Corporation",
 )
 class Thresholding(KernelOp):  # → HWCustomOp → CustomOp (inheritance chain)
     """Modern Thresholding implementation using KernelOp system.
@@ -132,7 +125,7 @@ class Thresholding(KernelOp):  # → HWCustomOp → CustomOp (inheritance chain)
     # ================================================================
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         """Build Thresholding schema (constant for all instances)."""
         return THRESHOLDING_SCHEMA
 
@@ -151,13 +144,13 @@ class Thresholding(KernelOp):  # → HWCustomOp → CustomOp (inheritance chain)
             return False
 
         from qonnx.custom_op.registry import getCustomOp
+
         mt_inst = getCustomOp(node)
 
         # Check MultiThreshold-specific constraints (not preserved in Thresholding node)
-        return (
-            mt_inst.get_nodeattr("out_scale") == 1.0 and
-            int(mt_inst.get_nodeattr("out_bias")) == mt_inst.get_nodeattr("out_bias")
-        )
+        return mt_inst.get_nodeattr("out_scale") == 1.0 and int(
+            mt_inst.get_nodeattr("out_bias")
+        ) == mt_inst.get_nodeattr("out_bias")
 
     @staticmethod
     def infer_from(node, model: ModelWrapper, insert_index: int) -> df.TransformationResult:
@@ -217,10 +210,7 @@ class Thresholding(KernelOp):  # → HWCustomOp → CustomOp (inheritance chain)
             runtime_writeable_weights=0,
         )
 
-        return df.TransformationResult(
-            nodes_to_insert=[hw_node],
-            nodes_to_remove=[node]
-        )
+        return df.TransformationResult(nodes_to_insert=[hw_node], nodes_to_remove=[node])
 
     # ================================================================
     # Custom Stream Width (Decoupled Threshold Memory Mode)
@@ -241,7 +231,11 @@ class Thresholding(KernelOp):  # → HWCustomOp → CustomOp (inheritance chain)
             return super().get_instream_width(ind)
         elif ind == 1:
             # Custom logic for threshold memory modes
-            mem_mode = self.get_nodeattr("mem_mode") if self.has_nodeattr("mem_mode") else "internal_embedded"
+            mem_mode = (
+                self.get_nodeattr("mem_mode")
+                if self.has_nodeattr("mem_mode")
+                else "internal_embedded"
+            )
 
             if mem_mode == "internal_decoupled":
                 pe = self.get_nodeattr("PE")
@@ -283,24 +277,18 @@ class Thresholding(KernelOp):  # → HWCustomOp → CustomOp (inheritance chain)
         pe = self.get_nodeattr("PE")
         tmem = num_channels // pe
 
-        assert num_channels % pe == 0, (
-            f"Requirement NumChannels={num_channels} divisible by PE={pe} is violated."
-        )
+        assert (
+            num_channels % pe == 0
+        ), f"Requirement NumChannels={num_channels} divisible by PE={pe} is violated."
 
-        assert orig_thres_matrix.ndim == 2, (
-            "Threshold matrix dimension is not as expected (2)."
-        )
+        assert orig_thres_matrix.ndim == 2, "Threshold matrix dimension is not as expected (2)."
 
         n_thres_steps = orig_thres_matrix.shape[1]
-        assert n_thres_steps == self.get_nodeattr("num_steps"), (
-            "Mismatch in threshold steps"
-        )
+        assert n_thres_steps == self.get_nodeattr("num_steps"), "Mismatch in threshold steps"
 
         # For unsigned inputs, ensure all thresholds are nonnegative
         if not self.get_input_datatype(0).signed():
-            assert (orig_thres_matrix >= 0).all(), (
-                "Unsigned input requires nonnegative thresholds"
-            )
+            assert (orig_thres_matrix >= 0).all(), "Unsigned input requires nonnegative thresholds"
 
         ret = orig_thres_matrix
 
@@ -308,22 +296,22 @@ class Thresholding(KernelOp):  # → HWCustomOp → CustomOp (inheritance chain)
         if ret.shape[0] == 1:
             ret = np.tile(ret, (num_channels, 1))
 
-        assert ret.shape[0] == num_channels, (
-            f"Channels of threshold matrix ({ret.shape[0]}) don't match NumChannels ({num_channels})"
-        )
+        assert (
+            ret.shape[0] == num_channels
+        ), f"Channels of threshold matrix ({ret.shape[0]}) don't match NumChannels ({num_channels})"
 
         # Distribute rows between PEs (interleaving)
         ret = interleave_matrix_outer_dim_from_partitions(ret, pe)
 
-        assert ret.shape[0] == pe, (
-            f"First dimension after PE distribution ({ret.shape[0]}) != PE ({pe})"
-        )
-        assert ret.shape[1] == tmem, (
-            f"Second dimension after PE distribution ({ret.shape[1]}) != TMEM ({tmem})"
-        )
-        assert ret.shape[2] == n_thres_steps, (
-            f"Third dimension after PE distribution ({ret.shape[2]}) != numSteps ({n_thres_steps})"
-        )
+        assert (
+            ret.shape[0] == pe
+        ), f"First dimension after PE distribution ({ret.shape[0]}) != PE ({pe})"
+        assert (
+            ret.shape[1] == tmem
+        ), f"Second dimension after PE distribution ({ret.shape[1]}) != TMEM ({tmem})"
+        assert (
+            ret.shape[2] == n_thres_steps
+        ), f"Third dimension after PE distribution ({ret.shape[2]}) != numSteps ({n_thres_steps})"
 
         return ret.reshape(1, pe, tmem, n_thres_steps)
 
@@ -373,5 +361,5 @@ class Thresholding(KernelOp):  # → HWCustomOp → CustomOp (inheritance chain)
             outputs=self.onnx_node.output,
             domain="brainsmith.kernels",
             input_shape=list(in_shape),
-            output_shape=list(out_shape)
+            output_shape=list(out_shape),
         )

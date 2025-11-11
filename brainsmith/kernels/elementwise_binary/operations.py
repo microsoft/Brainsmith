@@ -4,9 +4,10 @@ Single source of truth for all 17 supported binary operations.
 Eliminates duplication across npy_op and cpp_op properties.
 """
 
-import numpy as np
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Set
+
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class BinaryOperation:
         cpp_template: C++ expression template with {0} and {1} placeholders
         description: Human-readable description
     """
+
     name: str
     category: str
     npy_op: Callable
@@ -40,28 +42,28 @@ class BinaryOperations:
         category="arithmetic",
         npy_op=np.add,
         cpp_template="({0} + {1})",
-        description="Addition"
+        description="Addition",
     )
     SUB = BinaryOperation(
         name="Sub",
         category="arithmetic",
         npy_op=np.subtract,
         cpp_template="({0} - {1})",
-        description="Subtraction"
+        description="Subtraction",
     )
     MUL = BinaryOperation(
         name="Mul",
         category="arithmetic",
         npy_op=np.multiply,
         cpp_template="({0} * {1})",
-        description="Multiplication"
+        description="Multiplication",
     )
     DIV = BinaryOperation(
         name="Div",
         category="arithmetic",
         npy_op=np.divide,
         cpp_template="({0} / {1})",
-        description="Division"
+        description="Division",
     )
 
     # Logical Operations (3)
@@ -70,21 +72,21 @@ class BinaryOperations:
         category="logical",
         npy_op=np.logical_and,
         cpp_template="({0} && {1})",
-        description="Logical AND"
+        description="Logical AND",
     )
     OR = BinaryOperation(
         name="Or",
         category="logical",
         npy_op=np.logical_or,
         cpp_template="({0} || {1})",
-        description="Logical OR"
+        description="Logical OR",
     )
     XOR = BinaryOperation(
         name="Xor",
         category="logical",
         npy_op=np.logical_xor,
         cpp_template="(bool({0}) != bool({1}))",
-        description="Logical XOR"
+        description="Logical XOR",
     )
 
     # Comparison Operations (5)
@@ -93,35 +95,35 @@ class BinaryOperations:
         category="comparison",
         npy_op=np.equal,
         cpp_template="({0} == {1})",
-        description="Equality comparison"
+        description="Equality comparison",
     )
     LESS = BinaryOperation(
         name="Less",
         category="comparison",
         npy_op=np.less,
         cpp_template="({0} < {1})",
-        description="Less than"
+        description="Less than",
     )
     LESS_OR_EQUAL = BinaryOperation(
         name="LessOrEqual",
         category="comparison",
         npy_op=np.less_equal,
         cpp_template="({0} <= {1})",
-        description="Less than or equal"
+        description="Less than or equal",
     )
     GREATER = BinaryOperation(
         name="Greater",
         category="comparison",
         npy_op=np.greater,
         cpp_template="({0} > {1})",
-        description="Greater than"
+        description="Greater than",
     )
     GREATER_OR_EQUAL = BinaryOperation(
         name="GreaterOrEqual",
         category="comparison",
         npy_op=np.greater_equal,
         cpp_template="({0} >= {1})",
-        description="Greater than or equal"
+        description="Greater than or equal",
     )
 
     # Bitwise Operations (3)
@@ -130,21 +132,21 @@ class BinaryOperations:
         category="bitwise",
         npy_op=np.bitwise_and,
         cpp_template="({0} & {1})",
-        description="Bitwise AND"
+        description="Bitwise AND",
     )
     BITWISE_OR = BinaryOperation(
         name="BitwiseOr",
         category="bitwise",
         npy_op=np.bitwise_or,
         cpp_template="({0} | {1})",
-        description="Bitwise OR"
+        description="Bitwise OR",
     )
     BITWISE_XOR = BinaryOperation(
         name="BitwiseXor",
         category="bitwise",
         npy_op=np.bitwise_xor,
         cpp_template="({0} ^ {1})",
-        description="Bitwise XOR"
+        description="Bitwise XOR",
     )
 
     # Bit Shift Operation (1)
@@ -154,16 +156,27 @@ class BinaryOperations:
         category="bitshift",
         npy_op=np.left_shift,  # Default to left shift; actual operation determined by direction attribute
         cpp_template="({0} << {1})",  # Default template; actual template determined by direction attribute
-        description="Bit shift (direction determined by attribute)"
+        description="Bit shift (direction determined by attribute)",
     )
 
     # Internal registry
     _ALL_OPERATIONS = [
-        ADD, SUB, MUL, DIV,
-        AND, OR, XOR,
-        EQUAL, LESS, LESS_OR_EQUAL, GREATER, GREATER_OR_EQUAL,
-        BITWISE_AND, BITWISE_OR, BITWISE_XOR,
-        BIT_SHIFT
+        ADD,
+        SUB,
+        MUL,
+        DIV,
+        AND,
+        OR,
+        XOR,
+        EQUAL,
+        LESS,
+        LESS_OR_EQUAL,
+        GREATER,
+        GREATER_OR_EQUAL,
+        BITWISE_AND,
+        BITWISE_OR,
+        BITWISE_XOR,
+        BIT_SHIFT,
     ]
 
     _OPERATION_MAP = {op.name: op for op in _ALL_OPERATIONS}
@@ -184,7 +197,7 @@ class BinaryOperations:
         return cls._OPERATION_MAP[name]
 
     @classmethod
-    def all_operation_names(cls) -> Set[str]:
+    def all_operation_names(cls) -> set[str]:
         """Get set of all operation names for schema validation.
 
         Returns:

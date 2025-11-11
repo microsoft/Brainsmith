@@ -9,6 +9,6 @@ Modules:
 """
 
 __all__ = [
-    'kernel_integrator',
-    'profiling',
+    "kernel_integrator",
+    "profiling",
 ]

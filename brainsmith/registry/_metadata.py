@@ -10,9 +10,9 @@ Defines data structures used throughout the component registry:
 - Helper functions for metadata manipulation
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any
 
 
 class ComponentType(Enum):
@@ -23,6 +23,7 @@ class ComponentType(Enum):
         BACKEND: HLS or RTL backend implementation
         STEP: Pipeline transformation step
     """
+
     KERNEL = auto()
     BACKEND = auto()
     STEP = auto()
@@ -32,7 +33,7 @@ class ComponentType(Enum):
         return self.name.lower()
 
     @classmethod
-    def from_string(cls, s: str) -> 'ComponentType':
+    def from_string(cls, s: str) -> "ComponentType":
         """Parse component type from string.
 
         Args:
@@ -53,11 +54,8 @@ class ComponentType(Enum):
         try:
             return cls[s.upper()]
         except KeyError:
-            valid = ', '.join([t.name.lower() for t in cls])
-            raise ValueError(
-                f"Invalid component type: '{s}'. "
-                f"Must be one of: {valid}"
-            )
+            valid = ", ".join([t.name.lower() for t in cls])
+            raise ValueError(f"Invalid component type: '{s}'. " f"Must be one of: {valid}")
 
 
 @dataclass
@@ -68,6 +66,7 @@ class ImportSpec:
         module: Python module path (e.g., 'brainsmith.kernels.layernorm')
         attr: Attribute name in module (e.g., 'LayerNorm')
     """
+
     module: str
     attr: str
 
@@ -90,21 +89,22 @@ class ComponentMetadata:
         backend_target: Target kernel name (backends only)
         backend_language: Implementation language 'hls' or 'rtl' (backends only)
     """
+
     name: str
     source: str
     component_type: ComponentType
     import_spec: ImportSpec
-    loaded_obj: Optional[Any] = None
+    loaded_obj: Any | None = None
 
     # Type-specific metadata fields (only populated for relevant types)
     # Kernel metadata
-    kernel_infer: Optional[Any] = None  # InferTransform class or lazy import spec
-    kernel_backends: Optional[list[str]] = None  # List of backend names targeting this kernel
+    kernel_infer: Any | None = None  # InferTransform class or lazy import spec
+    kernel_backends: list[str] | None = None  # List of backend names targeting this kernel
     is_infrastructure: bool = False  # True for topology-based kernels (DuplicateStreams, FIFO)
 
     # Backend metadata
-    backend_target: Optional[str] = None  # Target kernel name (source:name format)
-    backend_language: Optional[str] = None  # 'hls' or 'rtl'
+    backend_target: str | None = None  # Target kernel name (source:name format)
+    backend_language: str | None = None  # 'hls' or 'rtl'
 
     @property
     def full_name(self) -> str:
@@ -116,7 +116,8 @@ class ComponentMetadata:
 # Metadata Helper Functions
 # ============================================================================
 
-def resolve_lazy_class(spec: Union[Type, Dict[str, str], None]) -> Optional[Type]:
+
+def resolve_lazy_class(spec: type | dict[str, str] | None) -> type | None:
     """Resolve lazy class import spec to actual class.
 
     Supports two formats:
@@ -140,9 +141,10 @@ def resolve_lazy_class(spec: Union[Type, Dict[str, str], None]) -> Optional[Type
     if spec is None:
         return None
 
-    if isinstance(spec, dict) and 'module' in spec:
+    if isinstance(spec, dict) and "module" in spec:
         import importlib
-        module = importlib.import_module(spec['module'])
-        return getattr(module, spec['class_name'])
+
+        module = importlib.import_module(spec["module"])
+        return getattr(module, spec["class_name"])
 
     return spec

@@ -8,11 +8,11 @@ Plugin-based hardware kernel implementations.
 """
 
 # Import all Kernels and Backends to trigger registration
-from .addstreams import *
-from .channelwise import *
-from .crop import *
-from .duplicate_streams import *
-from .elementwise_binary import *
-from .layernorm import *
-from .softmax import *
-from .thresholding import *
+from .addstreams import *  # noqa: F403
+from .channelwise import *  # noqa: F403
+from .crop import *  # noqa: F403
+from .duplicate_streams import *  # noqa: F403
+from .elementwise_binary import *  # noqa: F403
+from .layernorm import *  # noqa: F403
+from .softmax import *  # noqa: F403
+from .thresholding import *  # noqa: F403

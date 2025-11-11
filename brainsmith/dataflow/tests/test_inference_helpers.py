@@ -1,20 +1,20 @@
 """Tests for inference helper functions."""
 
-import pytest
 import numpy as np
-from onnx import helper, TensorProto
-from qonnx.core.modelwrapper import ModelWrapper
+import pytest
+from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import qonnx_make_model
 
 from brainsmith.dataflow.inference_helpers import (
-    find_static_dynamic_pair,
-    find_dynamic_inputs,
-    find_static_inputs,
     check_all_integer_types,
-    check_shapes_equal,
     check_parameter_shape_matches_channels,
+    check_shapes_equal,
     expand_scalar_to_channels,
+    find_dynamic_inputs,
+    find_static_dynamic_pair,
+    find_static_inputs,
     lift_scalar_to_rank1,
 )
 
@@ -32,8 +32,7 @@ class TestFindStaticDynamicPair:
 
         # Create initializers for static inputs
         initializers = [
-            helper.make_tensor(name, TensorProto.FLOAT, [64], np.zeros(64))
-            for name in static_names
+            helper.make_tensor(name, TensorProto.FLOAT, [64], np.zeros(64)) for name in static_names
         ]
 
         # Create dummy output
@@ -45,11 +44,7 @@ class TestFindStaticDynamicPair:
         node = helper.make_node("Identity", [first_input], ["output"])
 
         graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=inputs,
-            outputs=[output],
-            initializer=initializers
+            nodes=[node], name="test", inputs=inputs, outputs=[output], initializer=initializers
         )
 
         model = qonnx_make_model(graph)
@@ -109,8 +104,7 @@ class TestFindDynamicInputs:
         ]
 
         initializers = [
-            helper.make_tensor(name, TensorProto.FLOAT, [64], np.zeros(64))
-            for name in static_names
+            helper.make_tensor(name, TensorProto.FLOAT, [64], np.zeros(64)) for name in static_names
         ]
 
         output = helper.make_tensor_value_info("output", TensorProto.FLOAT, [64])
@@ -118,11 +112,7 @@ class TestFindDynamicInputs:
         node = helper.make_node("Identity", [first_input], ["output"])
 
         graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=inputs,
-            outputs=[output],
-            initializer=initializers
+            nodes=[node], name="test", inputs=inputs, outputs=[output], initializer=initializers
         )
 
         model = qonnx_make_model(graph)
@@ -172,19 +162,16 @@ class TestFindStaticInputs:
         ]
 
         initializers = [
-            helper.make_tensor(name, TensorProto.FLOAT, [64], np.zeros(64))
-            for name in static_names
+            helper.make_tensor(name, TensorProto.FLOAT, [64], np.zeros(64)) for name in static_names
         ]
 
         output = helper.make_tensor_value_info("output", TensorProto.FLOAT, [64])
-        node = helper.make_node("Identity", [dynamic_names[0]] if dynamic_names else [static_names[0]], ["output"])
+        node = helper.make_node(
+            "Identity", [dynamic_names[0]] if dynamic_names else [static_names[0]], ["output"]
+        )
 
         graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=inputs,
-            outputs=[output],
-            initializer=initializers
+            nodes=[node], name="test", inputs=inputs, outputs=[output], initializer=initializers
         )
 
         model = qonnx_make_model(graph)
@@ -215,12 +202,7 @@ class TestCheckAllIntegerTypes:
         output = helper.make_tensor_value_info("output", TensorProto.FLOAT, [64])
         node = helper.make_node("Identity", [list(tensor_datatypes.keys())[0]], ["output"])
 
-        graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=inputs,
-            outputs=[output]
-        )
+        graph = helper.make_graph(nodes=[node], name="test", inputs=inputs, outputs=[output])
 
         model = qonnx_make_model(graph)
         model_w = ModelWrapper(model)
@@ -233,11 +215,13 @@ class TestCheckAllIntegerTypes:
 
     def test_all_integer(self):
         """Test with all integer types."""
-        model = self.make_model_with_datatypes({
-            "a": DataType["INT8"],
-            "b": DataType["INT16"],
-            "c": DataType["UINT8"],
-        })
+        model = self.make_model_with_datatypes(
+            {
+                "a": DataType["INT8"],
+                "b": DataType["INT16"],
+                "c": DataType["UINT8"],
+            }
+        )
 
         result = check_all_integer_types(["a", "b", "c"], model)
 
@@ -245,10 +229,12 @@ class TestCheckAllIntegerTypes:
 
     def test_one_float(self):
         """Test with one float type - should return False."""
-        model = self.make_model_with_datatypes({
-            "a": DataType["INT8"],
-            "b": DataType["FLOAT32"],
-        })
+        model = self.make_model_with_datatypes(
+            {
+                "a": DataType["INT8"],
+                "b": DataType["FLOAT32"],
+            }
+        )
 
         result = check_all_integer_types(["a", "b"], model)
 
@@ -256,10 +242,12 @@ class TestCheckAllIntegerTypes:
 
     def test_all_float(self):
         """Test with all float types - should return False."""
-        model = self.make_model_with_datatypes({
-            "a": DataType["FLOAT32"],
-            "b": DataType["FLOAT32"],
-        })
+        model = self.make_model_with_datatypes(
+            {
+                "a": DataType["FLOAT32"],
+                "b": DataType["FLOAT32"],
+            }
+        )
 
         result = check_all_integer_types(["a", "b"], model)
 
@@ -283,23 +271,20 @@ class TestCheckShapesEqual:
         output = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1])
         node = helper.make_node("Identity", [list(tensor_shapes.keys())[0]], ["output"])
 
-        graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=inputs,
-            outputs=[output]
-        )
+        graph = helper.make_graph(nodes=[node], name="test", inputs=inputs, outputs=[output])
 
         model = qonnx_make_model(graph)
         return ModelWrapper(model)
 
     def test_equal_shapes(self):
         """Test with equal shapes."""
-        model = self.make_model_with_shapes({
-            "a": (1, 224, 224, 64),
-            "b": (1, 224, 224, 64),
-            "c": (1, 224, 224, 64),
-        })
+        model = self.make_model_with_shapes(
+            {
+                "a": (1, 224, 224, 64),
+                "b": (1, 224, 224, 64),
+                "c": (1, 224, 224, 64),
+            }
+        )
 
         result = check_shapes_equal(["a", "b", "c"], model)
 
@@ -307,10 +292,12 @@ class TestCheckShapesEqual:
 
     def test_unequal_shapes(self):
         """Test with unequal shapes."""
-        model = self.make_model_with_shapes({
-            "a": (1, 224, 224, 64),
-            "b": (1, 112, 112, 64),
-        })
+        model = self.make_model_with_shapes(
+            {
+                "a": (1, 224, 224, 64),
+                "b": (1, 112, 112, 64),
+            }
+        )
 
         result = check_shapes_equal(["a", "b"], model)
 
@@ -330,22 +317,14 @@ class TestCheckParameterShapeMatchesChannels:
         output = helper.make_tensor_value_info("output", TensorProto.FLOAT, list(data_shape))
         node = helper.make_node("Identity", ["data"], ["output"])
 
-        graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=inputs,
-            outputs=[output]
-        )
+        graph = helper.make_graph(nodes=[node], name="test", inputs=inputs, outputs=[output])
 
         model = qonnx_make_model(graph)
         return ModelWrapper(model)
 
     def test_per_channel_match(self):
         """Test with per-channel parameters (match last dim)."""
-        model = self.make_model_with_shapes(
-            data_shape=(1, 224, 224, 64),
-            param_shape=(64,)
-        )
+        model = self.make_model_with_shapes(data_shape=(1, 224, 224, 64), param_shape=(64,))
 
         result = check_parameter_shape_matches_channels("data", "params", model)
 
@@ -353,10 +332,7 @@ class TestCheckParameterShapeMatchesChannels:
 
     def test_scalar_broadcast(self):
         """Test with scalar parameter (broadcast)."""
-        model = self.make_model_with_shapes(
-            data_shape=(1, 224, 224, 64),
-            param_shape=(1,)
-        )
+        model = self.make_model_with_shapes(data_shape=(1, 224, 224, 64), param_shape=(1,))
 
         result = check_parameter_shape_matches_channels("data", "params", model)
 
@@ -366,7 +342,7 @@ class TestCheckParameterShapeMatchesChannels:
         """Test with mismatched parameter count."""
         model = self.make_model_with_shapes(
             data_shape=(1, 224, 224, 64),
-            param_shape=(32,)  # Wrong count
+            param_shape=(32,),  # Wrong count
         )
 
         result = check_parameter_shape_matches_channels("data", "params", model)
@@ -383,7 +359,7 @@ class TestExpandScalarToChannels:
             "scalar",
             TensorProto.FLOAT,  # Use FLOAT for simplicity, we'll set datatype later
             [1],
-            [scalar_value]
+            [scalar_value],
         )
 
         inp = helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 64])
@@ -391,11 +367,7 @@ class TestExpandScalarToChannels:
         node = helper.make_node("Identity", ["input"], ["output"])
 
         graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=[inp],
-            outputs=[output],
-            initializer=[scalar_tensor]
+            nodes=[node], name="test", inputs=[inp], outputs=[output], initializer=[scalar_tensor]
         )
 
         model = qonnx_make_model(graph)
@@ -440,12 +412,7 @@ class TestExpandScalarToChannels:
         output = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1])
         node = helper.make_node("Identity", ["not_init"], ["output"])
 
-        graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=[inp],
-            outputs=[output]
-        )
+        graph = helper.make_graph(nodes=[node], name="test", inputs=[inp], outputs=[output])
 
         model = qonnx_make_model(graph)
         model_w = ModelWrapper(model)
@@ -464,7 +431,7 @@ class TestLiftScalarToRank1:
             "scalar",
             TensorProto.FLOAT,
             [],  # Empty shape = scalar
-            [scalar_value]
+            [scalar_value],
         )
 
         # Create dummy node to use the scalar
@@ -473,11 +440,7 @@ class TestLiftScalarToRank1:
         node = helper.make_node("Add", ["input", "scalar"], ["output"])
 
         graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=[inp],
-            outputs=[output],
-            initializer=[scalar_init]
+            nodes=[node], name="test", inputs=[inp], outputs=[output], initializer=[scalar_init]
         )
 
         model = qonnx_make_model(graph)
@@ -487,12 +450,7 @@ class TestLiftScalarToRank1:
     def make_model_with_rank1(self, values):
         """Create model with a rank-1 tensor."""
         # Create rank-1 initializer
-        tensor_init = helper.make_tensor(
-            "tensor",
-            TensorProto.FLOAT,
-            [len(values)],
-            values
-        )
+        tensor_init = helper.make_tensor("tensor", TensorProto.FLOAT, [len(values)], values)
 
         # Create dummy node
         inp = helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, len(values)])
@@ -500,11 +458,7 @@ class TestLiftScalarToRank1:
         node = helper.make_node("Add", ["input", "tensor"], ["output"])
 
         graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=[inp],
-            outputs=[output],
-            initializer=[tensor_init]
+            nodes=[node], name="test", inputs=[inp], outputs=[output], initializer=[tensor_init]
         )
 
         model = qonnx_make_model(graph)
@@ -525,7 +479,7 @@ class TestLiftScalarToRank1:
         lifted = lift_scalar_to_rank1("scalar", model)
 
         # After lift
-        assert lifted == True
+        assert lifted is True
         assert model.get_tensor_shape("scalar") == [1]
         init_after = model.get_initializer("scalar")
         assert init_after.shape == (1,)
@@ -541,10 +495,7 @@ class TestLiftScalarToRank1:
         node = helper.make_node("Add", ["input", "scalar_shape"], ["output"])
 
         graph = helper.make_graph(
-            nodes=[node],
-            name="test",
-            inputs=[inp, scalar_shape],
-            outputs=[output]
+            nodes=[node], name="test", inputs=[inp, scalar_shape], outputs=[output]
         )
 
         model = qonnx_make_model(graph)
@@ -558,7 +509,7 @@ class TestLiftScalarToRank1:
         lifted = lift_scalar_to_rank1("scalar_shape", model_w)
 
         # After lift
-        assert lifted == True
+        assert lifted is True
         assert model_w.get_tensor_shape("scalar_shape") == [1]
         assert model_w.get_initializer("scalar_shape") is None  # Still no initializer
 
@@ -572,7 +523,7 @@ class TestLiftScalarToRank1:
         # Lift should return False (no-op)
         lifted = lift_scalar_to_rank1("tensor", model)
 
-        assert lifted == False
+        assert lifted is False
         assert model.get_tensor_shape("tensor") == [1]  # Unchanged
 
     def test_lift_higher_rank(self):
@@ -585,7 +536,7 @@ class TestLiftScalarToRank1:
         # Lift should return False (no-op)
         lifted = lift_scalar_to_rank1("tensor", model)
 
-        assert lifted == False
+        assert lifted is False
         assert model.get_tensor_shape("tensor") == [4]  # Unchanged
 
     def test_lift_preserves_onnx_semantics(self):
@@ -617,7 +568,7 @@ class TestLiftScalarToRank1:
             name="test",
             inputs=[inp],
             outputs=[output],
-            initializer=[scalar1, scalar2]
+            initializer=[scalar1, scalar2],
         )
 
         model = qonnx_make_model(graph)
@@ -632,7 +583,7 @@ class TestLiftScalarToRank1:
         lifted2 = lift_scalar_to_rank1("s2", model_w)
 
         # Both should be lifted
-        assert lifted1 == True
-        assert lifted2 == True
+        assert lifted1 is True
+        assert lifted2 is True
         assert model_w.get_tensor_shape("s1") == [1]
         assert model_w.get_tensor_shape("s2") == [1]

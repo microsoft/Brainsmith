@@ -14,21 +14,19 @@ Framework handles: DataType annotations, test data generation, golden reference,
 backend specialization, and validation.
 """
 
-from typing import Dict, Tuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
-from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.onnx_exec import execute_onnx
-from qonnx.transformation.infer_datatypes import InferDataTypes
-from qonnx.transformation.infer_shapes import InferShapes
 
 from brainsmith.primitives.transforms.infer_kernels import InferKernels
-
 from tests.frameworks.kernel_test_base import KernelTestBase
 from tests.support.pipeline import PipelineRunner
+
+if TYPE_CHECKING:
+    from tests.frameworks.test_config import KernelTestConfig
 
 
 class KernelTest(KernelTestBase):
@@ -42,9 +40,7 @@ class KernelTest(KernelTestBase):
     """
 
     @pytest.fixture(scope="function")
-    def stage1_model(
-        self, kernel_test_config: "KernelTestConfig", model_cache
-    ) -> ModelWrapper:
+    def stage1_model(self, kernel_test_config: "KernelTestConfig", model_cache) -> ModelWrapper:
         """Stage 1 model with QONNX annotations (before kernel inference).
 
         This is the ONNX model WITH DataType annotations (NO Quant nodes),
@@ -70,7 +66,7 @@ class KernelTest(KernelTestBase):
     @pytest.fixture(scope="function")
     def test_inputs(
         self, kernel_test_config: "KernelTestConfig", model_cache
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """Generate test inputs with deterministic seed.
 
         Uses session-scoped model_cache for computational reuse across tests
@@ -95,9 +91,9 @@ class KernelTest(KernelTestBase):
         self,
         kernel_test_config: "KernelTestConfig",
         stage1_model: ModelWrapper,
-        test_inputs: Dict[str, np.ndarray],
+        test_inputs: dict[str, np.ndarray],
         model_cache,
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """Golden reference computed from Stage 1 ONNX model.
 
         This is computed ONCE per test configuration and shared across all
@@ -127,7 +123,7 @@ class KernelTest(KernelTestBase):
         kernel_test_config: "KernelTestConfig",
         stage1_model: ModelWrapper,
         model_cache,
-    ) -> Tuple:
+    ) -> tuple:
         """Stage 2 model (base kernel, no backend specialization).
 
         Runs kernel inference transform on Stage 1 model to produce base kernel
@@ -155,9 +151,7 @@ class KernelTest(KernelTestBase):
 
             def configure_stage_2(op, m):
                 # Apply declarative configuration from fixture
-                self.auto_configure_from_fixture(
-                    op, m, stage=2, config=kernel_test_config
-                )
+                self.auto_configure_from_fixture(op, m, stage=2, config=kernel_test_config)
 
             # Create kernel inference transform from kernel op
             transform = InferKernels([self.get_kernel_op()])
@@ -176,9 +170,9 @@ class KernelTest(KernelTestBase):
     def stage3_model(
         self,
         kernel_test_config: "KernelTestConfig",
-        stage2_model: Tuple,
+        stage2_model: tuple,
         model_cache,
-    ) -> Tuple:
+    ) -> tuple:
         """Stage 3 model (backend-specialized kernel).
 
         Specializes Stage 2 base kernel to backend (e.g., AddStreams → AddStreams_hls).
@@ -207,9 +201,7 @@ class KernelTest(KernelTestBase):
             base_op, base_model = stage2_model
 
             # Stage 2 → Stage 3: Base Kernel → Backend
-            op, model = self.specialize_to_backend(
-                base_op, base_model, kernel_test_config
-            )
+            op, model = self.specialize_to_backend(base_op, base_model, kernel_test_config)
 
             # Apply declarative configuration from fixture
             self.auto_configure_from_fixture(op, model, stage=3, config=kernel_test_config)
@@ -221,7 +213,7 @@ class KernelTest(KernelTestBase):
     @pytest.mark.pipeline
     @pytest.mark.kernel
     def test_pipeline_creates_hw_node(
-        self, kernel_test_config: "KernelTestConfig", stage2_model: Tuple
+        self, kernel_test_config: "KernelTestConfig", stage2_model: tuple
     ):
         """Validate that kernel inference creates hardware node.
 
@@ -254,7 +246,7 @@ class KernelTest(KernelTestBase):
     @pytest.mark.pipeline
     @pytest.mark.kernel
     def test_shapes_preserved_through_pipeline(
-        self, kernel_test_config: "KernelTestConfig", stage2_model: Tuple
+        self, kernel_test_config: "KernelTestConfig", stage2_model: tuple
     ):
         """Validate tensor shapes remain correct through inference pipeline.
 
@@ -302,7 +294,7 @@ class KernelTest(KernelTestBase):
     @pytest.mark.pipeline
     @pytest.mark.kernel
     def test_datatypes_preserved_through_pipeline(
-        self, kernel_test_config: "KernelTestConfig", stage2_model: Tuple
+        self, kernel_test_config: "KernelTestConfig", stage2_model: tuple
     ):
         """Validate tensor datatypes remain correct through inference pipeline.
 
@@ -352,15 +344,19 @@ class KernelTest(KernelTestBase):
     def test_python_execution_vs_golden(
         self,
         kernel_test_config: "KernelTestConfig",
-        stage2_model: Tuple,
-        test_inputs: Dict[str, np.ndarray],
-        golden_outputs: Dict[str, np.ndarray],
+        stage2_model: tuple,
+        test_inputs: dict[str, np.ndarray],
+        golden_outputs: dict[str, np.ndarray],
     ):
         """Test Python execution matches QONNX golden reference."""
         # Delegate to shared utility
         self._execute_and_validate_golden(
-            stage2_model, test_inputs, golden_outputs,
-            "python", "Python execution", kernel_test_config
+            stage2_model,
+            test_inputs,
+            golden_outputs,
+            "python",
+            "Python execution",
+            kernel_test_config,
         )
 
     @pytest.mark.pipeline
@@ -371,15 +367,19 @@ class KernelTest(KernelTestBase):
     def test_cppsim_execution_vs_golden(
         self,
         kernel_test_config: "KernelTestConfig",
-        stage3_model: Tuple,
-        test_inputs: Dict[str, np.ndarray],
-        golden_outputs: Dict[str, np.ndarray],
+        stage3_model: tuple,
+        test_inputs: dict[str, np.ndarray],
+        golden_outputs: dict[str, np.ndarray],
     ):
         """Test HLS C++ simulation matches QONNX golden reference."""
         # Delegate to shared utility
         self._execute_and_validate_golden(
-            stage3_model, test_inputs, golden_outputs,
-            "cppsim", "HLS simulation (cppsim)", kernel_test_config
+            stage3_model,
+            test_inputs,
+            golden_outputs,
+            "cppsim",
+            "HLS simulation (cppsim)",
+            kernel_test_config,
         )
 
     @pytest.mark.pipeline
@@ -390,14 +390,17 @@ class KernelTest(KernelTestBase):
     def test_rtlsim_execution_vs_golden(
         self,
         kernel_test_config: "KernelTestConfig",
-        stage3_model: Tuple,
-        test_inputs: Dict[str, np.ndarray],
-        golden_outputs: Dict[str, np.ndarray],
+        stage3_model: tuple,
+        test_inputs: dict[str, np.ndarray],
+        golden_outputs: dict[str, np.ndarray],
     ):
         """Test RTL simulation matches QONNX golden reference."""
         # Delegate to shared utility
         self._execute_and_validate_golden(
-            stage3_model, test_inputs, golden_outputs,
-            "rtlsim", "RTL simulation (rtlsim)", kernel_test_config
+            stage3_model,
+            test_inputs,
+            golden_outputs,
+            "rtlsim",
+            "RTL simulation (rtlsim)",
+            kernel_test_config,
         )
-

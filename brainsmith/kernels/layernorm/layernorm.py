@@ -1,18 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
+
 import numpy as np
 from onnx import NodeProto, helper
-from typing import Optional
-
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import get_by_name
-from brainsmith.dataflow import KernelOp, FULL_DIM
-from brainsmith.dataflow.spec_helpers import derive_dim
-from brainsmith.dataflow.types import ShapeHierarchy
-import brainsmith.dataflow as df
-from brainsmith.registry import kernel
 
+import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_DIM, KernelOp
+from brainsmith.dataflow.constraints import AttrCompare
+from brainsmith.dataflow.spec_helpers import constant_datatype, derive_dim
+from brainsmith.dataflow.types import ShapeHierarchy
+from brainsmith.registry import kernel
 
 # =============================================================================
 # Clean Product Schema
@@ -23,19 +23,20 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     inputs=[
         df.InputSchema(
             name="input",
-            block_tiling=[FULL_DIM],         # (1, 1, channels) - process full spatial dims
-            stream_tiling=["SIMD"],          # Stream channels with SIMD parallelism
-            required_layout="NHWC",          # Hardware requires NHWC layout
+            block_tiling=[FULL_DIM],  # (1, 1, channels) - process full spatial dims
+            stream_tiling=["SIMD"],  # Stream channels with SIMD parallelism
+            required_layout="NHWC",  # Hardware requires NHWC layout
         )
     ],
-
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[FULL_DIM],         # (1, 1, channels)
-            stream_tiling=[derive_dim("input", ShapeHierarchy.STREAM, -1)],   # Output streams at same rate as input
-            datatype=df.constant_datatype("FLOAT32"),                # Output datatype same as input
-            required_layout="NHWC",          # Hardware produces NHWC layout
+            block_tiling=[FULL_DIM],  # (1, 1, channels)
+            stream_tiling=[
+                derive_dim("input", ShapeHierarchy.STREAM, -1)
+            ],  # Output streams at same rate as input
+            datatype=constant_datatype("FLOAT32"),  # Output datatype same as input
+            required_layout="NHWC",  # Hardware produces NHWC layout
         )
     ],
     kernel_params={
@@ -43,15 +44,12 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     },
     constraints=[
         # Product constraint: epsilon must be positive for numerical stability
-        df.AttrCompare("epsilon", ">", 0),
+        AttrCompare("epsilon", ">", 0),
     ],
 )
 
 
-@kernel(
-    description="Hardware LayerNorm w/out Bias/Scale",
-    author="Shane Fleming"
-)
+@kernel(description="Hardware LayerNorm w/out Bias/Scale", author="Shane Fleming")
 class LayerNorm(KernelOp):
     """Abstraction layer for HW implementation of the LayerNorm layer."""
 
@@ -59,7 +57,7 @@ class LayerNorm(KernelOp):
         super().__init__(onnx_node, **kwargs)
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         """Build LayerNorm schema (constant for all instances)."""
         return LAYERNORM_SCHEMA
 
@@ -77,7 +75,9 @@ class LayerNorm(KernelOp):
         return axis_attr is None or axis_attr.i == -1
 
     @classmethod
-    def infer_from(cls, node: NodeProto, model: ModelWrapper, insert_index: int) -> df.TransformationResult:
+    def infer_from(
+        cls, node: NodeProto, model: ModelWrapper, insert_index: int
+    ) -> df.TransformationResult:
         """Create LayerNorm HW node from FuncLayerNorm node.
 
         Args:
@@ -88,7 +88,7 @@ class LayerNorm(KernelOp):
         Returns:
             TransformationResult with LayerNorm node
         """
-        schema = cls.build_schema(node, model)
+        cls.build_schema(node, model)
 
         # Extract epsilon from FuncLayerNorm
         epsilon_attr = get_by_name(node.attribute, "epsilon")
@@ -106,10 +106,7 @@ class LayerNorm(KernelOp):
             epsilon=epsilon,
         )
 
-        return df.TransformationResult(
-            nodes_to_insert=[hw_node],
-            nodes_to_remove=[node]
-        )
+        return df.TransformationResult(nodes_to_insert=[hw_node], nodes_to_remove=[node])
 
     def execute_node(self, context, graph):
         node = self.onnx_node

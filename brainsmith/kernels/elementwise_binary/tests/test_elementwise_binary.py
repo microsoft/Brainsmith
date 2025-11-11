@@ -21,7 +21,6 @@ import numpy as np
 from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.util.basic import qonnx_make_model
-
 from tests.frameworks.kernel_test import KernelTest
 from tests.frameworks.test_config import KernelTestConfig
 

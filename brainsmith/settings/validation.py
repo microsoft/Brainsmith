@@ -9,11 +9,12 @@ Separates validation logic from UI/CLI concerns.
 """
 
 from __future__ import annotations
+
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .schema import SystemConfig
@@ -36,8 +37,7 @@ def validate_config_file_creation(path: Path, force: bool) -> None:
 
     if path.exists() and not force:
         raise ValidationError(
-            f"{path} already exists. Use --force to overwrite.",
-            details=[CONFIG_OVERWRITE_HINT]
+            f"{path} already exists. Use --force to overwrite.", details=[CONFIG_OVERWRITE_HINT]
         )
 
 
@@ -91,7 +91,10 @@ def ensure_environment_sourced(marker_var: str = "BSMITH_DIR") -> None:
     if marker_var not in os.environ:
         print("❌ Brainsmith environment not detected", file=sys.stderr)
         print("", file=sys.stderr)
-        print("Before running brainsmith commands or tests, activate the environment:", file=sys.stderr)
+        print(
+            "Before running brainsmith commands or tests, activate the environment:",
+            file=sys.stderr,
+        )
         print("", file=sys.stderr)
         print("  Option 1 (Recommended): direnv", file=sys.stderr)
         print("    brainsmith project allow-direnv", file=sys.stderr)
@@ -126,13 +129,13 @@ def warn_if_environment_not_sourced(marker_var: str = "BSMITH_DIR") -> bool:
             "Brainsmith environment not detected (%s not set). "
             "Some features may not work correctly. "
             "Run: source .brainsmith/env.sh",
-            marker_var
+            marker_var,
         )
         return False
     return True
 
 
-def get_environment_info() -> dict[str, Optional[str]]:
+def get_environment_info() -> dict[str, str | None]:
     """Get diagnostic information about current environment state.
 
     Useful for debugging environment-related issues.

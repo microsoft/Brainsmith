@@ -10,6 +10,7 @@
 """DuplicateStreams HLS backend."""
 
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
+
 from brainsmith.kernels.duplicate_streams.duplicate_streams import DuplicateStreams
 from brainsmith.registry import backend
 
@@ -18,7 +19,7 @@ from brainsmith.registry import backend
     name="DuplicateStreams_hls",
     target_kernel="brainsmith:DuplicateStreams",
     language="hls",
-    author="AMD FINN team"
+    author="AMD FINN team",
 )
 class DuplicateStreams_hls(DuplicateStreams, HLSBackend):
     """HLS backend for DuplicateStreams.
@@ -146,10 +147,6 @@ void DuplicateStreamsCustom({', '.join(inp_streams)}) {{
         self.code_gen_dict["$PRAGMAS$"] = ["#pragma HLS INTERFACE axis port=in0_V"]
 
         for i in range(len(self.design_point.output_list)):
-            self.code_gen_dict["$PRAGMAS$"].append(
-                f"#pragma HLS INTERFACE axis port=out{i}_V"
-            )
+            self.code_gen_dict["$PRAGMAS$"].append(f"#pragma HLS INTERFACE axis port=out{i}_V")
 
-        self.code_gen_dict["$PRAGMAS$"].append(
-            "#pragma HLS INTERFACE ap_ctrl_none port=return"
-        )
+        self.code_gen_dict["$PRAGMAS$"].append("#pragma HLS INTERFACE ap_ctrl_none port=return")

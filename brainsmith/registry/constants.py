@@ -13,13 +13,13 @@ Source Types:
 """
 
 # Core namespace reserved for brainsmith internal components
-CORE_NAMESPACE = 'brainsmith'
+CORE_NAMESPACE = "brainsmith"
 
 # Standard source names
-SOURCE_BRAINSMITH = 'brainsmith'
-SOURCE_FINN = 'finn'
-SOURCE_PROJECT = 'project'
-SOURCE_CUSTOM = 'custom'  # Ephemeral runtime components (not cached to manifest)
+SOURCE_BRAINSMITH = "brainsmith"
+SOURCE_FINN = "finn"
+SOURCE_PROJECT = "project"
+SOURCE_CUSTOM = "custom"  # Ephemeral runtime components (not cached to manifest)
 
 # Known entry point sources (discovered at runtime, not filesystem-based)
 # These are discovered via importlib.metadata.entry_points but we list known ones
@@ -38,6 +38,6 @@ DEFAULT_SOURCE_PRIORITY = [SOURCE_PROJECT, SOURCE_BRAINSMITH, SOURCE_FINN, SOURC
 # Source module prefixes for auto-detection
 # Maps module prefix -> source name
 SOURCE_MODULE_PREFIXES = {
-    f'{SOURCE_BRAINSMITH}.': SOURCE_BRAINSMITH,
-    f'{SOURCE_FINN}.': SOURCE_FINN,
+    f"{SOURCE_BRAINSMITH}.": SOURCE_BRAINSMITH,
+    f"{SOURCE_FINN}.": SOURCE_FINN,
 }

@@ -116,7 +116,7 @@ class NormalizeDataflowLayouts(Transformation):
                         tensor_name,
                         model,
                         producer_idx + 1,  # Insert after producer
-                        reverse=False
+                        reverse=False,
                     )
 
                     # Update all consumers to use the new NHWC tensor
@@ -168,9 +168,7 @@ class NormalizeDataflowLayouts(Transformation):
                         nhwc_shape = (bs, h, w, ch)
 
                         nhwc_tensor = helper.make_tensor_value_info(
-                            nhwc_tensor_name,
-                            TensorProto.FLOAT,
-                            nhwc_shape
+                            nhwc_tensor_name, TensorProto.FLOAT, nhwc_shape
                         )
                         graph.value_info.append(nhwc_tensor)
                         model.set_tensor_datatype(nhwc_tensor_name, output_dtype)
@@ -181,7 +179,7 @@ class NormalizeDataflowLayouts(Transformation):
                             "Transpose",
                             [nhwc_tensor_name],
                             [original_output_name],
-                            perm=[0, 3, 1, 2]  # NHWC → NCHW
+                            perm=[0, 3, 1, 2],  # NHWC → NCHW
                         )
                         graph.node.insert(producer_idx + 1, transpose_node)
 
@@ -219,11 +217,7 @@ class NormalizeDataflowLayouts(Transformation):
         # Rename the original input and create a new NHWC version
         nhwc_tensor_name = model.make_new_valueinfo_name()
 
-        nhwc_tensor = helper.make_tensor_value_info(
-            nhwc_tensor_name,
-            TensorProto.FLOAT,
-            nhwc_shape
-        )
+        nhwc_tensor = helper.make_tensor_value_info(nhwc_tensor_name, TensorProto.FLOAT, nhwc_shape)
         graph.value_info.append(nhwc_tensor)
 
         dtype = model.get_tensor_datatype(tensor_name)
@@ -235,7 +229,7 @@ class NormalizeDataflowLayouts(Transformation):
             "Transpose",
             [tensor_name],
             [nhwc_tensor_name],
-            perm=[0, 2, 3, 1]  # NCHW → NHWC
+            perm=[0, 2, 3, 1],  # NCHW → NHWC
         )
         graph.node.insert(0, transpose_node)
 

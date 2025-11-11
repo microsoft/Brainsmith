@@ -10,7 +10,7 @@ Modules:
 """
 
 __all__ = [
-    'model_profiling',
-    'roofline',
-    'roofline_runner',
+    "model_profiling",
+    "roofline",
+    "roofline_runner",
 ]

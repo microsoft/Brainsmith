@@ -14,10 +14,10 @@ from brainsmith._internal.math import divisors
 from brainsmith.dataflow.builder import DesignSpaceBuilder
 from brainsmith.dataflow.dse_models import InterfaceDesignSpace
 
-
 # =============================================================================
 # Test divisors() Helper
 # =============================================================================
+
 
 def test_divisors_small_numbers():
     """Test divisors() with small known values."""
@@ -93,6 +93,7 @@ def test_divisors_negative_raises_error():
 # Test _compute_parameter_ranges() Helper
 # =============================================================================
 
+
 def test_compute_parameter_ranges_single_parameter():
     """Test _compute_parameter_ranges() with single parallelization parameter."""
     builder = DesignSpaceBuilder()
@@ -109,7 +110,26 @@ def test_compute_parameter_ranges_single_parameter():
 
     assert "SIMD" in valid_ranges
     # Should be divisors of 768 (second dimension)
-    assert valid_ranges["SIMD"] == {1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 768}
+    assert valid_ranges["SIMD"] == {
+        1,
+        2,
+        3,
+        4,
+        6,
+        8,
+        12,
+        16,
+        24,
+        32,
+        48,
+        64,
+        96,
+        128,
+        192,
+        256,
+        384,
+        768,
+    }
     assert len(valid_ranges["SIMD"]) == 18
 
 

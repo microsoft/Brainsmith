@@ -7,9 +7,9 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from rich.table import Table
-from rich.panel import Panel
 from rich.console import Console as RichConsole
+from rich.panel import Panel
+from rich.table import Table
 
 from .messages import XILINX_NOT_CONFIGURED, XILINX_NOT_FOUND
 
@@ -57,13 +57,13 @@ class ConfigFormatter:
         env_parts = []
 
         # Check direnv
-        if os.environ.get('DIRENV_DIR'):
+        if os.environ.get("DIRENV_DIR"):
             env_parts.append("[green]direnv active[/green]")
         else:
             env_parts.append("[dim]direnv inactive[/dim]")
 
         # Check venv
-        venv_path = os.environ.get('VIRTUAL_ENV')
+        venv_path = os.environ.get("VIRTUAL_ENV")
         if venv_path:
             venv_name = Path(venv_path).name
             env_parts.append(f"venv: [green]{venv_name}[/green]")
@@ -80,7 +80,7 @@ class ConfigFormatter:
             cache_parts.append("[green]enabled[/green]")
 
             # Check if manifest file exists
-            manifest_path = config.project_dir / '.brainsmith' / 'component_manifest.json'
+            manifest_path = config.project_dir / ".brainsmith" / "component_manifest.json"
             if manifest_path.exists():
                 cache_parts.append("[green]manifest found[/green]")
             else:
@@ -111,18 +111,25 @@ class ConfigFormatter:
         table.add_column("Source", style="yellow")
 
         table.add_row("Core Paths", "", "")
-        table.add_row("  Build Directory",
-                      self._format_path(config.build_dir, config.bsmith_dir),
-                      self._get_source("build_dir", "BSMITH_BUILD_DIR", config))
-        table.add_row("  Dependencies Directory",
-                      self._format_path(config.deps_dir, config.bsmith_dir),
-                      self._get_source("deps_dir", "BSMITH_DEPS_DIR", config))
+        table.add_row(
+            "  Build Directory",
+            self._format_path(config.build_dir, config.bsmith_dir),
+            self._get_source("build_dir", "BSMITH_BUILD_DIR", config),
+        )
+        table.add_row(
+            "  Dependencies Directory",
+            self._format_path(config.deps_dir, config.bsmith_dir),
+            self._get_source("deps_dir", "BSMITH_DEPS_DIR", config),
+        )
 
         table.add_row("", "", "")
         table.add_row("Component Registry", "", "")
 
-        table.add_row("  Source Priority", ", ".join(config.source_priority),
-                      self._get_source("source_priority", "BSMITH_SOURCE_PRIORITY", config))
+        table.add_row(
+            "  Source Priority",
+            ", ".join(config.source_priority),
+            self._get_source("source_priority", "BSMITH_SOURCE_PRIORITY", config),
+        )
 
         # Component sources - show configured filesystem sources (project, user, custom)
         # Core namespace (brainsmith) and entry points (finn) are not shown here as they're not configurable
@@ -134,16 +141,25 @@ class ConfigFormatter:
             row_source = source if i == 0 else ""
             table.add_row(label, display_value, row_source)
 
-        table.add_row("  Components Strict", str(config.components_strict),
-                      self._get_source("components_strict", "BSMITH_COMPONENTS_STRICT", config))
+        table.add_row(
+            "  Components Strict",
+            str(config.components_strict),
+            self._get_source("components_strict", "BSMITH_COMPONENTS_STRICT", config),
+        )
 
         table.add_row("", "", "")
         table.add_row("Toolchain Settings", "", "")
         if config.default_workers:
-            table.add_row("  Default Workers", str(config.default_workers),
-                          self._get_source("default_workers", "BSMITH_DEFAULT_WORKERS", config))
-        table.add_row("  Netron Port", str(config.netron_port),
-                      self._get_source("netron_port", "BSMITH_NETRON_PORT", config))
+            table.add_row(
+                "  Default Workers",
+                str(config.default_workers),
+                self._get_source("default_workers", "BSMITH_DEFAULT_WORKERS", config),
+            )
+        table.add_row(
+            "  Netron Port",
+            str(config.netron_port),
+            self._get_source("netron_port", "BSMITH_NETRON_PORT", config),
+        )
 
         self._add_xilinx_tools_section(table, config)
 
@@ -155,23 +171,27 @@ class ConfigFormatter:
     def _add_xilinx_tools_section(self, table: Table, config: SystemConfig) -> None:
         table.add_row("", "", "")
         table.add_row("Xilinx Tools", "", "")
-        table.add_row("  Base Path",
-                      str(config.xilinx_path) if config.xilinx_path else XILINX_NOT_CONFIGURED,
-                      self._get_source("xilinx_path", "BSMITH_XILINX_PATH", config))
-        table.add_row("  Version", config.xilinx_version,
-                      self._get_source("xilinx_version", "BSMITH_XILINX_VERSION", config))
+        table.add_row(
+            "  Base Path",
+            str(config.xilinx_path) if config.xilinx_path else XILINX_NOT_CONFIGURED,
+            self._get_source("xilinx_path", "BSMITH_XILINX_PATH", config),
+        )
+        table.add_row(
+            "  Version",
+            config.xilinx_version,
+            self._get_source("xilinx_version", "BSMITH_XILINX_VERSION", config),
+        )
 
         # Add individual tools with sources
         for tool_name, path_attr, env_var in [
             ("Vivado", "vivado_path", "BSMITH_VIVADO_PATH"),
             ("Vitis", "vitis_path", "BSMITH_VITIS_PATH"),
-            ("Vitis HLS", "vitis_hls_path", "BSMITH_VITIS_HLS_PATH")
+            ("Vitis HLS", "vitis_hls_path", "BSMITH_VITIS_HLS_PATH"),
         ]:
             path = getattr(config, path_attr)
             if path:
                 display = self._format_xilinx_tool_path(
-                    path, config.xilinx_path, config.xilinx_version,
-                    tool_name.replace(" ", "_")
+                    path, config.xilinx_path, config.xilinx_version, tool_name.replace(" ", "_")
                 )
                 source = self._get_source(path_attr, env_var, config)
             else:
@@ -184,19 +204,25 @@ class ConfigFormatter:
         table.add_row("FINN Configuration", "", "")
 
         finn_build = config.finn_build_dir
-        table.add_row("  FINN_BUILD_DIR",
-                      self._format_path(finn_build, config.bsmith_dir),
-                      self._get_source("finn_build_dir", "BSMITH_FINN_BUILD_DIR", config))
+        table.add_row(
+            "  FINN_BUILD_DIR",
+            self._format_path(finn_build, config.bsmith_dir),
+            self._get_source("finn_build_dir", "BSMITH_FINN_BUILD_DIR", config),
+        )
 
         finn_deps = config.finn_deps_dir
-        table.add_row("  FINN_DEPS_DIR",
-                      self._format_path(finn_deps, config.bsmith_dir),
-                      self._get_source("finn_deps_dir", "BSMITH_FINN_DEPS_DIR", config))
+        table.add_row(
+            "  FINN_DEPS_DIR",
+            self._format_path(finn_deps, config.bsmith_dir),
+            self._get_source("finn_deps_dir", "BSMITH_FINN_DEPS_DIR", config),
+        )
 
         finn_root = config.finn_root
-        table.add_row("  FINN_ROOT",
-                      self._format_path(finn_root, config.bsmith_dir),
-                      self._get_source("finn_root", "BSMITH_FINN_ROOT", config))
+        table.add_row(
+            "  FINN_ROOT",
+            self._format_path(finn_root, config.bsmith_dir),
+            self._get_source("finn_root", "BSMITH_FINN_ROOT", config),
+        )
 
     def _format_path(self, path: Path | None, base_path: Path | None = None) -> str:
         if not path:
@@ -210,11 +236,7 @@ class ConfigFormatter:
         return f"[{color}]{display}[/{color}]"
 
     def _format_xilinx_tool_path(
-        self,
-        path: Path | None,
-        base: Path | None,
-        version: str,
-        tool: str
+        self, path: Path | None, base: Path | None, version: str, tool: str
     ) -> str:
         """Format Xilinx tool path with color based on existence."""
         if not path:
@@ -226,7 +248,9 @@ class ConfigFormatter:
         # Show as: base/tool/version
         return f"[green]{base}[/green][dim]/{tool}/[/dim][green]{version}[/green]"
 
-    def _get_source(self, setting_name: str, env_var: str, config: SystemConfig | None = None) -> str:
+    def _get_source(
+        self, setting_name: str, env_var: str, config: SystemConfig | None = None
+    ) -> str:
         """Get simplified source string for a configuration setting.
 
         Uses Pydantic's model_fields_set to detect if a field was explicitly configured,
@@ -250,7 +274,7 @@ class ConfigFormatter:
             return "yaml"
 
         # Check if this is an auto-derived Xilinx tool path
-        if config and setting_name in ('vivado_path', 'vitis_path', 'vitis_hls_path'):
+        if config and setting_name in ("vivado_path", "vitis_path", "vitis_hls_path"):
             # If the tool path exists but wasn't set via env or yaml, it was auto-derived
             tool_path = getattr(config, setting_name, None)
             if tool_path is not None:

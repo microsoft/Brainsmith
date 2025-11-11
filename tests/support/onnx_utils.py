@@ -52,9 +52,7 @@ def get_onnx_tensor_type(model: ModelWrapper, tensor_name: str) -> int:
         if vi.name == tensor_name:
             return vi.type.tensor_type.elem_type
 
-    raise ValueError(
-        f"Tensor '{tensor_name}' not found in model or has no type information"
-    )
+    raise ValueError(f"Tensor '{tensor_name}' not found in model or has no type information")
 
 
 __all__ = ["get_onnx_tensor_type"]

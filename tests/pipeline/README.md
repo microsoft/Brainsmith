@@ -436,7 +436,7 @@ pytest tests/pipeline/test_mykernel_integration.py -v --run-slow
 - RTL rtlsim compilation and execution
 - Cross-backend validation
 
-**Runs on**: Manual trigger, nightly CI, pre-release
+**Runs on**: Manual trigger, nightly CI
 
 ### Very Slow Tests (10+ min)
 - Full parametric sweep

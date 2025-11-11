@@ -9,42 +9,37 @@ These steps use the comprehensive component registry to access
 transforms from QONNX, FINN, and Brainsmith.
 """
 
-import os
 import logging
 from typing import Any
 
-from brainsmith.primitives.transforms.expand_norms import ExpandNorms
-from brainsmith.primitives.transforms.temp_shuffle_fixer import TempShuffleFixer
-from brainsmith.primitives.transforms.set_pumped_compute import SetPumpedCompute
+from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
 from qonnx.transformation.fold_constants import FoldConstants
 from qonnx.transformation.general import (
+    ApplyConfig,
     ConvertDivToMul,
     GiveUniqueNodeNames,
-    ApplyConfig,
 )
-from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
-from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
-from finn.builder.build_dataflow_steps import step_specialize_layers
+from qonnx.transformation.infer_shapes import InferShapes
+
+from brainsmith.primitives.transforms.expand_norms import ExpandNorms
+from brainsmith.primitives.transforms.set_pumped_compute import SetPumpedCompute
 from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
+from brainsmith.primitives.transforms.temp_shuffle_fixer import TempShuffleFixer
 
 logger = logging.getLogger(__name__)
 
 # Import decorator for registration
-from brainsmith.registry import step
+from brainsmith.registry import step  # noqa: E402
 
 # === Conversion Steps ===
 
-@step(name='qonnx_to_finn')
+
+@step(name="qonnx_to_finn")
 def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
     """Convert QONNX to FINN opset."""
 
-    for transform in [
-        ExpandNorms(),
-        FoldConstants(),
-        ConvertDivToMul(),
-        ConvertQONNXtoFINN()
-    ]:
+    for transform in [ExpandNorms(), FoldConstants(), ConvertDivToMul(), ConvertQONNXtoFINN()]:
         model = model.transform(transform)
 
     return model
@@ -52,7 +47,8 @@ def qonnx_to_finn_step(model: Any, cfg: Any) -> Any:
 
 # === Hardware Steps ===
 
-@step(name='specialize_layers')
+
+@step(name="specialize_layers")
 def specialize_layers_step(model: Any, cfg: Any) -> Any:
     """Specialize hardware layers using registry-based backend discovery."""
 
@@ -66,11 +62,7 @@ def specialize_layers_step(model: Any, cfg: Any) -> Any:
     # Run FINN's step_specialize_layers as catch-all for any remaining ops
     # model = step_specialize_layers(model, cfg)
 
-    for transform in [
-        GiveUniqueNodeNames(),
-        InferShapes(),
-        InferDataTypes()
-    ]:
+    for transform in [GiveUniqueNodeNames(), InferShapes(), InferDataTypes()]:
         model = model.transform(transform)
 
     return model
@@ -78,7 +70,8 @@ def specialize_layers_step(model: Any, cfg: Any) -> Any:
 
 # === Optimization Steps ===
 
-@step(name='constrain_folding_and_set_pumped_compute')
+
+@step(name="constrain_folding_and_set_pumped_compute")
 def constrain_folding_and_set_pumped_compute_step(model, cfg):
     """Apply optimizations including folding constraints and pumped compute."""
     for transform in [TempShuffleFixer(), SetPumpedCompute()]:

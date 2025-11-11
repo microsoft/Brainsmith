@@ -2,17 +2,17 @@
 # Licensed under the MIT License.
 
 """Parameter exploration step for DSE (Phase 7)."""
+import json
 import logging
 import time
-import json
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any
 
 from qonnx.custom_op.registry import getCustomOp
 
-from brainsmith.registry import step
-from brainsmith.dataflow.utils import iter_valid_configurations
 from brainsmith.dataflow.kernel_op import KernelOp
+from brainsmith.dataflow.utils import iter_valid_configurations
+from brainsmith.registry import step
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +104,10 @@ def explore_kernel_params_step(model, cfg):
         # Log parameter space
         logger.debug(f"  Parameters: {list(valid_ranges.keys())}")
         for param_name, param_values in valid_ranges.items():
-            logger.debug(f"    {param_name}: {len(param_values)} values "
-                       f"(range: {min(param_values)}-{max(param_values)})")
+            logger.debug(
+                f"    {param_name}: {len(param_values)} values "
+                f"(range: {min(param_values)}-{max(param_values)})"
+            )
 
         # Calculate total configs
         total_configs = 1
@@ -140,7 +142,7 @@ def explore_kernel_params_step(model, cfg):
         logger.info(f"Average time per config: {avg_time_per_config:.2f}ms")
 
     # Save results to JSON
-    if hasattr(cfg, 'output_dir'):
+    if hasattr(cfg, "output_dir"):
         output_path = Path(cfg.output_dir) / "parameter_exploration_results.json"
         _save_results(output_path, all_results, total_elapsed)
         logger.info(f"Results saved to: {output_path}")
@@ -151,11 +153,8 @@ def explore_kernel_params_step(model, cfg):
 
 
 def _explore_kernel_configs(
-    node_name: str,
-    kernel_op: KernelOp,
-    model,
-    expected_count: int
-) -> Dict[str, Any]:
+    node_name: str, kernel_op: KernelOp, model, expected_count: int
+) -> dict[str, Any]:
     """Explore all configurations for a single kernel.
 
     Args:
@@ -197,34 +196,38 @@ def _explore_kernel_configs(
             config_time = time.time() - config_start
             successful += 1
 
-            config_details.append({
-                "config": config,
-                "status": "success",
-                "time_ms": config_time * 1000
-            })
+            config_details.append(
+                {"config": config, "status": "success", "time_ms": config_time * 1000}
+            )
 
         except Exception as e:
             config_time = time.time() - config_start
             failed += 1
             logger.warning(f"    Config {config} failed: {e}")
 
-            config_details.append({
-                "config": config,
-                "status": "failed",
-                "error": str(e),
-                "time_ms": config_time * 1000
-            })
+            config_details.append(
+                {
+                    "config": config,
+                    "status": "failed",
+                    "error": str(e),
+                    "time_ms": config_time * 1000,
+                }
+            )
 
         # Log progress every 10 configs
         if (i + 1) % 10 == 0 or (i + 1) == expected_count:
-            logger.debug(f"    Progress: {i+1}/{expected_count} configs "
-                       f"({successful} successful, {failed} failed)")
+            logger.debug(
+                f"    Progress: {i+1}/{expected_count} configs "
+                f"({successful} successful, {failed} failed)"
+            )
 
     elapsed = time.time() - start_time
 
     logger.debug(f"  Completed in {elapsed:.2f}s")
-    logger.debug(f"  Success rate: {successful}/{expected_count} "
-               f"({100*successful/max(expected_count,1):.1f}%)")
+    logger.debug(
+        f"  Success rate: {successful}/{expected_count} "
+        f"({100*successful/max(expected_count,1):.1f}%)"
+    )
 
     return {
         "node_name": node_name,
@@ -232,11 +235,11 @@ def _explore_kernel_configs(
         "configs_successful": successful,
         "configs_failed": failed,
         "time_seconds": elapsed,
-        "config_details": config_details
+        "config_details": config_details,
     }
 
 
-def _save_results(output_path: Path, results: List[Dict[str, Any]], total_time: float):
+def _save_results(output_path: Path, results: list[dict[str, Any]], total_time: float):
     """Save exploration results to JSON file.
 
     Args:
@@ -252,8 +255,8 @@ def _save_results(output_path: Path, results: List[Dict[str, Any]], total_time: 
             "total_failed": sum(r["configs_failed"] for r in results),
             "total_time_seconds": total_time,
         },
-        "kernels": results
+        "kernels": results,
     }
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         json.dump(output_data, f, indent=2)

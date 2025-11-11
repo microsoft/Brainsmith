@@ -14,13 +14,13 @@ Usage:
 """
 
 import pytest
+from tests.frameworks.test_config import KernelTestConfig
 
 from brainsmith.kernels.elementwise_binary.tests import (
-    ElementwiseBinaryTestBase,
     VALIDATION_CASES_BASE,
+    ElementwiseBinaryTestBase,
     make_elementwise_case,
 )
-from tests.frameworks.test_config import KernelTestConfig
 
 # ============================================================================
 # Test Case Generation

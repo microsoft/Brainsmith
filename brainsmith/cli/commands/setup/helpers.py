@@ -3,7 +3,6 @@
 
 """Shared helper functions for setup commands."""
 
-from pathlib import Path
 
 from brainsmith._internal.io.dependencies import DependencyManager
 
@@ -20,4 +19,5 @@ def _are_hlslib_headers_installed(deps_mgr: DependencyManager) -> bool:
 
 def _is_finnxsim_built() -> bool:
     from finn import xsi
+
     return xsi.is_available()

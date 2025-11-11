@@ -11,7 +11,7 @@ and step manipulation operations (before, after, replace, etc.).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union, Literal
+from typing import Any, Literal
 
 from brainsmith.dse._constants import SKIP_INDICATOR
 from brainsmith.registry import has_step
@@ -20,19 +20,20 @@ from brainsmith.registry import has_step
 SKIP_VALUES = frozenset([None, "~", ""])
 
 # Type definitions
-StepSpec = Union[str, List[Optional[str]]]
+StepSpec = str | list[str | None]
 
 
 @dataclass
 class StepOperation:
     """Represents a step manipulation operation"""
+
     op_type: Literal["after", "before", "replace", "remove", "at_start", "at_end"]
-    target: Optional[StepSpec] = None
-    insert: Optional[StepSpec] = None
-    with_step: Optional[StepSpec] = None
+    target: StepSpec | None = None
+    insert: StepSpec | None = None
+    with_step: StepSpec | None = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Optional[StepOperation]:
+    def from_dict(cls, data: dict[str, Any]) -> StepOperation | None:
         """Parse operation from YAML dict"""
         if "after" in data:
             return cls(op_type="after", target=data["after"], insert=data.get("insert"))
@@ -50,9 +51,8 @@ class StepOperation:
 
 
 def parse_steps(
-    steps_data: List[Any],
-    parent_steps: Optional[List[Union[str, List[Optional[str]]]]] = None
-) -> List[Union[str, List[Optional[str]]]]:
+    steps_data: list[Any], parent_steps: list[str | list[str | None]] | None = None
+) -> list[str | list[str | None]]:
     """Parse steps from design_space, preserving variations and supporting operations.
 
     Args:
@@ -92,7 +92,7 @@ def parse_steps(
     return [_validate_spec(spec) for spec in result]
 
 
-def _apply_step_operation(steps: List[StepSpec], op: StepOperation) -> List[StepSpec]:
+def _apply_step_operation(steps: list[StepSpec], op: StepOperation) -> list[StepSpec]:
     """Apply a single operation to the step list"""
 
     # Normalize the operation target to match already-normalized steps
@@ -120,7 +120,7 @@ def _apply_step_operation(steps: List[StepSpec], op: StepOperation) -> List[Step
     return steps
 
 
-def _validate_nested_lists(spec: Optional[StepSpec]) -> None:
+def _validate_nested_lists(spec: StepSpec | None) -> None:
     """Validate nested lists in step specifications"""
     if spec is not None and isinstance(spec, list):
         for item in spec:
@@ -128,12 +128,16 @@ def _validate_nested_lists(spec: Optional[StepSpec]) -> None:
                 _validate_spec(item)
 
 
-def _apply_remove(steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+def _apply_remove(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply remove operation"""
     return [s for s in steps if not _step_matches(s, target)]
 
 
-def _apply_replace(steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+def _apply_replace(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply replace operation"""
     new_steps = []
     for step in steps:
@@ -144,7 +148,9 @@ def _apply_replace(steps: List[StepSpec], op: StepOperation, target: Optional[St
     return new_steps
 
 
-def _apply_after(steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+def _apply_after(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply after operation"""
     new_steps = []
     for step in steps:
@@ -154,7 +160,9 @@ def _apply_after(steps: List[StepSpec], op: StepOperation, target: Optional[Step
     return new_steps
 
 
-def _apply_before(steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+def _apply_before(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply before operation"""
     new_steps = []
     for step in steps:
@@ -164,7 +172,9 @@ def _apply_before(steps: List[StepSpec], op: StepOperation, target: Optional[Ste
     return new_steps
 
 
-def _apply_at_start(steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+def _apply_at_start(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply at_start operation"""
     new_steps = []
     _insert_steps(new_steps, op.insert)
@@ -172,14 +182,16 @@ def _apply_at_start(steps: List[StepSpec], op: StepOperation, target: Optional[S
     return new_steps
 
 
-def _apply_at_end(steps: List[StepSpec], op: StepOperation, target: Optional[StepSpec]) -> List[StepSpec]:
+def _apply_at_end(
+    steps: list[StepSpec], op: StepOperation, target: StepSpec | None
+) -> list[StepSpec]:
     """Apply at_end operation"""
     new_steps = steps.copy()
     _insert_steps(new_steps, op.insert)
     return new_steps
 
 
-def _insert_steps(target_list: List[StepSpec], steps: StepSpec) -> None:
+def _insert_steps(target_list: list[StepSpec], steps: StepSpec) -> None:
     """Insert steps as sequential or branch based on content.
 
     Args:
@@ -200,7 +212,7 @@ def _insert_steps(target_list: List[StepSpec], steps: StepSpec) -> None:
         target_list.append(steps)
 
 
-def _step_matches(step: StepSpec, target: Optional[StepSpec]) -> bool:
+def _step_matches(step: StepSpec, target: StepSpec | None) -> bool:
     """Check if a step matches the target pattern"""
     if target is None:
         return False
@@ -211,7 +223,7 @@ def _step_matches(step: StepSpec, target: Optional[StepSpec]) -> bool:
     return False
 
 
-def _validate_spec(spec: Union[str, List[Optional[str]], None]) -> Union[str, List[str]]:
+def _validate_spec(spec: str | list[str | None] | None) -> str | list[str]:
     """Validate a step specification (string or list).
 
     Dispatcher that routes to specialized validation based on type.
@@ -235,7 +247,7 @@ def _validate_spec(spec: Union[str, List[Optional[str]], None]) -> Union[str, Li
         raise ValueError(f"Invalid step specification: {spec}")
 
 
-def _validate_branch_point(options: List[Optional[str]]) -> List[str]:
+def _validate_branch_point(options: list[str | None]) -> list[str]:
     """Validate branch point specification.
 
     Branch points are lists of step options. Constraints:
@@ -265,7 +277,7 @@ def _validate_branch_point(options: List[Optional[str]]) -> List[str]:
     return normalized
 
 
-def _validate_branch_types(options: List[Optional[str]]) -> None:
+def _validate_branch_types(options: list[str | None]) -> None:
     """Validate branch point contains only valid types.
 
     Args:
@@ -281,12 +293,10 @@ def _validate_branch_types(options: List[Optional[str]]) -> None:
                 "Use double brackets [[opt1, opt2]] for branch insertion."
             )
         if not isinstance(opt, str):
-            raise ValueError(
-                f"Branch option must be string, got {type(opt).__name__}"
-            )
+            raise ValueError(f"Branch option must be string, got {type(opt).__name__}")
 
 
-def _validate_branch_constraints(normalized: List[str]) -> None:
+def _validate_branch_constraints(normalized: list[str]) -> None:
     """Validate branch point skip/non-skip ratio.
 
     Args:
@@ -303,7 +313,7 @@ def _validate_branch_constraints(normalized: List[str]) -> None:
         raise ValueError("Branch point must have at least one non-skip step")
 
 
-def _validate_step(step: Optional[str]) -> str:
+def _validate_step(step: str | None) -> str:
     """Validate a step name.
 
     Normalizes skip indicators (None, "", ~) to canonical form (~).
@@ -320,6 +330,7 @@ def _validate_step(step: Optional[str]) -> str:
     if step in SKIP_VALUES:
         return SKIP_INDICATOR
     if not has_step(step):
-        raise ValueError(f"Step '{step}' not found. Use 'brainsmith list steps' to see available steps.")
+        raise ValueError(
+            f"Step '{step}' not found. Use 'brainsmith list steps' to see available steps."
+        )
     return step
-

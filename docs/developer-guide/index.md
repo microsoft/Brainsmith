@@ -7,12 +7,12 @@ hide:
 
 Technical documentation for extending Brainsmith and understanding its architecture.
 
-## Core Documentation
+**[Hardware Kernels](hardware-kernels.md)** - What kernels are, design principles, layer-level granularity, and complete kernel examples.
 
 **[Component Registry](registry.md)** - Plugin system for registering custom kernels, backends, and pipeline steps.
 
-**[Hardware Kernels](hardware-kernels.md)** - Layer-level operations on FPGA: interfaces, architecture, and implementation patterns.
+**[Blueprint Schema](blueprint-schema.md)** - Complete YAML schema for design space configuration files.
 
-**[Blueprint Schema Reference](blueprint-schema.md)** - Complete YAML schema for design space configuration files.
+**[Dataflow Modeling](dataflow-modeling.md)** - Theoretical foundations: TENSOR/BLOCK/STREAM hierarchy, inter-kernel composition, streaming interfaces.
 
-**[Multi-Layer Offload](multi-layer-offload.md)** - Graph partitioning and heterogeneous execution strategies.
+**[Multi-Layer Offload](multi-layer-offload.md)** - Using weight streaming to implement large models (experimental).

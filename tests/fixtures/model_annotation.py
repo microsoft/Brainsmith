@@ -50,7 +50,6 @@ Supported DataTypes:
 
 import re
 import warnings
-from typing import Dict, Optional
 
 import numpy as np
 import onnx.helper as oh
@@ -61,7 +60,6 @@ from qonnx.custom_op.general.floatquant import compute_max_val
 
 from .constants import ANNOTATION_WARNING_STACKLEVEL, QUANT_FULL_RANGE, QUANT_ROUNDING_MODE
 
-
 # ============================================================================
 # Direct Annotation (v2.3 Standard)
 # ============================================================================
@@ -69,7 +67,7 @@ from .constants import ANNOTATION_WARNING_STACKLEVEL, QUANT_FULL_RANGE, QUANT_RO
 
 def annotate_model_datatypes(
     model: ModelWrapper,
-    tensor_datatypes: Dict[str, DataType],
+    tensor_datatypes: dict[str, DataType],
     warn_unsupported: bool = True,
 ) -> ModelWrapper:
     """Set QONNX DataType annotations directly on tensors (no Quant nodes).
@@ -110,8 +108,8 @@ def annotate_model_datatypes(
 
 def annotate_inputs_and_outputs(
     model: ModelWrapper,
-    input_datatypes: Dict[str, DataType],
-    output_datatype: Optional[DataType] = None,
+    input_datatypes: dict[str, DataType],
+    output_datatype: DataType | None = None,
     warn_unsupported: bool = True,
 ) -> ModelWrapper:
     """Annotate model inputs and optionally outputs with DataTypes.
@@ -187,7 +185,7 @@ def _check_datatype_support(dtype: DataType) -> None:
 
 
 def insert_input_quant_nodes(
-    model: ModelWrapper, input_datatypes: Dict[str, DataType]
+    model: ModelWrapper, input_datatypes: dict[str, DataType]
 ) -> ModelWrapper:
     """Insert IntQuant/FloatQuant/BipolarQuant nodes before model inputs.
 
@@ -237,9 +235,7 @@ def insert_input_quant_nodes(
     return model
 
 
-def _insert_int_quant(
-    model: ModelWrapper, input_name: str, datatype: DataType
-) -> None:
+def _insert_int_quant(model: ModelWrapper, input_name: str, datatype: DataType) -> None:
     """Insert IntQuant node for INT*/UINT*/BINARY types.
 
     Args:
@@ -284,9 +280,7 @@ def _insert_int_quant(
     model.set_tensor_datatype(input_name, datatype)
 
 
-def _insert_float_quant(
-    model: ModelWrapper, input_name: str, datatype: ArbPrecFloatType
-) -> None:
+def _insert_float_quant(model: ModelWrapper, input_name: str, datatype: ArbPrecFloatType) -> None:
     """Insert FloatQuant node for FLOAT<exp,mant,bias> types.
 
     Args:
@@ -314,9 +308,7 @@ def _insert_float_quant(
     model.set_initializer(exp_bitwidth_name, np.array(float(exp_bitwidth), dtype=np.float32))
 
     mant_bitwidth_name = model.make_new_valueinfo_name()
-    model.set_initializer(
-        mant_bitwidth_name, np.array(float(mant_bitwidth), dtype=np.float32)
-    )
+    model.set_initializer(mant_bitwidth_name, np.array(float(mant_bitwidth), dtype=np.float32))
 
     bias_name = model.make_new_valueinfo_name()
     model.set_initializer(bias_name, np.array(float(exp_bias), dtype=np.float32))

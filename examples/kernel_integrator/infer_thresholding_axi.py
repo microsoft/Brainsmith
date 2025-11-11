@@ -11,18 +11,12 @@ Matches the behavior of InferThresholdingLayer but targets the auto-generated
 ThresholdingAxi RTL implementation.
 """
 
-import numpy as np
-from typing import Dict, Any
-from onnx import NodeProto, helper
-
-from onnx import NodeProto
+import qonnx.core.data_layout as DataLayout
+from onnx import helper
 from qonnx.core.datatype import DataType
-from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.custom_op.registry import getCustomOp
 from qonnx.transformation.base import Transformation
 from qonnx.util.onnx import nchw_to_nhwc
-import qonnx.core.data_layout as DataLayout
-from qonnx.core.datatype import DataType
 
 
 # QONNX wrapper to ONNX model graphs
@@ -43,7 +37,7 @@ class InferThresholdingAxi(Transformation):
                 thl_threshold = node.input[1]
                 thl_output = node.output[0]
                 thl_in_shape = model.get_tensor_shape(thl_input)
-                thl_thres_shape = model.get_tensor_shape(thl_threshold)
+                model.get_tensor_shape(thl_threshold)
                 idt = model.get_tensor_datatype(thl_input)
                 tdt = model.get_tensor_datatype(thl_threshold)
 
@@ -107,4 +101,3 @@ class InferThresholdingAxi(Transformation):
                 graph_modified = True
 
         return (model, graph_modified)
-

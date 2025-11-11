@@ -8,14 +8,13 @@ Handles parsing of kernel specifications and backend resolution.
 """
 
 import logging
-from typing import List, Tuple, Type, Union
 
-from brainsmith.registry import list_backends_for_kernel, get_backend
+from brainsmith.registry import get_backend, list_backends_for_kernel
 
 logger = logging.getLogger(__name__)
 
 
-def parse_kernels(kernels_data: List[Union[str, dict]]) -> List[Tuple[str, List[Type]]]:
+def parse_kernels(kernels_data: list[str | dict]) -> list[tuple[str, list[type]]]:
     """Parse kernels section with optional backend specification.
 
     Supports two formats:
@@ -95,7 +94,7 @@ def parse_kernels(kernels_data: List[Union[str, dict]]) -> List[Tuple[str, List[
     return kernel_backends
 
 
-def _resolve_all_backends(kernel_name: str) -> List[Type]:
+def _resolve_all_backends(kernel_name: str) -> list[type]:
     """Get all registered backends for a kernel.
 
     Args:
@@ -116,17 +115,15 @@ def _resolve_all_backends(kernel_name: str) -> List[Type]:
     try:
         backend_classes = [get_backend(name) for name in backend_names]
     except KeyError as e:
-        raise ValueError(
-            f"Backend not found for kernel '{kernel_name}': {e}"
-        ) from e
+        raise ValueError(f"Backend not found for kernel '{kernel_name}': {e}") from e
 
     # Sort backends: RTL first, then HLS, then others
-    def backend_sort_key(backend_class: Type) -> tuple:
+    def backend_sort_key(backend_class: type) -> tuple:
         """Sort key: (priority, class_name) where lower priority comes first."""
         class_name = backend_class.__name__.lower()
-        if class_name.endswith('_rtl'):
+        if class_name.endswith("_rtl"):
             priority = 0  # RTL first
-        elif class_name.endswith('_hls'):
+        elif class_name.endswith("_hls"):
             priority = 1  # HLS second
         else:
             priority = 2  # Others last
@@ -137,7 +134,7 @@ def _resolve_all_backends(kernel_name: str) -> List[Type]:
     return backend_classes
 
 
-def _resolve_specified_backends(kernel_name: str, backend_spec: List[str]) -> List[Type]:
+def _resolve_specified_backends(kernel_name: str, backend_spec: list[str]) -> list[type]:
     """Resolve explicitly specified backends for a kernel.
 
     Accepts both class names (e.g., 'MVAU_rtl') and full registry names
@@ -182,7 +179,7 @@ def _resolve_specified_backends(kernel_name: str, backend_spec: List[str]) -> Li
     return backend_classes
 
 
-def _resolve_backend_name(kernel_name: str, backend_name: str) -> Type:
+def _resolve_backend_name(kernel_name: str, backend_name: str) -> type:
     """Resolve a backend name to its class.
 
     Supports two formats:
@@ -200,7 +197,7 @@ def _resolve_backend_name(kernel_name: str, backend_name: str) -> Type:
         ValueError: If backend not found or doesn't match kernel
     """
     # If backend_name contains ':', it's a full registry name
-    if ':' in backend_name:
+    if ":" in backend_name:
         try:
             backend_class = get_backend(backend_name)
         except KeyError:
@@ -216,13 +213,13 @@ def _resolve_backend_name(kernel_name: str, backend_name: str) -> Type:
         matching_backend = None
         for full_name in all_backend_names:
             # Extract class name from registry name (e.g., 'brainsmith:MVAU_rtl' → 'MVAU_rtl')
-            class_name = full_name.split(':')[-1]
+            class_name = full_name.split(":")[-1]
             if class_name.lower() == backend_name.lower():
                 matching_backend = full_name
                 break
 
         if matching_backend is None:
-            available = [name.split(':')[-1] for name in all_backend_names]
+            available = [name.split(":")[-1] for name in all_backend_names]
             raise ValueError(
                 f"Backend '{backend_name}' not found for kernel '{kernel_name}'.\n"
                 f"Available backends for {kernel_name}: {available}"
@@ -241,7 +238,9 @@ def _resolve_backend_name(kernel_name: str, backend_name: str) -> Type:
     return backend_class
 
 
-def _validate_backend_kernel_match(kernel_name: str, backend_name: str, backend_class: Type) -> None:
+def _validate_backend_kernel_match(
+    kernel_name: str, backend_name: str, backend_class: type
+) -> None:
     """Validate that a backend implements the expected kernel.
 
     Args:
@@ -253,15 +252,15 @@ def _validate_backend_kernel_match(kernel_name: str, backend_name: str, backend_
         ValueError: If backend doesn't implement the kernel
     """
     # Strip namespace from kernel_name if present (e.g., 'finn:MVAU' → 'MVAU')
-    expected_kernel = kernel_name.split(':')[-1]
+    expected_kernel = kernel_name.split(":")[-1]
 
     # Get the backend's target kernel from its class name
     # Backend class names follow pattern: KernelName_backend (e.g., MVAU_rtl, LayerNorm_hls)
     backend_class_name = backend_class.__name__
 
     # Extract kernel part (everything before last underscore for _hls/_rtl)
-    if '_' in backend_class_name:
-        backend_kernel = backend_class_name.rsplit('_', 1)[0]
+    if "_" in backend_class_name:
+        backend_kernel = backend_class_name.rsplit("_", 1)[0]
     else:
         backend_kernel = backend_class_name
 

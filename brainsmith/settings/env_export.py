@@ -11,7 +11,7 @@ runtime expects environment to be sourced via shell scripts before Python starts
 import os
 import platform
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .schema import SystemConfig
@@ -36,11 +36,11 @@ class EnvironmentExporter:
         >>> print(env_dict['FINN_ROOT'])
     """
 
-    def __init__(self, config: 'SystemConfig'):
+    def __init__(self, config: "SystemConfig"):
         """Initialize with system configuration."""
         self.config = config
 
-    def to_external_dict(self) -> Dict[str, str]:
+    def to_external_dict(self) -> dict[str, str]:
         """Generate dict of external tool environment variables.
 
         Returns variables for external tools (FINN, Xilinx, etc.).
@@ -91,7 +91,7 @@ class EnvironmentExporter:
 
         return env
 
-    def to_all_dict(self) -> Dict[str, str]:
+    def to_all_dict(self) -> dict[str, str]:
         """Generate dict of all environment variables.
 
         Includes both external tool variables and internal BSMITH_* variables.
@@ -101,17 +101,14 @@ class EnvironmentExporter:
         """
         env_dict = self.to_external_dict()
 
-        env_dict['BSMITH_BUILD_DIR'] = str(self.config.build_dir)
-        env_dict['BSMITH_DEPS_DIR'] = str(self.config.deps_dir)
-        env_dict['BSMITH_DIR'] = str(self.config.bsmith_dir)
-        env_dict['BSMITH_PROJECT_DIR'] = str(self.config.project_dir)
+        env_dict["BSMITH_BUILD_DIR"] = str(self.config.build_dir)
+        env_dict["BSMITH_DEPS_DIR"] = str(self.config.deps_dir)
+        env_dict["BSMITH_DIR"] = str(self.config.bsmith_dir)
+        env_dict["BSMITH_PROJECT_DIR"] = str(self.config.project_dir)
 
         return env_dict
 
-    def to_env_dict(
-        self,
-        include_internal: bool = True
-    ) -> Dict[str, str]:
+    def to_env_dict(self, include_internal: bool = True) -> dict[str, str]:
         """Generate complete environment for shell script generation.
 
         Includes PATH, LD_LIBRARY_PATH, and all configuration variables.
@@ -131,9 +128,7 @@ class EnvironmentExporter:
         path_components = os.environ.get("PATH", "").split(":")
 
         new_paths = [
-            str(p)
-            for p in self._collect_path_additions()
-            if str(p) not in path_components
+            str(p) for p in self._collect_path_additions() if str(p) not in path_components
         ]
 
         env_dict["PATH"] = ":".join(path_components + new_paths)

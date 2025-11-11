@@ -14,7 +14,6 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from typing import Dict, List
 from urllib.request import urlretrieve
 
 logger = logging.getLogger(__name__)
@@ -23,31 +22,37 @@ logger = logging.getLogger(__name__)
 # Custom exceptions for better error handling
 class DependencyError(Exception):
     """Base exception for dependency operations."""
+
     pass
 
 
 class UnknownDependencyError(DependencyError):
     """Requested dependency not found in registry."""
+
     pass
 
 
 class InstallationError(DependencyError):
     """Dependency installation failed."""
+
     pass
 
 
 class BuildError(DependencyError):
     """Dependency build failed."""
+
     pass
 
 
 class RequirementError(DependencyError):
     """Required tool or dependency missing."""
+
     pass
 
 
 class RemovalError(DependencyError):
     """Dependency removal failed."""
+
     pass
 
 
@@ -72,14 +77,7 @@ def _remove_directory(name: str, dest: Path, quiet: bool) -> None:
 class GitDependencyInstaller:
     """Installer for git-based dependencies."""
 
-    def install(
-        self,
-        name: str,
-        dep: Dict,
-        dest: Path,
-        force: bool,
-        quiet: bool
-    ) -> None:
+    def install(self, name: str, dep: dict, dest: Path, force: bool, quiet: bool) -> None:
         """Clone git repository.
 
         Args:
@@ -98,15 +96,15 @@ class GitDependencyInstaller:
         if dest.exists():
             shutil.rmtree(dest)
 
-        cmd = ['git', 'clone', '--quiet']
+        cmd = ["git", "clone", "--quiet"]
 
-        if 'sparse_dirs' in dep:
-            cmd.extend(['--filter=blob:none', '--sparse'])
+        if "sparse_dirs" in dep:
+            cmd.extend(["--filter=blob:none", "--sparse"])
 
-        cmd.extend([dep['url'], str(dest)])
+        cmd.extend([dep["url"], str(dest)])
 
         if not quiet:
-            logger.info("Cloning %s from %s", name, dep['url'])
+            logger.info("Cloning %s from %s", name, dep["url"])
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
@@ -114,30 +112,27 @@ class GitDependencyInstaller:
             logger.error(error_msg)
             raise InstallationError(error_msg)
 
-        if 'ref' in dep:
+        if "ref" in dep:
             subprocess.run(
-                ['git', '-C', str(dest), 'fetch', '--quiet', 'origin', dep['ref']],
-                capture_output=True
+                ["git", "-C", str(dest), "fetch", "--quiet", "origin", dep["ref"]],
+                capture_output=True,
             )
 
             result = subprocess.run(
-                ['git', '-C', str(dest), 'checkout', '--quiet', dep['ref']],
+                ["git", "-C", str(dest), "checkout", "--quiet", dep["ref"]],
                 capture_output=True,
-                text=True
+                text=True,
             )
             if result.returncode != 0:
                 error_msg = f"Failed to checkout {dep['ref']} for {name}: {result.stderr}"
                 logger.error(error_msg)
                 raise InstallationError(error_msg)
 
-        if 'sparse_dirs' in dep:
+        if "sparse_dirs" in dep:
+            subprocess.run(["git", "-C", str(dest), "sparse-checkout", "init"], capture_output=True)
             subprocess.run(
-                ['git', '-C', str(dest), 'sparse-checkout', 'init'],
-                capture_output=True
-            )
-            subprocess.run(
-                ['git', '-C', str(dest), 'sparse-checkout', 'set'] + dep['sparse_dirs'],
-                capture_output=True
+                ["git", "-C", str(dest), "sparse-checkout", "set"] + dep["sparse_dirs"],
+                capture_output=True,
             )
 
     def remove(self, name: str, dest: Path, quiet: bool) -> None:
@@ -151,14 +146,7 @@ class ZipDependencyInstaller:
     def __init__(self, temp_dir: Path | None = None):
         self.temp_dir = temp_dir
 
-    def install(
-        self,
-        name: str,
-        dep: Dict,
-        dest: Path,
-        force: bool,
-        quiet: bool
-    ) -> None:
+    def install(self, name: str, dep: dict, dest: Path, force: bool, quiet: bool) -> None:
         """Download and extract zip file.
 
         Args:
@@ -182,9 +170,9 @@ class ZipDependencyInstaller:
 
         try:
             if not quiet:
-                logger.info("Downloading %s from %s", name, dep['url'])
+                logger.info("Downloading %s from %s", name, dep["url"])
 
-            urlretrieve(dep['url'], zip_path)
+            urlretrieve(dep["url"], zip_path)
 
             dest.mkdir(parents=True, exist_ok=True)
 
@@ -208,14 +196,7 @@ class ZipDependencyInstaller:
 class BuildDependencyInstaller:
     """Installer for build-based dependencies."""
 
-    def install(
-        self,
-        name: str,
-        dep: Dict,
-        dest: Path,
-        force: bool,
-        quiet: bool
-    ) -> None:
+    def install(self, name: str, dep: dict, dest: Path, force: bool, quiet: bool) -> None:
         """Build a local dependency.
 
         Args:
@@ -225,7 +206,7 @@ class BuildDependencyInstaller:
             BuildError: If build fails
         """
         # Special handling for finn-xsim
-        if name == 'finn-xsim':
+        if name == "finn-xsim":
             self._install_finn_xsim(force, quiet)
         else:
             self._install_generic_build(name, dep, force, quiet)
@@ -239,9 +220,10 @@ class BuildDependencyInstaller:
         # Check if FINN package is available
         try:
             import finn
+
             # Check if already built
             finn_root = Path(finn.__file__).parent.parent.parent
-            output_file = finn_root / 'finn_xsi' / 'xsi.so'
+            output_file = finn_root / "finn_xsi" / "xsi.so"
 
             if output_file.exists() and not force:
                 if not quiet:
@@ -255,6 +237,7 @@ class BuildDependencyInstaller:
 
         # Get Vivado settings path from config
         from brainsmith.settings import get_config
+
         config = get_config()
         vivado_path = config.vivado_path
 
@@ -274,22 +257,18 @@ class BuildDependencyInstaller:
             logger.info("Building finn-xsim...")
 
         # Construct build command
-        build_cmd = ['python3', '-m', 'finn.xsi.setup']
+        build_cmd = ["python3", "-m", "finn.xsi.setup"]
         if force:
-            build_cmd.append('--force')
+            build_cmd.append("--force")
 
         # Build bash command that sources Vivado settings
-        python_cmd = ' '.join(build_cmd)
+        python_cmd = " ".join(build_cmd)
         bash_cmd = f"source {settings_script} && {python_cmd}"
 
         logger.info("Running: %s", bash_cmd)
 
         # Execute build
-        result = subprocess.run(
-            ['bash', '-c', bash_cmd],
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(["bash", "-c", bash_cmd], capture_output=True, text=True)
 
         # Log output at INFO level (visible with --logs info)
         if result.stdout:
@@ -320,13 +299,7 @@ class BuildDependencyInstaller:
             logger.error(error_msg)
             raise BuildError(error_msg)
 
-    def _install_generic_build(
-        self,
-        name: str,
-        dep: Dict,
-        force: bool,
-        quiet: bool
-    ) -> None:
+    def _install_generic_build(self, name: str, dep: dict, force: bool, quiet: bool) -> None:
         """Install generic build dependency.
 
         Args:
@@ -337,11 +310,14 @@ class BuildDependencyInstaller:
         """
         # Get deps_dir from config
         from brainsmith.settings import get_config
+
         deps_dir = get_config().deps_dir
 
-        source_dir = Path(deps_dir) / dep['source']
+        source_dir = Path(deps_dir) / dep["source"]
         if not source_dir.exists():
-            error_msg = f"Source directory not found: {source_dir}. Install source dependency first."
+            error_msg = (
+                f"Source directory not found: {source_dir}. Install source dependency first."
+            )
             logger.error(error_msg)
             raise BuildError(error_msg)
 
@@ -351,11 +327,7 @@ class BuildDependencyInstaller:
         # Run build command
         env = os.environ.copy()
         result = subprocess.run(
-            dep['build_cmd'],
-            cwd=source_dir,
-            capture_output=True,
-            text=True,
-            env=env
+            dep["build_cmd"], cwd=source_dir, capture_output=True, text=True, env=env
         )
 
         # Log output
@@ -383,11 +355,12 @@ class BuildDependencyInstaller:
 
     def remove(self, name: str, dest: Path, quiet: bool) -> None:
         # Special handling for finn-xsim
-        if name == 'finn-xsim':
+        if name == "finn-xsim":
             try:
                 import finn
+
                 finn_root = Path(finn.__file__).parent.parent.parent
-                output_file = finn_root / 'finn_xsi' / 'xsi.so'
+                output_file = finn_root / "finn_xsi" / "xsi.so"
 
                 if not output_file.exists():
                     if not quiet:
@@ -398,12 +371,8 @@ class BuildDependencyInstaller:
                 if not quiet:
                     logger.info("Cleaning finn-xsim...")
 
-                clean_cmd = ['python3', '-m', 'finn.xsi.setup', '--clean']
-                result = subprocess.run(
-                    clean_cmd,
-                    capture_output=True,
-                    text=True
-                )
+                clean_cmd = ["python3", "-m", "finn.xsi.setup", "--clean"]
+                result = subprocess.run(clean_cmd, capture_output=True, text=True)
 
                 if result.returncode != 0:
                     # Try manual removal as fallback

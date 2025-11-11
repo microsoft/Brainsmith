@@ -8,13 +8,13 @@ from pathlib import Path
 
 import click
 
-from .context import ApplicationContext
-from .utils import console
 from .constants import (
     CLI_NAME_BRAINSMITH,
     CLI_NAME_SMITH,
     ExitCode,
 )
+from .context import ApplicationContext
+from .utils import console
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,9 @@ def _version_callback(ctx, param, value):
     if not value:
         return
     import importlib.metadata
+
     from .messages import PACKAGE_NAME
+
     version = importlib.metadata.version(PACKAGE_NAME)
     console.print(f"[bold]{CLI_NAME_BRAINSMITH}[/bold], version {version}")
     ctx.exit()
@@ -40,7 +42,7 @@ def _should_skip_environment_validation() -> bool:
     args = sys.argv[1:]  # Skip program name
 
     # project init - creates environment files
-    if len(args) >= 2 and args[0] == 'project' and args[1] == 'init':
+    if len(args) >= 2 and args[0] == "project" and args[1] == "init":
         return True
 
     # Future: add other bootstrap commands here if needed
@@ -66,6 +68,7 @@ class LazyGroup(click.Group):
 
         if name in self.lazy_commands:
             from importlib import import_module
+
             module_path, attr_name = self.lazy_commands[name]
             module = import_module(module_path)
             return getattr(module, attr_name)
@@ -97,7 +100,7 @@ def _create_smith_subcommand() -> click.Command:
 
 def create_cli(name: str, include_admin: bool = True) -> click.Group:
     # Import command maps from single source of truth
-    from brainsmith.cli.commands import OPERATIONAL_COMMAND_MAP, ADMIN_COMMAND_MAP
+    from brainsmith.cli.commands import ADMIN_COMMAND_MAP, OPERATIONAL_COMMAND_MAP
 
     lazy_commands = {}
     if name == CLI_NAME_SMITH:
@@ -112,7 +115,7 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         build_dir: Path | None,
         config: Path | None,
         log_level: str,
-        no_progress: bool
+        no_progress: bool,
     ) -> None:
         # Bootstrap commands (like project init) don't need environment or config
         skip_bootstrap = _should_skip_environment_validation()
@@ -120,6 +123,7 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         if not skip_bootstrap:
             # Validate environment is sourced
             from brainsmith.settings.validation import ensure_environment_sourced
+
             ensure_environment_sourced()
 
             # Create ApplicationContext (loads config)
@@ -128,7 +132,7 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
                 build_dir_override=build_dir,
                 log_level=log_level,
                 no_progress=no_progress,
-                cli_name=name
+                cli_name=name,
             )
 
     # Create the lazy group
@@ -136,40 +140,46 @@ def create_cli(name: str, include_admin: bool = True) -> click.Group:
         name=name,
         callback=callback,
         context_settings={"help_option_names": ["-h", "--help"]},
-        lazy_commands=lazy_commands
+        lazy_commands=lazy_commands,
     )
 
-    cli.params.append(click.Option(
-        ["-b", "--build-dir"],
-        type=click.Path(path_type=Path),
-        help="Override build directory"
-    ))
-    cli.params.append(click.Option(
-        ["-c", "--config"],
-        type=click.Path(exists=True, path_type=Path),
-        help="Override configuration file"
-    ))
-    cli.params.append(click.Option(
-        ["-l", "--log-level"],
-        type=click.Choice(["quiet", "normal", "verbose", "debug"]),
-        default="normal",
-        metavar="LEVEL",
-        help="Set log verbosity (quiet|normal|verbose|debug)"
-    ))
-    cli.params.append(click.Option(
-        ["--no-progress"],
-        is_flag=True,
-        help="Disable progress spinners and animations"
-    ))
+    cli.params.append(
+        click.Option(
+            ["-b", "--build-dir"], type=click.Path(path_type=Path), help="Override build directory"
+        )
+    )
+    cli.params.append(
+        click.Option(
+            ["-c", "--config"],
+            type=click.Path(exists=True, path_type=Path),
+            help="Override configuration file",
+        )
+    )
+    cli.params.append(
+        click.Option(
+            ["-l", "--log-level"],
+            type=click.Choice(["quiet", "normal", "verbose", "debug"]),
+            default="normal",
+            metavar="LEVEL",
+            help="Set log verbosity (quiet|normal|verbose|debug)",
+        )
+    )
+    cli.params.append(
+        click.Option(
+            ["--no-progress"], is_flag=True, help="Disable progress spinners and animations"
+        )
+    )
 
-    cli.params.append(click.Option(
-        ["--version"],
-        is_flag=True,
-        expose_value=False,
-        is_eager=True,
-        callback=_version_callback,
-        help="Show the version and exit."
-    ))
+    cli.params.append(
+        click.Option(
+            ["--version"],
+            is_flag=True,
+            expose_value=False,
+            is_eager=True,
+            callback=_version_callback,
+            help="Show the version and exit.",
+        )
+    )
 
     if name == CLI_NAME_SMITH:
         cli.help = """Smith - Create hardware designs and components.

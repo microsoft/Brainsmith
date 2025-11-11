@@ -13,7 +13,6 @@ cd brainsmith
 
 ```
 
----
 
 ### (Option A): Local Development with Poetry
 
@@ -47,7 +46,6 @@ Query project settings to confirm your configuration is loaded correctly
 brainsmith project info
 ```
 
----
 
 ### (Option B): Docker-based Development
 
@@ -80,7 +78,6 @@ Or send one-off commands to the container
 ./ctl-docker.sh "brainsmith project info"
 ```
 
----
 
 ## Command-Line Interface
 
@@ -100,7 +97,6 @@ brainsmith setup cppsim                # Setup C++ simulation
 
 All commands support `--help` for details. See [CLI Reference](api/cli.md) for complete documentation.
 
----
 
 ## Project Management
 
@@ -108,7 +104,6 @@ Brainsmith operates from a single poetry `venv` from the repository root, but
 you can create isolated workspaces via the *project* system with independent
 configurations, build directories, and component registries.
 
----
 
 ### Creating Projects
 
@@ -140,7 +135,6 @@ Otherwise, refresh env after any config changes:
 source .brainsmith/env.sh
 ```
 
----
 
 ### Configuration
 
@@ -195,11 +189,9 @@ Additional configuration fields (FINN settings, direct Xilinx tool paths, etc.) 
 let auto-configure from the core brainsmith fields.
 
 
----
 
 ## Running Design Space Exploration
 
----
 
 ### Prerequisites
 
@@ -214,7 +206,6 @@ source .venv/bin/activate && source .brainsmith/env.sh
 ```
 
 
----
 
 ### Run Your First DSE
 
@@ -265,7 +256,6 @@ PyTorch → ONNX → Hardware Kernels → HLS/RTL → IP Cores → Bitfile
 
 Check `build/quicktest/brainsmith.log` for detailed progress and diagnostics.
 
----
 
 ### Explore Results
 
@@ -311,7 +301,6 @@ The generated RTL is in `final_output/stitched_ip/`:
 - Individual kernel implementations (e.g., `MVAU_hls_*.v`, `Thresholding_rtl_*.v`)
 - Stream infrastructure (FIFOs, width converters, etc.)
 
----
 
 ### Customize the Design
 
@@ -368,7 +357,6 @@ python bert_demo.py -o bert_demo_output -l 4 --blueprint bert_demo.yaml
 
 This creates a more realistic accelerator but takes significantly longer to build.
 
----
 
 ### Understanding Blueprints
 
@@ -391,13 +379,13 @@ finn_config:
   fifosim_n_inferences: 2           # Faster FIFO sizing
 ```
 
----
 
 ## Getting Help
 
 **Build logs:** Check `<output_dir>/brainsmith.log` for detailed error messages and transformation steps.
 
 **Resources:**
+
 - [GitHub Issues](https://github.com/microsoft/brainsmith/issues) - Report bugs or search existing issues
 - [GitHub Discussions](https://github.com/microsoft/brainsmith/discussions) - Ask questions and share experiences
 

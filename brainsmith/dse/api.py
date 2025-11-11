@@ -10,18 +10,21 @@ into FPGA accelerators through blueprint-driven design space exploration.
 
 from __future__ import annotations
 
-import os
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
-from brainsmith.dse._parser import parse_blueprint
-from brainsmith.dse._builder import DSETreeBuilder
-from brainsmith.dse.tree import DSETree
-from brainsmith.dse.runner import SegmentRunner
 from brainsmith._internal.finn.adapter import FINNAdapter
+from brainsmith.dse._builder import DSETreeBuilder
+from brainsmith.dse._parser import parse_blueprint
+from brainsmith.dse.runner import SegmentRunner
+from brainsmith.dse.tree import DSETree
 from brainsmith.dse.types import TreeExecutionResult
+
+if TYPE_CHECKING:
+    from brainsmith.dse.config import DSEConfig
+    from brainsmith.dse.design_space import GlobalDesignSpace
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +32,10 @@ logger = logging.getLogger(__name__)
 def explore_design_space(
     model_path: str,
     blueprint_path: str,
-    output_dir: Optional[str] = None,
-    start_step_override: Optional[str] = None,
-    stop_step_override: Optional[str] = None,
-    verbosity: str = "normal"
+    output_dir: str | None = None,
+    start_step_override: str | None = None,
+    stop_step_override: str | None = None,
+    verbosity: str = "normal",
 ) -> TreeExecutionResult:
     """
     Explore design space and synthesize FPGA accelerator from neural network model.
@@ -63,6 +66,7 @@ def explore_design_space(
 
     # Load config early to ensure BSMITH_* vars are exported for YAML expansion
     from brainsmith.settings import get_config
+
     get_config()  # Exports BSMITH_DIR and other env vars
 
     # Determine output directory
@@ -76,10 +80,11 @@ def explore_design_space(
 
     # Configure logging with output directory for file logging
     from brainsmith._internal.logging import setup_logging
+
     config = get_config()
     setup_logging(level=verbosity, output_dir=output_path, config=config.logging)
 
-    logger.info(f"Exploring design space for dataflow accelerator:")
+    logger.info("Exploring design space for dataflow accelerator:")
     logger.info(f"    Model: {model_path}")
     logger.info(f"    Blueprint: {blueprint_path}")
     logger.info(f"    Output: {output_dir}")
@@ -89,19 +94,21 @@ def explore_design_space(
         blueprint_path,
         str(Path(model_path).absolute()),
         start_step=start_step_override,
-        stop_step=stop_step_override
+        stop_step=stop_step_override,
     )
 
     # Build DSE tree
     tree_builder = DSETreeBuilder()
     tree = tree_builder.build_tree(design_space, blueprint_config)
 
-    logger.debug(f"Design space: {len(design_space.steps)} steps, "
-                 f"{len(design_space.kernel_backends)} kernels")
+    logger.debug(
+        f"Design space: {len(design_space.steps)} steps, "
+        f"{len(design_space.kernel_backends)} kernels"
+    )
 
     # Log tree statistics
     stats = tree.get_statistics()
-    logger.debug(f"DSE tree:")
+    logger.debug("DSE tree:")
     logger.debug(f"  - Total paths: {stats['total_paths']:,}")
     logger.debug(f"  - Total segments: {stats['total_segments']:,}")
     logger.debug(f"  - Segment efficiency: {stats['segment_efficiency']}%")
@@ -110,9 +117,7 @@ def explore_design_space(
     finn_adapter = FINNAdapter()
     runner = SegmentRunner(finn_adapter, tree.root.finn_config)
     results = runner.run_tree(
-        tree=tree,
-        initial_model=Path(model_path),
-        output_dir=Path(output_dir)
+        tree=tree, initial_model=Path(model_path), output_dir=Path(output_dir)
     )
 
     # Validate results
@@ -129,14 +134,11 @@ def explore_design_space(
         segment_results=results.segment_results,
         total_time=results.total_time,
         design_space=design_space,
-        dse_tree=tree
+        dse_tree=tree,
     )
 
 
-def build_tree(
-    design_space: GlobalDesignSpace,
-    config: DSEConfig
-) -> DSETree:
+def build_tree(design_space: GlobalDesignSpace, config: DSEConfig) -> DSETree:
     """Build execution tree from design space.
 
     Separates tree construction from execution for inspection and validation.
@@ -160,7 +162,7 @@ def execute_tree(
     model_path: str,
     config: DSEConfig,
     output_dir: str,
-    runner: Optional[SegmentRunner] = None
+    runner: SegmentRunner | None = None,
 ) -> TreeExecutionResult:
     """Execute a pre-built DSE tree.
 
@@ -188,11 +190,7 @@ def execute_tree(
         runner = SegmentRunner(finn_adapter, tree.root.finn_config)
 
     # Execute tree
-    results = runner.run_tree(
-        tree=tree,
-        initial_model=Path(model_path),
-        output_dir=output_path
-    )
+    results = runner.run_tree(tree=tree, initial_model=Path(model_path), output_dir=output_path)
 
     # Validate results
     results.validate_success(output_path)
@@ -202,7 +200,5 @@ def execute_tree(
         segment_results=results.segment_results,
         total_time=results.total_time,
         design_space=None,  # Not available in this path
-        dse_tree=tree
+        dse_tree=tree,
     )
-
-

@@ -10,18 +10,16 @@ Provides standardized functions for:
 - User messaging (success, warning, tips)
 """
 
-import logging
-import os
 import sys
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import NoReturn, Iterator
+from typing import NoReturn
 
 from rich.console import Console
-from rich.logging import RichHandler
-from rich.progress import Progress, SpinnerColumn, TextColumn, TaskID
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn
 
-from .constants import ENV_QUIET, ExitCode
+from .constants import ExitCode
 
 console = Console()
 
@@ -67,7 +65,7 @@ def progress_spinner(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console,
-        transient=transient
+        transient=transient,
     ) as progress:
         task = progress.add_task(description, total=None)
         try:
@@ -78,10 +76,7 @@ def progress_spinner(
 
 def show_panel(title: str, content: str, border_style: str = "blue") -> None:
     """Display a bordered panel with title and content."""
-    console.print(Panel.fit(
-        f"[bold]{title}[/bold]\n{content}",
-        border_style=border_style
-    ))
+    console.print(Panel.fit(f"[bold]{title}[/bold]\n{content}", border_style=border_style))
 
 
 def format_status(status: str, is_success: bool) -> str:

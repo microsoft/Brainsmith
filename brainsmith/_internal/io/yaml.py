@@ -67,10 +67,7 @@ def expand_env_vars(data: Any) -> Any:
 
 
 def dump_yaml(
-    data: dict[str, Any],
-    file_path: str | Path,
-    add_copyright: bool = False,
-    **kwargs
+    data: dict[str, Any], file_path: str | Path, add_copyright: bool = False, **kwargs
 ) -> None:
     """Write YAML file with blueprint-compatible formatting.
 
@@ -106,17 +103,17 @@ def dump_yaml(
 
     # Blueprint-compatible defaults
     default_kwargs = {
-        'default_flow_style': False,  # Lists as '- item' not '[item1, item2]'
-        'sort_keys': False,            # Preserve dict insertion order
-        'allow_unicode': True,         # Support unicode characters
-        'width': 80,                   # Line wrap at 80 characters
-        'indent': 2,                   # 2-space indentation (YAML standard)
-        'explicit_start': False,       # No '---' document marker
-        'explicit_end': False,         # No '...' document marker
+        "default_flow_style": False,  # Lists as '- item' not '[item1, item2]'
+        "sort_keys": False,  # Preserve dict insertion order
+        "allow_unicode": True,  # Support unicode characters
+        "width": 80,  # Line wrap at 80 characters
+        "indent": 2,  # 2-space indentation (YAML standard)
+        "explicit_start": False,  # No '---' document marker
+        "explicit_end": False,  # No '...' document marker
     }
     default_kwargs.update(kwargs)
 
-    with open(file_path, 'w') as f:
+    with open(file_path, "w") as f:
         # Add copyright header if requested
         if add_copyright:
             f.write("# Copyright (c) Microsoft Corporation.\n")

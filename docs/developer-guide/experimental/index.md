@@ -43,7 +43,6 @@ Understand how dataflow architectures work: von Neumann vs dataflow execution, A
 
 **Key concepts**: Layer-level parallelism, streaming interfaces, on-chip memory, pipeline execution
 
----
 
 ### 2. Core Systems
 
@@ -73,7 +72,6 @@ Understand Brainsmith's extensibility foundation: component discovery, lazy load
 
 **Key concepts**: Plugin architecture, entry points, discovery system, source classification
 
----
 
 ### 3. Reference
 
@@ -103,7 +101,6 @@ Comprehensive CLI reference covering both `brainsmith` and `smith` commands: con
 
 **Use when**: Running Brainsmith commands, setting up projects, managing configuration
 
----
 
 ## Common Workflows
 
@@ -149,7 +146,6 @@ smith dfc model.onnx blueprint.yaml --output rtl
 smith dfc model.onnx blueprint.yaml --output bitfile
 ```
 
----
 
 ## How to Navigate This Guide
 

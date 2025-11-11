@@ -4,21 +4,21 @@ Ported from OLD_FOR_REFERENCE_ONLY/fixtures/model_utils.py
 Real ONNX models - no mocks.
 """
 
-import onnx
-from onnx import helper, TensorProto
-import numpy as np
 from pathlib import Path
-from typing import List
+
+import numpy as np
+import onnx
 import pytest
+from onnx import TensorProto, helper
 
 from .constants import FIXTURE_RANDOM_SEED
 
 
 def create_simple_model(
-    input_shape: List[int] = [1, 3, 32, 32],
-    output_shape: List[int] = [1, 10],
+    input_shape: list[int] = [1, 3, 32, 32],
+    output_shape: list[int] = [1, 10],
     op_type: str = "MatMul",
-    model_name: str = "simple_test_model"
+    model_name: str = "simple_test_model",
 ) -> onnx.ModelProto:
     """Create a simple single-operation ONNX model.
 
@@ -32,12 +32,8 @@ def create_simple_model(
         ONNX model proto
     """
     # Create input/output tensors
-    input_tensor = helper.make_tensor_value_info(
-        "input", TensorProto.FLOAT, input_shape
-    )
-    output_tensor = helper.make_tensor_value_info(
-        "output", TensorProto.FLOAT, output_shape
-    )
+    input_tensor = helper.make_tensor_value_info("input", TensorProto.FLOAT, input_shape)
+    output_tensor = helper.make_tensor_value_info("output", TensorProto.FLOAT, output_shape)
 
     # Create weight initializer for MatMul
     if op_type == "MatMul":
@@ -46,22 +42,15 @@ def create_simple_model(
             "weight",
             TensorProto.FLOAT,
             weight_shape,
-            np.random.randn(*weight_shape).astype(np.float32).flatten()
+            np.random.randn(*weight_shape).astype(np.float32).flatten(),
         )
 
         # Flatten input first
-        flatten_node = helper.make_node(
-            "Flatten",
-            inputs=["input"],
-            outputs=["input_flat"],
-            axis=1
-        )
+        flatten_node = helper.make_node("Flatten", inputs=["input"], outputs=["input_flat"], axis=1)
 
         # MatMul operation
         matmul_node = helper.make_node(
-            "MatMul",
-            inputs=["input_flat", "weight"],
-            outputs=["output"]
+            "MatMul", inputs=["input_flat", "weight"], outputs=["output"]
         )
 
         nodes = [flatten_node, matmul_node]
@@ -73,42 +62,27 @@ def create_simple_model(
             "constant",
             TensorProto.FLOAT,
             input_shape,
-            np.ones(input_shape).astype(np.float32).flatten()
+            np.ones(input_shape).astype(np.float32).flatten(),
         )
 
-        add_node = helper.make_node(
-            "Add",
-            inputs=["input", "constant"],
-            outputs=["output"]
-        )
+        add_node = helper.make_node("Add", inputs=["input", "constant"], outputs=["output"])
 
         nodes = [add_node]
         initializers = [const_tensor]
 
     else:
         # Generic single operation
-        node = helper.make_node(
-            op_type,
-            inputs=["input"],
-            outputs=["output"]
-        )
+        node = helper.make_node(op_type, inputs=["input"], outputs=["output"])
         nodes = [node]
         initializers = []
 
     # Create graph
     graph_proto = helper.make_graph(
-        nodes,
-        model_name,
-        [input_tensor],
-        [output_tensor],
-        initializer=initializers
+        nodes, model_name, [input_tensor], [output_tensor], initializer=initializers
     )
 
     # Create model
-    model_proto = helper.make_model(
-        graph_proto,
-        producer_name="brainsmith_test"
-    )
+    model_proto = helper.make_model(graph_proto, producer_name="brainsmith_test")
 
     # Set opset version
     model_proto.opset_import[0].version = 11
@@ -254,20 +228,20 @@ def brevitas_fc_model(tmp_path_factory):
     """
     import torch
     import torch.nn as nn
-    from brevitas.nn import QuantLinear, QuantReLU
     from brevitas.core.quant import QuantType
     from brevitas.export import export_qonnx
-    from qonnx.util.cleanup import cleanup as qonnx_cleanup
-    from qonnx.core.modelwrapper import ModelWrapper
+    from brevitas.nn import QuantLinear, QuantReLU
     from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
-    from qonnx.transformation.infer_shapes import InferShapes
+    from qonnx.core.modelwrapper import ModelWrapper
     from qonnx.transformation.fold_constants import FoldConstants
     from qonnx.transformation.general import (
-        GiveUniqueNodeNames,
         GiveReadableTensorNames,
-        RemoveStaticGraphInputs
+        GiveUniqueNodeNames,
+        RemoveStaticGraphInputs,
     )
     from qonnx.transformation.infer_datatypes import InferDataTypes
+    from qonnx.transformation.infer_shapes import InferShapes
+    from qonnx.util.cleanup import cleanup as qonnx_cleanup
 
     # Use session-scoped cache directory
     cache_dir = tmp_path_factory.mktemp("brevitas_models")
@@ -319,12 +293,7 @@ def brevitas_fc_model(tmp_path_factory):
 
     # 2. Export to QONNX
     ishape = (1, 1, 28, 28)
-    export_qonnx(
-        model,
-        torch.randn(ishape),
-        str(model_path),
-        opset_version=13
-    )
+    export_qonnx(model, torch.randn(ishape), str(model_path), opset_version=13)
 
     # 3. Cleanup ONNX
     qonnx_cleanup(str(model_path), out_file=str(model_path))

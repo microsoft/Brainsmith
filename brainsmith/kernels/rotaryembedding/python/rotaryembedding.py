@@ -26,17 +26,21 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import numpy as np
+import os
 import warnings
+
+import numpy as np
 import onnx
 import onnxruntime as ort
-import os
+from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 
-from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
 def get_rope_onnx_filename(theta_base, batch_size, num_attention_heads, seq_len, head_size):
-    return f"rope_rt{theta_base}_b{batch_size}_nh{num_attention_heads}_s{seq_len}_hs{head_size}.onnx"
+    return (
+        f"rope_rt{theta_base}_b{batch_size}_nh{num_attention_heads}_s{seq_len}_hs{head_size}.onnx"
+    )
+
 
 class RotaryEmbedding(HWCustomOp):
     """Abstraction layer for HW impplementation of RotaryEmbedding.
@@ -48,10 +52,13 @@ class RotaryEmbedding(HWCustomOp):
         # Onnx Filename is always generated with batch size 1
         # since RTL generation is not affected by batch size
         batch_size = 1
-        self.onnx_filename = get_rope_onnx_filename(self.get_nodeattr("RopeTheta"), batch_size,
-                                                    self.get_nodeattr("NumHeads"),
-                                                    self.get_nodeattr("SequenceLength"),
-                                                    self.get_nodeattr("HeadDimension"))
+        self.onnx_filename = get_rope_onnx_filename(
+            self.get_nodeattr("RopeTheta"),
+            batch_size,
+            self.get_nodeattr("NumHeads"),
+            self.get_nodeattr("SequenceLength"),
+            self.get_nodeattr("HeadDimension"),
+        )
         self.onnx_dir = os.path.dirname(__file__) + "/rotaryembedding/onnxgraphs/"
         self.onnx_path = self.onnx_dir + self.onnx_filename
         self.onnx_model = onnx.load(self.onnx_path)
@@ -82,7 +89,6 @@ class RotaryEmbedding(HWCustomOp):
             "NumHeads": ("i", True, 0),
             # Rope Theta
             "RopeTheta": ("f", True, 10000.0),
-
             # SIMD Input parallelism
             "SIMD": ("i", False, 1),
             # FINN input datatype
@@ -94,19 +100,18 @@ class RotaryEmbedding(HWCustomOp):
         my_attrs.update(super().get_nodeattr_types())
         return my_attrs
 
-
     def get_exp_cycles(self):
         return 0
 
     def get_normal_input_shape(self, ind=0):
-        seq_len  = self.get_nodeattr("SequenceLength")
+        seq_len = self.get_nodeattr("SequenceLength")
         head_dim = self.get_nodeattr("HeadDimension")
         num_heads = self.get_nodeattr("NumHeads")
         ishape = (1, num_heads, seq_len, head_dim)
         return ishape
 
     def get_normal_output_shape(self, ind=0):
-        seq_len  = self.get_nodeattr("SequenceLength")
+        seq_len = self.get_nodeattr("SequenceLength")
         head_dim = self.get_nodeattr("HeadDimension")
         num_heads = self.get_nodeattr("NumHeads")
         oshape = (1, num_heads, seq_len, head_dim)
@@ -141,7 +146,7 @@ class RotaryEmbedding(HWCustomOp):
         node = self.onnx_node
         idt = model.get_tensor_datatype(node.input[0])
         if idt != self.get_input_datatype():
-            warn_str = "inputDataType changing for %s: %s -> %s " % (
+            warn_str = "inputDataType changing for {}: {} -> {} ".format(
                 node.name,
                 str(self.get_input_datatype().name),
                 str(idt.name),
@@ -188,7 +193,7 @@ class RotaryEmbedding(HWCustomOp):
     def execute_node(self, context, graph):
         ort_session = ort.InferenceSession(self.onnx_path)
         inputs = {
-            "act_in": context['act_in'],
+            "act_in": context["act_in"],
         }
 
         output_names = ["act_out"]

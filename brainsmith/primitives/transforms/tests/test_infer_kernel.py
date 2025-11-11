@@ -6,12 +6,9 @@
 """Tests for InferKernel transform."""
 
 import pytest
-import numpy as np
-from onnx import helper, TensorProto
-
-from qonnx.core.modelwrapper import ModelWrapper
+from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
-from qonnx.util.basic import gen_finn_dt_tensor
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.primitives.transforms.infer_kernel import InferKernel
 
@@ -31,12 +28,7 @@ def make_simple_add_model():
     add_node = helper.make_node("Add", ["in0", "in1"], ["out"], name="Add_0")
 
     # Create graph
-    graph = helper.make_graph(
-        [add_node],
-        "test_add",
-        [in0, in1],
-        [out]
-    )
+    graph = helper.make_graph([add_node], "test_add", [in0, in1], [out])
 
     # Create model
     model = helper.make_model(graph, producer_name="test")
@@ -49,6 +41,7 @@ def make_simple_add_model():
 
     # Set layout
     import qonnx.core.data_layout as DataLayout
+
     model.set_tensor_layout("in0", DataLayout.NHWC)
     model.set_tensor_layout("in1", DataLayout.NHWC)
     model.set_tensor_layout("out", DataLayout.NHWC)
@@ -111,14 +104,15 @@ def test_infer_kernel_no_matching_nodes():
 
 def test_infer_kernel_statistics():
     """Test that InferKernel logs statistics correctly."""
-    from brainsmith.kernels.addstreams import AddStreams
     import logging
     from io import StringIO
+
+    from brainsmith.kernels.addstreams import AddStreams
 
     # Create model with two Add nodes
     in0 = helper.make_tensor_value_info("in0", TensorProto.FLOAT, [1, 64])
     in1 = helper.make_tensor_value_info("in1", TensorProto.FLOAT, [1, 64])
-    mid = helper.make_tensor_value_info("mid", TensorProto.FLOAT, [1, 64])
+    helper.make_tensor_value_info("mid", TensorProto.FLOAT, [1, 64])
     out = helper.make_tensor_value_info("out", TensorProto.FLOAT, [1, 64])
 
     add1 = helper.make_node("Add", ["in0", "in1"], ["mid"], name="Add_1")
@@ -133,6 +127,7 @@ def test_infer_kernel_statistics():
 
     # Set layout
     import qonnx.core.data_layout as DataLayout
+
     for tensor in ["in0", "in1", "mid", "out"]:
         model.set_tensor_layout(tensor, DataLayout.NHWC)
 

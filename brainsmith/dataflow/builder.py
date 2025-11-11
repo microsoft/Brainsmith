@@ -4,7 +4,6 @@
 #
 # @author       Thomas Keller <thomaskeller@microsoft.com>
 ############################################################################
-from __future__ import annotations
 
 """Kernel design space builder - constructs immutable models from schemas and context (two-phase).
 
@@ -23,21 +22,25 @@ The builder follows a two-phase flow:
 2. design_space.configure(params): Build KernelDesignPoint (stream shapes for specific params)
 """
 
+from __future__ import annotations
+
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import reduce
 from math import gcd
-from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any
 
 from qonnx.core.datatype import BaseDataType
 from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith._internal.math import divisors
+
 from .ordered_parameter import OrderedParameter
 from .schemas import KernelSchema
-from .template_resolution import resolve_template, normalize_template
-from .types import VALUE_OPTIMIZED, ShapeHierarchy
 from .spec_helpers import derive_datatype, value_optimized_datatype
+from .template_resolution import normalize_template, resolve_template
+from .types import VALUE_OPTIMIZED
 
 if TYPE_CHECKING:
     from .dse_models import InterfaceDesignSpace, KernelDesignSpace
@@ -60,10 +63,11 @@ class BuildContext:
         param_setter: Function to store nodeattr values
         node_name: Node name for error messages
     """
+
     schema: KernelSchema
     model_w: ModelWrapper
-    node_inputs: List[str]
-    node_outputs: List[str]
+    node_inputs: list[str]
+    node_outputs: list[str]
     param_getter: Callable[[str], Any]
     param_setter: Callable[[str, Any], None]
     node_name: str = "<unknown>"
@@ -94,8 +98,8 @@ class DesignSpaceBuilder:
     def _resolve_datatype_spec(
         self,
         spec: Any,
-        tensor_name: Optional[str] = None,
-        fallback_datatype: Optional[BaseDataType] = None
+        tensor_name: str | None = None,
+        fallback_datatype: BaseDataType | None = None,
     ) -> BaseDataType:
         """Resolve DatatypeSpec union type to concrete datatype.
 
@@ -131,10 +135,7 @@ class DesignSpaceBuilder:
         try:
             resolver = self._get_datatype_resolver(spec)
             return resolver(
-                self._interfaces,
-                self._ctx.param_getter,
-                self._ctx.model_w,
-                tensor_name
+                self._interfaces, self._ctx.param_getter, self._ctx.model_w, tensor_name
             )
         except Exception as e:
             spec_type = type(spec).__name__ if not isinstance(spec, str) else f"'{spec}'"
@@ -188,16 +189,16 @@ class DesignSpaceBuilder:
         Raises:
             ValueError: If structural constraints fail
         """
-        from .dse_models import InterfaceDesignSpace, KernelDesignSpace
+        from .dse_models import KernelDesignSpace
         from .validation import DesignSpaceValidationContext
 
         self._ctx = ctx
-        self._interfaces: Dict[str, Any] = {}
+        self._interfaces: dict[str, Any] = {}
 
         logger.debug(f"Building KernelDesignSpace for {ctx.node_name}")
 
         # Build input interfaces from ONNX graph
-        inputs: Dict[str, InterfaceDesignSpace] = {}
+        inputs: dict[str, InterfaceDesignSpace] = {}
 
         for i, inp_name in enumerate(ctx.node_inputs):
             if not inp_name:
@@ -213,10 +214,7 @@ class DesignSpaceBuilder:
 
             try:
                 interface = self._build_interface(
-                    direction='input',
-                    index=i,
-                    tensor_name=inp_name,
-                    schema=schema
+                    direction="input", index=i, tensor_name=inp_name, schema=schema
                 )
                 inputs[schema.name] = interface
                 self._interfaces[schema.name] = interface
@@ -233,7 +231,7 @@ class DesignSpaceBuilder:
                     datatype = self._resolve_datatype_spec(
                         spec=datatype_spec,
                         tensor_name=None,  # Internals have no ONNX tensor
-                        fallback_datatype=None  # Internal datatypes must be explicit
+                        fallback_datatype=None,  # Internal datatypes must be explicit
                     )
                     ctx.param_setter(f"{internal_name}Datatype", datatype.name)
 
@@ -243,10 +241,12 @@ class DesignSpaceBuilder:
 
                     logger.debug(f"  Internal '{internal_name}': dtype={datatype.name}")
                 except ValueError as e:
-                    raise ValueError(f"Failed to resolve internal datatype '{internal_name}': {e}") from e
+                    raise ValueError(
+                        f"Failed to resolve internal datatype '{internal_name}': {e}"
+                    ) from e
 
         # Build output interfaces (may derive datatypes from inputs)
-        outputs: Dict[str, InterfaceDesignSpace] = {}
+        outputs: dict[str, InterfaceDesignSpace] = {}
 
         for i, out_name in enumerate(ctx.node_outputs):
             if i >= len(ctx.schema.outputs):
@@ -259,10 +259,7 @@ class DesignSpaceBuilder:
 
             try:
                 interface = self._build_interface(
-                    direction='output',
-                    index=i,
-                    tensor_name=out_name,
-                    schema=schema
+                    direction="output", index=i, tensor_name=out_name, schema=schema
                 )
                 outputs[schema.name] = interface
                 self._interfaces[schema.name] = interface
@@ -271,12 +268,10 @@ class DesignSpaceBuilder:
 
         # Separate constraints by evaluation phase (structural vs optimization)
         structural_constraints = [
-            c for c in ctx.schema.constraints
-            if c.evaluation_phase == 'structural'
+            c for c in ctx.schema.constraints if c.evaluation_phase == "structural"
         ]
         optimization_constraints = [
-            c for c in ctx.schema.constraints
-            if c.evaluation_phase != 'structural'
+            c for c in ctx.schema.constraints if c.evaluation_phase != "structural"
         ]
 
         logger.debug(
@@ -290,7 +285,7 @@ class DesignSpaceBuilder:
                 inputs=inputs,
                 outputs=outputs,
                 internal_datatypes=internal_datatypes,
-                param_getter=ctx.param_getter
+                param_getter=ctx.param_getter,
             )
 
             failed = [
@@ -299,9 +294,7 @@ class DesignSpaceBuilder:
                 if (e := c.check(validation_ctx))
             ]
             if failed:
-                raise ValueError(
-                    f"{ctx.node_name} validation failed:\n" + "\n".join(failed)
-                )
+                raise ValueError(f"{ctx.node_name} validation failed:\n" + "\n".join(failed))
 
             logger.debug(f"  All {len(structural_constraints)} structural constraints passed")
 
@@ -328,11 +321,7 @@ class DesignSpaceBuilder:
         return design_space
 
     def _resolve_datatype(
-        self,
-        spec: Any,
-        tensor_name: str,
-        direction: str,
-        schema_name: Optional[str] = None
+        self, spec: Any, tensor_name: str, direction: str, schema_name: str | None = None
     ) -> BaseDataType:
         """Unified datatype resolution for inputs, outputs, and internal datatypes.
 
@@ -362,7 +351,7 @@ class DesignSpaceBuilder:
         derived_dt = self._resolve_datatype_spec(
             spec=spec,
             tensor_name=tensor_name,
-            fallback_datatype=graph_dt  # Use graph datatype if spec is None
+            fallback_datatype=graph_dt,  # Use graph datatype if spec is None
         )
 
         # Log if schema overrides graph datatype
@@ -410,7 +399,7 @@ class DesignSpaceBuilder:
             spec=schema.datatype,
             tensor_name=tensor_name,
             direction=direction,
-            schema_name=schema.name
+            schema_name=schema.name,
         )
 
         # Store datatype to nodeattrs for FINN
@@ -427,7 +416,7 @@ class DesignSpaceBuilder:
                 ctx.param_getter,
                 self._interfaces,
                 ctx.model_w,
-                tensor_name  # Resolves at BLOCK hierarchy level
+                tensor_name,  # Resolves at BLOCK hierarchy level
             )
         except ValueError as e:
             raise ValueError(
@@ -438,19 +427,14 @@ class DesignSpaceBuilder:
         normalized_stream_tiling = None
         if schema.stream_tiling is not None:
             try:
-                normalized_stream_tiling = normalize_template(
-                    schema.stream_tiling, block_shape
-                )
+                normalized_stream_tiling = normalize_template(schema.stream_tiling, block_shape)
             except ValueError as e:
                 raise ValueError(
                     f"Failed to normalize stream_tiling for {direction} '{schema.name}': {e}"
                 ) from e
 
         # Infer is_weight from ONNX initializer (only for inputs)
-        is_weight = (
-            direction == 'input' and
-            ctx.model_w.get_initializer(tensor_name) is not None
-        )
+        is_weight = direction == "input" and ctx.model_w.get_initializer(tensor_name) is not None
 
         # Build and return interface
         interface = InterfaceDesignSpace(
@@ -460,7 +444,7 @@ class DesignSpaceBuilder:
             stream_tiling=normalized_stream_tiling,
             datatype=datatype,
             is_weight=is_weight,
-            tensor_name=tensor_name
+            tensor_name=tensor_name,
         )
 
         logger.debug(
@@ -474,7 +458,7 @@ class DesignSpaceBuilder:
     # Helper Methods for Two-Phase Construction
     # =========================================================================
 
-    def _extract_stream_params(self, stream_tiling: Optional[Any]) -> List[str]:
+    def _extract_stream_params(self, stream_tiling: Any | None) -> list[str]:
         """Extract string parameters from stream_tiling template.
 
         Extracts parallelization parameter names (strings) from stream_tiling,
@@ -507,9 +491,9 @@ class DesignSpaceBuilder:
 
     def _link_parallelism_metadata(
         self,
-        interfaces: Dict[str, Any],  # InterfaceDesignSpace
-        dimensions: Dict[str, Union[OrderedParameter, FrozenSet]]
-    ) -> Dict[str, Any]:  # InterfaceDesignSpace
+        interfaces: dict[str, Any],  # InterfaceDesignSpace
+        dimensions: dict[str, OrderedParameter | frozenset],
+    ) -> dict[str, Any]:  # InterfaceDesignSpace
         """Link parallelism dimensions to interfaces.
 
         For each interface, extract params from stream_tiling and link to
@@ -563,7 +547,7 @@ class DesignSpaceBuilder:
                 result[name] = dataclasses.replace(
                     interface,
                     parallelism_dimension=dim,  # Same object as dimensions[param]
-                    parallelism_param=param
+                    parallelism_param=param,
                 )
 
                 logger.debug(
@@ -582,10 +566,10 @@ class DesignSpaceBuilder:
 
     def _compute_dimension_ranges(
         self,
-        inputs: Dict[str, InterfaceDesignSpace],
-        outputs: Dict[str, InterfaceDesignSpace],
-        schema: 'KernelSchema',
-    ) -> Dict[str, Union[OrderedParameter, FrozenSet]]:
+        inputs: dict[str, InterfaceDesignSpace],
+        outputs: dict[str, InterfaceDesignSpace],
+        schema: KernelSchema,
+    ) -> dict[str, OrderedParameter | frozenset]:
         """Compute valid values for all explorable dimensions (tiling + DSE).
 
         Combines:
@@ -666,7 +650,7 @@ class DesignSpaceBuilder:
             tiling_dimensions[param_name] = OrderedParameter(
                 name=param_name,
                 values=tuple(divisor_list),
-                default=None  # Will use minimum (first value)
+                default=None,  # Will use minimum (first value)
             )
 
         logger.debug(
@@ -684,14 +668,14 @@ class DesignSpaceBuilder:
                 values = dim_spec.values
 
             # Auto-detect type based on container type
-            if isinstance(values, (list, tuple)):
+            if isinstance(values, list | tuple):
                 # Ordered sequence → OrderedParameter
                 dse_dimensions[dim_name] = OrderedParameter(
                     name=dim_name,
                     values=tuple(sorted(values)),  # Ensure sorted
-                    default=dim_spec.default if hasattr(dim_spec, 'default') else None
+                    default=dim_spec.default if hasattr(dim_spec, "default") else None,
                 )
-            elif isinstance(values, (set, frozenset)):
+            elif isinstance(values, set | frozenset):
                 # Discrete set → frozenset
                 dse_dimensions[dim_name] = frozenset(values)
             else:
@@ -703,7 +687,9 @@ class DesignSpaceBuilder:
                 dse_dimensions[dim_name] = frozenset(values)
 
         if dse_dimensions:
-            ordered_count = sum(1 for v in dse_dimensions.values() if isinstance(v, OrderedParameter))
+            ordered_count = sum(
+                1 for v in dse_dimensions.values() if isinstance(v, OrderedParameter)
+            )
             discrete_count = sum(1 for v in dse_dimensions.values() if isinstance(v, frozenset))
             logger.debug(
                 f"Added {len(dse_dimensions)} DSE dimensions: "
@@ -717,6 +703,6 @@ class DesignSpaceBuilder:
 
 
 __all__ = [
-    'BuildContext',
-    'DesignSpaceBuilder',
+    "BuildContext",
+    "DesignSpaceBuilder",
 ]

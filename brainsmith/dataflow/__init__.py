@@ -32,95 +32,8 @@ Architecture:
 """
 
 # Core types
-from .types import (
-    Shape,
-    ShapeHierarchy,
-    FULL_DIM,
-    FULL_SHAPE,
-    VALUE_OPTIMIZED,
-)
-
-# Schema helpers (for building kernel schemas)
-from .spec_helpers import (
-    # Dimension/datatype derivation
-    derive_dim,
-    derive_datatype,
-    constant_datatype,
-    value_optimized_datatype,
-    # Arithmetic range computation
-    compute_add_range,
-    compute_sub_range,
-    compute_mul_range,
-    compute_min_range,
-    compute_max_range,
-    smallest_datatype_for_range,
-    # Context-aware datatype builders
-    add_datatype,
-    sub_datatype,
-    mul_datatype,
-    min_datatype,
-    max_datatype,
-)
-
-# Broadcasting helpers (for elementwise operations)
-from .broadcast_helpers import (
-    BroadcastInfo,
-    compute_broadcast_info,
-)
-
-# Inference helpers (for kernel inference preprocessing)
-from .inference_helpers import (
-    lift_scalar_to_rank1,
-)
-
 # QONNX types (direct from QONNX)
-from qonnx.core.datatype import DataType, BaseDataType
-
-# Unified Constraint system (works in both ONNX and kernel contexts)
-from .constraints import (
-    # Base class
-    Constraint,
-    # Datatype constraints
-    DatatypeInteger,
-    DatatypeFloat,
-    DatatypeInRange,
-    DatatypesEqual,
-    # Shape constraints
-    ShapesEqual,
-    DimensionDivisible,
-    DimensionInRange,
-    DimensionEquals,
-    TensorDimMatches,
-    TensorSizeMatches,
-    # ONNX-specific constraints
-    IsDynamic,
-    IsStatic,
-    HasLayout,
-    NodeAttributeEquals,
-    # Attribute comparison
-    AttrCompare,
-    # Custom constraint
-    CustomConstraint,
-)
-
-# Core architecture - unified schemas
-from .schemas import (
-    ParameterSpec,
-    InputSchema,
-    OutputSchema,
-    KernelSchema,
-)
-
-# DSE navigation
-from .ordered_parameter import OrderedParameter
-
-# Immutable models (design space exploration)
-from .dse_models import (
-    InterfaceDesignSpace,
-    KernelDesignSpace,
-    InterfaceDesignPoint,
-    KernelDesignPoint,
-)
+from qonnx.core.datatype import BaseDataType, DataType
 
 # Builder (constructs models from schemas + context)
 from .builder import (
@@ -128,66 +41,93 @@ from .builder import (
     DesignSpaceBuilder,
 )
 
-# Template resolution
-from .template_resolution import resolve_template, normalize_template
+# Unified Constraint system (works in both ONNX and kernel contexts)
+from .constraints import (
+    # Base class
+    Constraint,
+)
 
-# Validation
-from .validation import (
-    ValidationError,
-    DesignSpaceValidationContext,
-    ConfigurationValidationContext,
+# Immutable models (design space exploration)
+from .dse_models import (
+    InterfaceDesignPoint,
+    InterfaceDesignSpace,
+    KernelDesignPoint,
+    KernelDesignSpace,
+)
+
+# Schema helpers (for building kernel schemas)
+# Broadcasting helpers (for elementwise operations)
+# Inference helpers (for kernel inference preprocessing)
+from .inference_helpers import (
+    lift_scalar_to_rank1,
 )
 
 # Kernel operator base class
 from .kernel_op import KernelOp, KernelOpError
 
+# DSE navigation
+from .ordered_parameter import OrderedParameter
+
+# Core architecture - unified schemas
+from .schemas import (
+    InputSchema,
+    KernelSchema,
+    OutputSchema,
+    ParameterSpec,
+)
+
 # Transformation system (unified)
 from .transformation import TransformationResult
+from .types import (
+    FULL_DIM,
+    FULL_SHAPE,
+    Shape,
+    ShapeHierarchy,
+)
 
+# Template resolution
+# Validation
+from .validation import (
+    ConfigurationValidationContext,
+    DesignSpaceValidationContext,
+    ValidationError,
+)
 
 __all__ = [
     # === Core Public API ===
     # Main classes
-    'KernelOp',
-    'KernelOpError',
-    'KernelSchema',
-    'InputSchema',
-    'OutputSchema',
-    'ParameterSpec',
-
+    "KernelOp",
+    "KernelOpError",
+    "KernelSchema",
+    "InputSchema",
+    "OutputSchema",
+    "ParameterSpec",
     # Builder (for DSE and kernel construction)
-    'DesignSpaceBuilder',
-    'BuildContext',
-
+    "DesignSpaceBuilder",
+    "BuildContext",
     # Immutable models (design space exploration)
-    'KernelDesignSpace',
-    'KernelDesignPoint',
-    'InterfaceDesignSpace',
-    'InterfaceDesignPoint',
-    'OrderedParameter',  # For ordered parameter navigation
-
+    "KernelDesignSpace",
+    "KernelDesignPoint",
+    "InterfaceDesignSpace",
+    "InterfaceDesignPoint",
+    "OrderedParameter",  # For ordered parameter navigation
     # Validation
-    'Constraint',
-    'ValidationError',
-    'DesignSpaceValidationContext',
-    'ConfigurationValidationContext',
-
+    "Constraint",
+    "ValidationError",
+    "DesignSpaceValidationContext",
+    "ConfigurationValidationContext",
     # Transformation
-    'TransformationResult',
-
+    "TransformationResult",
     # Inference helpers
-    'lift_scalar_to_rank1',  # For scalar input normalization in kernel inference
-
+    "lift_scalar_to_rank1",  # For scalar input normalization in kernel inference
     # Essential types
-    'Shape',
-    'ShapeHierarchy',
-    'FULL_DIM',
-    'FULL_SHAPE',
-
+    "Shape",
+    "ShapeHierarchy",
+    "FULL_DIM",
+    "FULL_SHAPE",
     # QONNX type re-exports (for convenience)
-    'DataType',
-    'BaseDataType',
-
+    "DataType",
+    "BaseDataType",
     # === Advanced API ===
     # For advanced users - specific constraint classes require explicit import:
     #   from brainsmith.dataflow.constraints import DatatypeInteger, ShapesEqual, ...

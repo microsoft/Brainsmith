@@ -14,15 +14,15 @@ system into KernelOp, ensuring:
 """
 
 import time
-import pytest
-from typing import Optional
 from unittest.mock import MagicMock, patch
-from onnx import helper, TensorProto
 
-from qonnx.core.modelwrapper import ModelWrapper
+import pytest
+from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
-import brainsmith.dataflow as df
+from qonnx.core.modelwrapper import ModelWrapper
 
+import brainsmith.dataflow as df
+from brainsmith.dataflow.constraints import IsDynamic
 
 # Test fixture: Simple kernel schema for testing (matches 3D tensor [1, 1, 768])
 TEST_SCHEMA = df.KernelSchema(
@@ -39,12 +39,12 @@ TEST_SCHEMA = df.KernelSchema(
             name="output",
             block_tiling=[df.FULL_DIM, df.FULL_DIM, df.FULL_DIM],
             stream_tiling=[1, 1, df.DerivedDim("input", -1)],  # Match input streaming
-            datatype=df.DerivedDatatype("input")
+            datatype=df.DerivedDatatype("input"),
         )
     ],
     constraints=[
-        df.IsDynamic("input"),
-    ]
+        IsDynamic("input"),
+    ],
 )
 
 
@@ -85,15 +85,10 @@ def create_test_model_and_node():
         domain="brainsmith.kernels",
         SIMD=1,
         input0Datatype="FLOAT32",
-        output0Datatype="FLOAT32"
+        output0Datatype="FLOAT32",
     )
 
-    graph = helper.make_graph(
-        [node],
-        "test_graph",
-        [input_tensor],
-        [output_tensor]
-    )
+    graph = helper.make_graph([node], "test_graph", [input_tensor], [output_tensor])
 
     model = helper.make_model(graph)
     model_w = ModelWrapper(model)
@@ -104,6 +99,7 @@ def create_test_model_and_node():
 # ====================================================================
 # Test 1: Two-Phase Caching Tests
 # ====================================================================
+
 
 def test_design_space_cached_across_reconfigurations():
     """Test that design space is built once and reused across reconfigurations."""
@@ -165,13 +161,14 @@ def test_configuration_cached_when_params_unchanged():
 # Test 2: get_design_space() Tests
 # ====================================================================
 
+
 def test_get_design_space_builds_once():
     """Test that get_design_space() builds only on first call."""
     model_w, node = create_test_model_and_node()
     kernel_op = TestKernel(node)
 
     # Patch module-level builder function to track calls
-    with patch('brainsmith.dataflow.kernel_op.build_kernel_design_space') as mock_build:
+    with patch("brainsmith.dataflow.kernel_op.build_kernel_design_space") as mock_build:
         mock_build.return_value = MagicMock()
 
         # First call should build
@@ -198,6 +195,7 @@ def test_get_design_space_returns_same_instance():
 # ====================================================================
 # Test 3: get_design_point() Tests
 # ====================================================================
+
 
 def test_get_design_point_first_call_builds_both_models():
     """Test that first get_design_point() call builds both design_space and configured."""
@@ -247,6 +245,7 @@ def test_get_design_point_reconfigures_with_new_params():
 # Test 4: get_valid_ranges() Tests
 # ====================================================================
 
+
 def test_get_valid_ranges_returns_divisor_sets():
     """Test that get_valid_ranges() returns correct divisor sets."""
     model_w, node = create_test_model_and_node()
@@ -275,12 +274,15 @@ def test_valid_ranges_match_block_shapes():
 
     # All valid SIMD values should divide the last dimension
     for simd in valid_ranges["SIMD"]:
-        assert block_shape[-1] % simd == 0, f"SIMD={simd} should divide block_shape[-1]={block_shape[-1]}"
+        assert (
+            block_shape[-1] % simd == 0
+        ), f"SIMD={simd} should divide block_shape[-1]={block_shape[-1]}"
 
 
 # ====================================================================
 # Test 5: set_nodeattr() Invalidation Tests
 # ====================================================================
+
 
 def test_set_nodeattr_invalidates_configured_only():
     """Test that set_nodeattr() invalidates only configured model, not design_space."""
@@ -290,7 +292,6 @@ def test_set_nodeattr_invalidates_configured_only():
     # Build both models
     kernel_op.get_design_point(model_w)
     invariant_before = kernel_op._design_space
-    configured_before = kernel_op._configuration
 
     # Change param
     kernel_op.set_nodeattr("SIMD", 2)
@@ -315,7 +316,9 @@ def test_set_nodeattr_preserves_design_space():
     # Change params multiple times
     for simd in [2, 4, 8, 16, 32]:
         kernel_op.set_nodeattr("SIMD", simd)
-        assert kernel_op._design_space is invariant_original, f"Invariant should persist (SIMD={simd})"
+        assert (
+            kernel_op._design_space is invariant_original
+        ), f"Invariant should persist (SIMD={simd})"
 
 
 def test_set_nodeattr_no_op_when_value_unchanged():
@@ -336,6 +339,7 @@ def test_set_nodeattr_no_op_when_value_unchanged():
 # ====================================================================
 # Test 6: Performance Tests
 # ====================================================================
+
 
 def test_reconfiguration_performance_target_1ms():
     """Test that reconfiguration completes in <1ms (target performance)."""
@@ -377,7 +381,9 @@ def test_100_configurations_under_100ms():
     # Target: <100ms, use generous 500ms for CI variability
     assert elapsed < 0.5, f"100 configs took {elapsed*1000:.2f}ms, target <500ms"
 
-    print(f"  Performance: {len(configs)} configs in {elapsed*1000:.1f}ms ({elapsed*1000/len(configs):.2f}ms avg)")
+    print(
+        f"  Performance: {len(configs)} configs in {elapsed*1000:.1f}ms ({elapsed*1000/len(configs):.2f}ms avg)"
+    )
 
 
 def test_cache_hit_under_01ms():
@@ -403,6 +409,7 @@ def test_cache_hit_under_01ms():
 # ====================================================================
 # Test 7: Backward Compatibility Tests
 # ====================================================================
+
 
 def test_legacy_design_point_property_still_works():
     """Test that legacy design_point property still works."""
@@ -452,6 +459,7 @@ def test_datatype_queries_delegate_correctly():
 # Test 8: Error Handling Tests
 # ====================================================================
 
+
 def test_get_design_space_requires_model_wrapper():
     """Test that get_design_space() raises error without ModelWrapper."""
     _, node = create_test_model_and_node()
@@ -477,6 +485,7 @@ def test_design_point_property_requires_prior_build():
 # ====================================================================
 # Test 9: Property-Based API Tests
 # ====================================================================
+
 
 def test_design_space_property_before_build_raises():
     """Test that design_space property raises before build_design_space()."""
@@ -536,6 +545,7 @@ def test_build_design_space_idempotent():
 # ====================================================================
 # Test 10: Schema-Based Invalidation Tests
 # ====================================================================
+
 
 def test_structural_nodeattr_invalidates_design_space():
     """Test that structural nodeattr changes invalidate design space."""
@@ -615,6 +625,7 @@ def test_execution_nodeattr_invalidates_config_only():
 # Test 11: Explicit Invalidation Tests
 # ====================================================================
 
+
 def test_explicit_invalidation_works():
     """Test that invalidate_design_space() works."""
     model_w, node = create_test_model_and_node()
@@ -645,8 +656,6 @@ def test_build_after_invalidation_rebuilds():
 
     # Build
     kernel_op.infer_node_datatype(model_w)
-    ds1 = kernel_op.design_space
-    km1 = kernel_op.design_point
 
     # Invalidate
     kernel_op.invalidate()
@@ -670,6 +679,7 @@ def test_build_after_invalidation_rebuilds():
 # ====================================================================
 # Test 12: Backward Compatibility Tests
 # ====================================================================
+
 
 def test_old_api_still_works():
     """Test that old get_design_space() / get_design_point() still work."""
