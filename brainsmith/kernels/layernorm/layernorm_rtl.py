@@ -10,7 +10,12 @@
 import os
 import shutil
 
+from finn import xsi
+finnxsi = xsi if xsi.is_available() else None
+
 from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
+from finn.util.basic import make_build_dir
+
 from brainsmith.kernels.layernorm.layernorm import LayerNorm
 from brainsmith.core.plugins import backend
 
@@ -66,10 +71,15 @@ class LayerNorm_rtl(LayerNorm, RTLBackend):
             template = template.replace(key, str(code_gen_dict[key]))
 
         with open(
-            os.path.join(code_gen_dir, self.get_verilog_top_module_name() + ".v"),
+            os.path.join(code_gen_dir, self.get_nodeattr("gen_top_module") + ".v"),
             "w",
         ) as f:
-            f.write(template)
+            f.write(template.replace("$FORCE_BEHAVIORAL$", str(0)))
+        with open(
+            os.path.join(code_gen_dir, self.get_nodeattr("gen_top_module") + "_sim.v"),
+            "w",
+        ) as f:
+            f.write(template.replace("$FORCE_BEHAVIORAL$", str(1)))
 
         sv_files = ["layernorm.sv", "queue.sv", "accuf.sv", "binopf.sv", "rsqrtf.sv"]
         for sv_file in sv_files:
@@ -120,6 +130,31 @@ class LayerNorm_rtl(LayerNorm, RTLBackend):
             % (self.get_nodeattr("gen_top_module"), self.onnx_node.name)
         ]
         return cmd
+
+    def prepare_rtlsim(self):
+        """Creates a xsi emulation library for the RTL code generated
+        for this node, sets the rtlsim_so attribute to its path."""
+
+        code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen") + "/"
+        rtllib_dir = rtlsrc = os.environ["BSMITH_DIR"] + "/deps/finn/finn-rtllib/layernorm/"
+
+        verilog_files = [
+            rtllib_dir + "layernorm.sv",
+            rtllib_dir + "queue.sv",
+            rtllib_dir + "accuf.sv",
+            rtllib_dir + "binopf.sv",
+            rtllib_dir + "rsqrtf.sv",
+            code_gen_dir + self.get_nodeattr("gen_top_module") + "_sim.v",
+        ]
+
+        single_src_dir = make_build_dir("rtlsim_" + self.onnx_node.name + "_")
+        trace_file = self.get_nodeattr("rtlsim_trace")
+        debug = not (trace_file is None or trace_file == "")
+        ret = finnxsi.compile_sim_obj(
+            self.get_verilog_top_module_name(), verilog_files, single_src_dir, debug
+        )
+        # save generated lib filename in attribute
+        self.set_nodeattr("rtlsim_so", ret[0] + "/" + ret[1])
 
     def execute_node(self, context, graph):
         mode = self.get_nodeattr("exec_mode")
