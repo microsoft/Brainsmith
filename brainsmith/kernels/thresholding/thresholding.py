@@ -26,6 +26,12 @@ from qonnx.util.basic import interleave_matrix_outer_dim_from_partitions
 
 import brainsmith.dataflow as df
 from brainsmith.dataflow import FULL_DIM, KernelOp
+from brainsmith.dataflow.constraints import (
+    DatatypeInteger,
+    DimensionDivisible,
+    IsDynamic,
+    IsStatic,
+)
 from brainsmith.dataflow.spec_helpers import derive_dim
 from brainsmith.dataflow.types import VALUE_OPTIMIZED, ShapeHierarchy
 from brainsmith.registry import kernel
@@ -75,12 +81,12 @@ THRESHOLDING_SCHEMA = df.KernelSchema(
     # =========================================================================
     constraints=[
         # Input must be dynamic, thresholds must be static
-        df.IsDynamic(("input",)),
-        df.IsStatic(("thresholds",)),
+        IsDynamic(("input",)),
+        IsStatic(("thresholds",)),
         # PE must divide number of channels
-        df.DimensionDivisible("input", -1, "PE", hierarchy=df.ShapeHierarchy.STREAM),
+        DimensionDivisible("input", -1, "PE", hierarchy=df.ShapeHierarchy.STREAM),
         # Datatypes must be integer (enforced in can_infer_from)
-        df.DatatypeInteger(("input", "output")),
+        DatatypeInteger(("input", "output")),
     ],
     # Parallelization
 )

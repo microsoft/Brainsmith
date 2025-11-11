@@ -22,6 +22,7 @@ from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
 import brainsmith.dataflow as df
+from brainsmith.dataflow.constraints import IsDynamic
 
 # Test fixture: Simple kernel schema for testing (matches 3D tensor [1, 1, 768])
 TEST_SCHEMA = df.KernelSchema(
@@ -42,7 +43,7 @@ TEST_SCHEMA = df.KernelSchema(
         )
     ],
     constraints=[
-        df.IsDynamic("input"),
+        IsDynamic("input"),
     ],
 )
 

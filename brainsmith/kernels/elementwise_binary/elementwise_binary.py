@@ -30,6 +30,7 @@ from qonnx.core.modelwrapper import ModelWrapper
 
 import brainsmith.dataflow as df
 from brainsmith.dataflow import FULL_DIM, KernelOp
+from brainsmith.dataflow.constraints import CustomConstraint
 from brainsmith.dataflow.spec_helpers import (
     add_datatype,
     derive_dim,
@@ -284,7 +285,7 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
     },
     constraints=[
         # Pattern-specific validation (dynamic vs static, broadcasting)
-        df.CustomConstraint(
+        CustomConstraint(
             check_fn=_validate_input_pattern,
             description="Validate input pattern (dynamic_static or dynamic_dynamic)",
         ),

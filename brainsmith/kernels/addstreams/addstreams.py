@@ -22,6 +22,7 @@ from qonnx.core.modelwrapper import ModelWrapper
 
 import brainsmith.dataflow as df
 from brainsmith.dataflow import FULL_SHAPE, KernelOp
+from brainsmith.dataflow.constraints import DatatypeInteger, IsDynamic, ShapesEqual
 from brainsmith.dataflow.spec_helpers import add_datatype, derive_dim
 from brainsmith.dataflow.types import ShapeHierarchy
 from brainsmith.registry import kernel
@@ -54,9 +55,9 @@ ADDSTREAMS_SCHEMA = df.KernelSchema(
         )
     ],
     constraints=[
-        df.IsDynamic(("input0", "input1")),
-        df.DatatypeInteger(("input0", "input1")),
-        df.ShapesEqual(("input0", "input1")),
+        IsDynamic(("input0", "input1")),
+        DatatypeInteger(("input0", "input1")),
+        ShapesEqual(("input0", "input1")),
     ],
 )
 

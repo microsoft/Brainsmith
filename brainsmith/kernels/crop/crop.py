@@ -38,6 +38,13 @@ from qonnx.util.basic import get_by_name
 
 import brainsmith.dataflow as df
 from brainsmith.dataflow import FULL_DIM, KernelOp
+from brainsmith.dataflow.constraints import (
+    CustomConstraint,
+    DatatypeInteger,
+    DimensionDivisible,
+    DimensionEquals,
+    IsDynamic,
+)
 from brainsmith.dataflow.spec_helpers import derive_dim
 from brainsmith.dataflow.types import ShapeHierarchy
 from brainsmith.registry import kernel
@@ -205,15 +212,15 @@ CROP_SCHEMA = df.KernelSchema(
     # is done in can_infer_from() override.
     constraints=[
         # Data input must be dynamic (not an initializer)
-        df.IsDynamic(("input",)),
+        IsDynamic(("input",)),
         # Data input must be integer datatype
-        df.DatatypeInteger(("input",)),
+        DatatypeInteger(("input",)),
         # Batch size must be 1 (NHWC: dimension 0)
-        df.DimensionEquals("input", 0, 1, hierarchy=df.ShapeHierarchy.TENSOR),
+        DimensionEquals("input", 0, 1, hierarchy=df.ShapeHierarchy.TENSOR),
         # SIMD must divide channel dimension (parametric constraint)
-        df.DimensionDivisible("input", -1, "SIMD", hierarchy=df.ShapeHierarchy.STREAM),
+        DimensionDivisible("input", -1, "SIMD", hierarchy=df.ShapeHierarchy.STREAM),
         # Custom crop bounds validation
-        df.CustomConstraint(_validate_crop_bounds, "Crop bounds must be within input dimensions"),
+        CustomConstraint(_validate_crop_bounds, "Crop bounds must be within input dimensions"),
     ],
     # ========== TRANSFORMATION ==========
     attribute_mapping={},  # No direct ONNX attrs → kernel params (computed from indices)

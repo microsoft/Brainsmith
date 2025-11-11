@@ -14,6 +14,13 @@ from qonnx.core.modelwrapper import ModelWrapper
 
 import brainsmith.dataflow as df
 from brainsmith.dataflow import FULL_SHAPE, KernelOp
+from brainsmith.dataflow.constraints import (
+    DatatypeInteger,
+    IsDynamic,
+    IsStatic,
+    TensorDimMatches,
+    TensorSizeMatches,
+)
 from brainsmith.dataflow.inference_helpers import (
     expand_scalar_to_channels,
     find_static_dynamic_pair,
@@ -89,12 +96,12 @@ CHANNELWISE_SCHEMA = df.KernelSchema(
         ),
     },
     constraints=[
-        df.IsDynamic(("input",)),  # Streaming activation input
-        df.IsStatic(("parameters",)),  # Static weight input
-        df.DatatypeInteger(("input", "parameters")),
+        IsDynamic(("input",)),  # Streaming activation input
+        IsStatic(("parameters",)),  # Static weight input
+        DatatypeInteger(("input", "parameters")),
         # Parameters: scalar (1) or per-channel (matches input channels)
-        df.TensorSizeMatches("parameters", [1, ("input", -1)]),
-        df.TensorDimMatches("parameters", -1, [1, ("input", -1)]),
+        TensorSizeMatches("parameters", [1, ("input", -1)]),
+        TensorDimMatches("parameters", -1, [1, ("input", -1)]),
     ],
 )
 

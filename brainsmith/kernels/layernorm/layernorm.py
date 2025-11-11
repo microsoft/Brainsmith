@@ -9,7 +9,8 @@ from qonnx.util.basic import get_by_name
 
 import brainsmith.dataflow as df
 from brainsmith.dataflow import FULL_DIM, KernelOp
-from brainsmith.dataflow.spec_helpers import derive_dim
+from brainsmith.dataflow.constraints import AttrCompare
+from brainsmith.dataflow.spec_helpers import constant_datatype, derive_dim
 from brainsmith.dataflow.types import ShapeHierarchy
 from brainsmith.registry import kernel
 
@@ -34,7 +35,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
             stream_tiling=[
                 derive_dim("input", ShapeHierarchy.STREAM, -1)
             ],  # Output streams at same rate as input
-            datatype=df.constant_datatype("FLOAT32"),  # Output datatype same as input
+            datatype=constant_datatype("FLOAT32"),  # Output datatype same as input
             required_layout="NHWC",  # Hardware produces NHWC layout
         )
     ],
@@ -43,7 +44,7 @@ LAYERNORM_SCHEMA = df.KernelSchema(
     },
     constraints=[
         # Product constraint: epsilon must be positive for numerical stability
-        df.AttrCompare("epsilon", ">", 0),
+        AttrCompare("epsilon", ">", 0),
     ],
 )
 
