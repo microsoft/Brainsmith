@@ -107,7 +107,7 @@ class LayerNorm_rtl(LayerNorm, RTLBackend):
         ]
         return verilog_files
 
-    def code_generation_ipi(self):
+    def code_generation_ipi(self, behavioral=False):
         """Constructs and returns the TCL for node instantiation in Vivado IPI."""
         code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
 
@@ -117,8 +117,11 @@ class LayerNorm_rtl(LayerNorm, RTLBackend):
             "accuf.sv",
             "binopf.sv",
             "rsqrtf.sv",
-            self.get_nodeattr("gen_top_module") + ".v",
         ]
+        if behavioral is True:
+            sourcefiles.append(self.get_nodeattr("gen_top_module") + "_sim.v")
+        else:
+            sourcefiles.append(self.get_nodeattr("gen_top_module") + ".v")
 
         sourcefiles = [os.path.join(code_gen_dir, f) for f in sourcefiles]
 

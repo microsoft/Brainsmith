@@ -314,7 +314,7 @@ class AutoRTLBackend(RTLBackend):
         """
         pass
     
-    def code_generation_ipi(self):
+    def code_generation_ipi(self, behavioral=False):
         """
         Generate TCL commands for Vivado IPI integration.
         

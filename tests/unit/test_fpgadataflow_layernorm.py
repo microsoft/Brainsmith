@@ -2,7 +2,7 @@
 # Copyright (C) 2025, Advanced Micro Devices, Inc.
 # All rights reserved.
 #
-# SPDX-License-Identifier: MIT 
+# SPDX-License-Identifier: MIT
 #
 ############################################################################
 
@@ -18,7 +18,7 @@ from onnx import TensorProto, helper
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.custom_op.registry import getCustomOp
-from qonnx.transformation.infer_shapes import InferShapes 
+from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.util.basic import gen_finn_dt_tensor, qonnx_make_model
 from qonnx.transformation.infer_datatypes import InferDataTypes
 import finn.transformation.fpgadataflow.convert_to_hw_layers as to_hw
@@ -30,7 +30,7 @@ from finn.transformation.fpgadataflow.prepare_ip import PrepareIP
 from finn.transformation.fpgadataflow.prepare_rtlsim import PrepareRTLSim
 from finn.transformation.fpgadataflow.set_exec_mode import SetExecMode
 from finn.transformation.fpgadataflow.specialize_layers import SpecializeLayers
-from finn.transformation.qonnx.convert_qonnx_to_finn import ConvertQONNXtoFINN
+from finn.transformation.fpgadataflow.set_fifo_depths import InsertAndSetFIFODepths
 from finn.transformation.fpgadataflow.create_stitched_ip import CreateStitchedIP
 from finn.transformation.fpgadataflow.create_dataflow_partition import (
     CreateDataflowPartition,
@@ -115,3 +115,15 @@ def test_fpgadataflow_layernorm():
     y_hw = oxe.execute_onnx(model, input_t)[model.graph.output[0].name]
 
     assert np.allclose(y_ref, y_hw, rtol=1e-3, atol=2**-4)
+
+    # stitched ip rtlsim
+    model = model.transform(InsertAndSetFIFODepths(test_fpga_part, target_clk_ns))
+    model = model.transform(PrepareIP(test_fpga_part, target_clk_ns))
+    model = model.transform(HLSSynthIP())
+    model = model.transform(CreateStitchedIP(test_fpga_part, target_clk_ns))
+
+    model.set_metadata_prop("exec_mode", "rtlsim")
+    input_t = {model.graph.input[0].name: input}
+    y_stitch = oxe.execute_onnx(model, input_t)[model.graph.output[0].name]
+
+    assert np.allclose(y_ref, y_stitch, rtol=1e-3, atol=2**-4)
