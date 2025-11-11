@@ -11,42 +11,45 @@
 ############################################################################
 
 """
-BERT-Specific Custom Build Steps
+BERT-Specific Custom Build Steps (Runtime Component Registration Example)
 
-Custom steps specifically for BERT model processing, including:
-- Head and tail removal for model decomposition
-- Metadata extraction for shell integration
-- Reference I/O generation for validation
+These steps are specific to this BERT example and register when custom_steps.py
+is imported by bert_demo.py. They are referenced in bert_demo.yaml and executed
+via the blueprint.
 
-These steps are highly specific to BERT model architecture and
-are not general-purpose FINN dataflow compilation steps.
+Custom steps defined here:
+- remove_head: Remove model head up to first LayerNorm
+- remove_tail: Remove model tail after second output
+- generate_reference_io: Generate reference inputs/outputs for validation
+
+Core brainsmith steps also used in bert_demo.yaml:
+- bert_cleanup, bert_streamlining: from brainsmith.steps.bert_custom_steps
+- shell_metadata_handover: from brainsmith.steps.bert_custom_steps
+
+These steps are highly specific to BERT model architecture and demonstrate
+how to create example-specific steps using the @step decorator without
+needing a full package structure.
 """
 
-import os
-import shutil
 import logging
-from typing import Any
-import numpy as np
 
 import finn.core.onnx_exec as oxe
+import numpy as np
 from qonnx.core.datatype import DataType
+from qonnx.transformation.general import GiveReadableTensorNames, RemoveUnusedTensors
 from qonnx.util.basic import gen_finn_dt_tensor
-from brainsmith.core.plugins import step
-from brainsmith.utils import apply_transforms
+
+from brainsmith.registry import step
 
 logger = logging.getLogger(__name__)
 
 
-@step(
-    name="remove_head",
-    category="bert",
-    description="Head removal for models"
-)
+@step(name="remove_head")
 def remove_head_step(model, cfg):
     """Remove all nodes up to the first LayerNormalization node and rewire input."""
-    
+
     assert len(model.graph.input) == 1, "Error the graph has more inputs than expected"
-    tensor_to_node = {output: node for node in model.graph.node for output in node.output}
+    {output: node for node in model.graph.node for output in node.output}
 
     to_remove = []
 
@@ -74,16 +77,14 @@ def remove_head_step(model, cfg):
 
     # Reconnect input
     for con in consumers:
-        for i,ip in enumerate(con.input):
+        for i, ip in enumerate(con.input):
             if ip == LN_output:
                 con.input[i] = model.graph.input[0].name
 
     # Clean up after head removal
-    model = apply_transforms(model, [
-        'RemoveUnusedTensors',
-        'GiveReadableTensorNames'
-    ])
-    
+    for transform in [RemoveUnusedTensors(), GiveReadableTensorNames()]:
+        model = model.transform(transform)
+
     return model
 
 
@@ -98,48 +99,42 @@ def _recurse_model_tail_removal(model, to_remove, node):
     return
 
 
-@step(
-    name="remove_tail", 
-    category="bert",
-    description="BERT-specific tail removal for models"
-)
+@step(name="remove_tail")
 def remove_tail_step(model, cfg):
     """Remove from global_out_1 all the way back to the first LayerNorm."""
     # Direct implementation from old custom_step_remove_tail
     out_names = [x.name for x in model.graph.output]
-    assert "global_out_1" in out_names, "Error: expected one of the outputs to be called global_out_1, we might need better pattern matching logic here"
+    assert (
+        "global_out_1" in out_names
+    ), "Error: expected one of the outputs to be called global_out_1, we might need better pattern matching logic here"
 
     to_remove = []
-    current_node = model.find_producer('global_out_1')
+    current_node = model.find_producer("global_out_1")
     _recurse_model_tail_removal(model, to_remove, current_node)
 
     for node in to_remove:
         model.graph.node.remove(node)
-    del model.graph.output[out_names.index('global_out_1')]
+    del model.graph.output[out_names.index("global_out_1")]
 
     return model
 
 
-@step(
-    name="generate_reference_io", 
-    category="bert",
-    description="Reference IO generation for BERT demo"
-)
+@step(name="generate_reference_io")
 def generate_reference_io_step(model, cfg):
     """
-    This step is to generate a reference IO pair for the 
-    onnx model where the head and the tail have been 
+    This step is to generate a reference IO pair for the
+    onnx model where the head and the tail have been
     chopped off.
     """
     input_m = model.graph.input[0]
     in_shape = [dim.dim_value for dim in input_m.type.tensor_type.shape.dim]
     in_tensor = gen_finn_dt_tensor(DataType["FLOAT32"], in_shape)
-    np.save(cfg.output_dir+"/input.npy", in_tensor)
+    np.save(cfg.output_dir + "/input.npy", in_tensor)
 
-    input_t = { input_m.name : in_tensor}
+    input_t = {input_m.name: in_tensor}
     out_name = model.graph.output[0].name
 
     y_ref = oxe.execute_onnx(model, input_t, True)
-    np.save(cfg.output_dir+"/expected_output.npy", y_ref[out_name])
-    np.savez(cfg.output_dir+"/expected_context.npz", **y_ref) 
+    np.save(cfg.output_dir + "/expected_output.npy", y_ref[out_name])
+    np.savez(cfg.output_dir + "/expected_context.npz", **y_ref)
     return model

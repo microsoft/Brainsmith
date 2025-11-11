@@ -1,0 +1,8 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+# Import the main operator and backends for {{ kernel_metadata.name }}
+from .{{ kernel_metadata.name }} import {{ kernel_metadata.class_name }}
+from .{{ kernel_metadata.name }}_rtl import {{ kernel_metadata.class_name }}_rtl
+
+__all__ = ["{{ kernel_metadata.class_name }}", "{{ kernel_metadata.class_name }}_rtl"]

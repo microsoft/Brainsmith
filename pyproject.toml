@@ -1,0 +1,265 @@
+# NOTE: Git dependencies (finn, qonnx, etc.) are listed below as local path dependencies.
+# Use ./docker/fetch-repos.sh to clone repositories, then poetry install to set up the environment.
+
+[build-system]
+requires = [ "poetry-core>=1.0.0",]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "brainsmith"
+version = "0.1.0"
+description = "From PyTorch to RTL with no brakes - FPGA Accelerator Compiler for AI"
+authors = [ "Thomas Keller <thomaskeller@microsoft.com>",]
+maintainers = [ "Thomas Keller <thomaskeller@microsoft.com>",]
+readme = "README.md"
+license = "MIT"
+homepage = "https://github.com/microsoft/Brainsmith/"
+repository = "https://github.com/microsoft/Brainsmith/"
+documentation = "https://github.com/microsoft/Brainsmith/tree/main/docs"
+keywords = ["fpga", "accelerator", "pytorch", "rtl", "neural-network", "hardware", "xilinx", "amd", "dse", "ml-compiler"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: System :: Hardware",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: Console",
+]
+
+[tool.poetry.urls]
+"Bug Tracker" = "https://github.com/microsoft/Brainsmith/issues"
+"Discussions" = "https://github.com/microsoft/Brainsmith/discussions"
+"Changelog" = "https://github.com/microsoft/Brainsmith/blob/main/CHANGELOG.md"
+[[tool.poetry.packages]]
+include = "brainsmith"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-include = ["*.ipynb"]
+src = ["brainsmith", "tests"]
+# Minimal rules for alpha stage - focus on errors and basic quality
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+]
+ignore = [
+    "E501",    # line too long - handled by formatter
+]
+
+[tool.ruff.per-file-ignores]
+"tests/**/*.py" = ["E402", "UP009"]
+
+[tool.ruff.isort]
+known-first-party = ["brainsmith"]
+
+[tool.ruff.lint]
+# Make all Python 3.10+ typing upgrades auto-fixable without --unsafe-fixes
+extend-safe-fixes = [
+    "UP006",  # Use PEP 585 annotation (list instead of typing.List)
+    "UP007",  # Use X | Y for type annotations (PEP 604)
+    "UP008",  # Use super() instead of super(__class__, self)
+    "UP009",  # UTF-8 encoding declaration is unnecessary
+    "UP010",  # Unnecessary __future__ import for Python 3.10+
+    "UP032",  # Use f-string instead of format call
+    "UP034",  # Avoid extraneous parentheses
+    "UP035",  # Import replacements (typing.Dict -> dict, etc.)
+    "UP037",  # Remove quotes from type annotations
+    "UP038",  # Use X | Y in isinstance instead of (X, Y)
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = ["-ra"]  # Show all test outcomes
+testpaths = ["tests"]
+markers = [
+    # Test Framework Type
+    "single_kernel: marks tests using SingleKernelTest framework",
+    "kernel_parity: marks tests using KernelParityTest framework (v6.0)",
+    "integration: marks tests as integration tests",
+
+    # Test Purpose
+    "pipeline: marks tests validating pipeline transformations",
+    "golden: marks tests comparing against golden reference outputs",
+    "parity: marks tests comparing manual vs auto HWCustomOp implementations",
+
+    # Test Selection (Coverage)
+    "basic_validation: marks representative test cases for quick validation",
+
+    # Execution Mode
+    "python_only: marks tests that only validate Python execution (no backend)",
+    "cppsim: marks tests requiring C++ simulation with Vivado/Vitis HLS",
+    "rtlsim: marks tests requiring RTL simulation",
+    "hardware: marks tests that require actual hardware",
+
+    # Speed/Resources
+    "fast: marks tests that run quickly",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+
+    # Build Requirements
+    "hls: marks tests requiring HLS code generation",
+    "rtl: marks tests requiring RTL synthesis",
+    "finn_build: marks tests that perform FINN builds",
+    "bitfile: marks tests that generate bitfiles",
+]
+
+# Coverage configuration - optional for time being
+[tool.coverage.run]
+source = ["brainsmith"]
+omit = ["*/tests/*"]
+
+[tool.mypy]
+python_version = "3.11"
+# Relaxed settings for initial release
+ignore_missing_imports = true
+allow_untyped_defs = true
+allow_incomplete_defs = true
+allow_untyped_calls = true
+no_implicit_optional = false
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces
+indent-style = "space"
+
+# Respect magic trailing commas
+skip-magic-trailing-comma = false
+
+# Auto-detect line endings
+line-ending = "auto"
+
+[tool.poetry.dependencies]
+python = ">=3.11"
+
+# Core dependencies - critical for basic functionality
+click = "~=8.1.7"
+rich = "~=13.7"
+pyyaml = "~=6.0.1"
+pydantic = "~=2.5"
+pydantic-settings = "~=2.1"
+packaging = "~=25.0"
+typing-extensions = "~=4.10"
+
+# Scientific computing
+numpy = "~=2.3.0"
+scipy = "~=1.15.0"
+
+# Deep learning frameworks & utilities
+ml-dtypes = "~=0.5.3"
+torch = "~=2.7.0"
+torchvision = "~=0.22.0"  # Required by finn/brevitas
+transformers = "~=4.48.3"
+
+# ONNX ecosystem
+onnx = "~=1.17.0"
+onnxoptimizer = "~=0.3.13"
+onnxruntime = "~=1.23.2"
+onnxscript = "~=0.5.4"
+onnxsim = "~=0.4.36"
+
+# Visualization and debugging
+netron = "~=8.6"
+ipython = "~=8.12.2"
+ipykernel = "~=6.21.2"
+pygments = ">=2.16,<3.0"  # Updated for mkdocs-material compatibility
+tqdm = "~=4.64.1"
+
+# Hardware and optimization
+bitstring = "~=4.2.3"
+vcdvcd = "~=1.0.5"
+deap = "~=1.3.1"
+mip = "~=1.13.0"
+networkx = "~=2.8"
+toposort = "~=1.7"
+
+# Build and utilities
+setuptools = "~=68.2.2"
+pyscaffold = "~=4.4"
+setupext-janitor = "~=1.1.2"
+pybind11 = "~=2.10.0"
+psutil = "~=5.9.4"
+tree-sitter = "~=0.24.0"
+
+# CLI and configuration
+clize = "~=5.0.1"
+sigtools = "~=4.0.1"
+dataclasses-json = "~=0.5.7"
+
+# External services
+docker = "~=7.0"
+gspread = "~=3.6.0"
+wget = "~=3.2"
+
+# Compatibility and misc
+protobuf = "==3.20.3"  # Exact pin for ONNX compatibility
+markupsafe = "==2.0.1"  # Exact pin for compatibility
+importlib-resources = "~=6.1.0"
+dependencies = "~=2.0.1"  # Required by brevitas
+
+# Git dependencies (finn, qonnx, brevitas, etc.) are managed by docker/fetch-repos.sh
+# The repositories are cloned to ./deps/ and installed as editable local packages
+brevitas = {path = "deps/brevitas", develop = true, python = ">=3.11,<3.13"}
+qonnx = {path = "deps/qonnx", develop = true}
+finn = {path = "deps/finn", develop = true}
+finn-experimental = {path = "deps/finn-experimental", develop = true}
+# dataset-loading = {path = "deps/dataset-loading", develop = true}  # Temporarily commented - missing
+
+[tool.poetry.scripts]
+brainsmith = "brainsmith.cli.cli:brainsmith_main"
+smith = "brainsmith.cli.cli:smith_main"
+
+[tool.poetry.group.dev]
+optional = false
+
+[tool.poetry.group.dev.dependencies]
+# Core testing framework (upgraded for DSE integration tests)
+pytest = "~=8.0"
+pytest-cov = "~=4.1.0"
+
+# Parallel execution and timeouts (critical for large builds)
+pytest-xdist = "~=3.5"       # Parallel test execution
+pytest-timeout = "~=2.2"     # Prevent hanging builds
+
+# Regression testing
+syrupy = "~=4.0"             # Snapshot testing for tree structures
+pytest-regressions = "~=2.5" # Golden file testing for artifacts
+pytest-cases = ">=3.8.1,<3.9.0"     # Parameterization with case functions
+
+# Essential linting only
+ruff = "~=0.1.0"
+pre-commit = "~=3.3.2"
+
+# Useful development tools
+ipdb = "~=0.13.0"
+jupyter = "~=1.0.0"
+
+[tool.poetry.group.boards]
+optional = true
+
+[tool.poetry.group.boards.dependencies]
+pyserial = "~=3.5"
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = "~=1.6.0"
+mkdocs-material = "~=9.5.0"
+mkdocstrings = {extras = ["python"], version = "~=0.26.0"}
+mkdocs-autorefs = "~=1.2.0"
+mkdocs-git-revision-date-localized-plugin = "~=1.2.0"
+mkdocs-minify-plugin = "~=0.8.0"
+mkdocs-glightbox = "~=0.5.2"
+mike = "~=2.1.0"
+pymdown-extensions = "~=10.8.0"

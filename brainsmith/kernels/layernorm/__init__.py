@@ -1,9 +1,11 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-# Import the main operator, backends, and inference transform for the LayerNorm
+# LayerNorm implementations using KernelOp and Dataflow Modeling
 from .layernorm import LayerNorm
-from .layernorm_hls import LayerNorm_hls as LayerNormHLS
-from .infer_layernorm import InferLayerNorm
+from .layernorm_hls import LayerNorm_hls
 
-__all__ = ["LayerNorm", "LayerNormHLS", "InferLayerNorm"]
+__all__ = [
+    "LayerNorm",
+    "LayerNorm_hls",
+]
