@@ -7,7 +7,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "brainsmith"
-version = "0.1.0-alpha.1"
+version = "0.1.0"
 description = "From PyTorch to RTL with no brakes - FPGA Accelerator Compiler for AI"
 authors = [ "Thomas Keller <thomaskeller@microsoft.com>",]
 maintainers = [ "Thomas Keller <thomaskeller@microsoft.com>",]

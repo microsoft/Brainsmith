@@ -54,18 +54,14 @@ jobs:
           poetry run mike deploy --push --update-aliases stable latest
           poetry run mike set-default --push latest
 
-      - name: Deploy dev version as default (develop branch)
+      - name: Deploy dev version (develop branch)
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         run: |
-          # NOTE: For pre-release splash page, develop deploys to root URL
-          # At November 2025 launch, change this to just: poetry run mike deploy --push dev
-          # This will move develop to /dev/ and let main be the default at root
-          
+          # Deploy develop branch as "dev" version only
+          # The main branch handles "latest" alias and default page
+
           # Delete existing versions to force fresh deployment (prevents "nothing changed" errors)
-          # This is a pre-release measure until proper dev/main split is created at launch
-          # Note: Only delete "dev" - "latest" is an alias, not a separate version
           poetry run mike delete --push dev 2>/dev/null || echo "No existing dev version to delete"
 
-          # Deploy fresh versions with aliases
-          poetry run mike deploy --push --update-aliases dev latest
-          poetry run mike set-default --push latest
+          # Deploy dev version (no "latest" alias - that's for main branch)
+          poetry run mike deploy --push dev

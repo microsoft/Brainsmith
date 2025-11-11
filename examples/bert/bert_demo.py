@@ -24,6 +24,7 @@ import brevitas.onnx as bo
 
 # Import local custom steps to register them for use in blueprint YAML.
 # These steps are referenced in bert_demo.yaml: remove_head, remove_tail, generate_reference_io
+import custom_steps  # noqa: F401 - Registers custom steps via @step decorator
 import onnx
 import torch
 
