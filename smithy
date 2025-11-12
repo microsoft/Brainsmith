@@ -399,9 +399,25 @@ create_container() {
 
         # Xilinx tools (if available)
         if [ ! -z "$BSMITH_XILINX_PATH" ]; then
-            VIVADO_PATH="$BSMITH_XILINX_PATH/Vivado/$BSMITH_XILINX_VERSION"
-            VITIS_PATH="$BSMITH_XILINX_PATH/Vitis/$BSMITH_XILINX_VERSION"
-            HLS_PATH="$BSMITH_XILINX_PATH/Vitis_HLS/$BSMITH_XILINX_VERSION"
+            if [[ "$BSMITH_XILINX_VERSION" =~ ^20([0-9]{2})\.(1|2)$ ]]; then
+                year="${BASH_REMATCH[1]}"
+                minor="${BASH_REMATCH[2]}"
+
+                # Convert to integers for comparison
+                year=$((10#$year))
+                minor=$((10#$minor))
+                if (( year > 24 )) || { (( year == 24 )) && (( minor > 2 )); }; then
+                    VIVADO_PATH="$BSMITH_XILINX_PATH/$BSMITH_XILINX_VERSION/Vivado"
+                    VITIS_PATH="$BSMITH_XILINX_PATH/$BSMITH_XILINX_VERSION/Vitis"
+                    HLS_PATH="$BSMITH_XILINX_PATH/$BSMITH_XILINX_VERSION/Vitis"
+                else
+                    VIVADO_PATH="$BSMITH_XILINX_PATH/Vivado/$BSMITH_XILINX_VERSION"
+                    VITIS_PATH="$BSMITH_XILINX_PATH/Vitis/$BSMITH_XILINX_VERSION"
+                    HLS_PATH="$BSMITH_XILINX_PATH/Vitis_HLS/$BSMITH_XILINX_VERSION"
+                fi
+            else
+                echo "BSMITH_XILINX_VERSION ($BSMITH_XILINX_VERSION) is not in the correct format (YYYY.1 or YYYY.2)"
+            fi
 
             DOCKER_CMD+=" -v $BSMITH_XILINX_PATH:$BSMITH_XILINX_PATH"
             [ -d "$VIVADO_PATH" ] && DOCKER_CMD+=" -e XILINX_VIVADO=$VIVADO_PATH -e VIVADO_PATH=$VIVADO_PATH"
