@@ -7,7 +7,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "brainsmith"
-version = "0.1.0-alpha.1"
+version = "0.1.0"
 description = "From PyTorch to RTL with no brakes - FPGA Accelerator Compiler for AI"
 authors = [ "Thomas Keller <thomaskeller@microsoft.com>",]
 maintainers = [ "Thomas Keller <thomaskeller@microsoft.com>",]
@@ -112,14 +112,14 @@ markers = [
     "bitfile: marks tests that generate bitfiles",
 ]
 
-# Coverage configuration - optional for alpha (pre-release) stage
+# Coverage configuration - optional for time being
 [tool.coverage.run]
 source = ["brainsmith"]
 omit = ["*/tests/*"]
 
 [tool.mypy]
 python_version = "3.11"
-# Relaxed settings for alpha (pre-release) stage
+# Relaxed settings for initial release
 ignore_missing_imports = true
 allow_untyped_defs = true
 allow_incomplete_defs = true
@@ -209,9 +209,8 @@ markupsafe = "==2.0.1"  # Exact pin for compatibility
 importlib-resources = "~=6.1.0"
 dependencies = "~=2.0.1"  # Required by brevitas
 
-# PRE-RELEASE NOTE: Git dependencies (finn, qonnx, brevitas, etc.) are managed by docker/fetch-repos.sh
+# Git dependencies (finn, qonnx, brevitas, etc.) are managed by docker/fetch-repos.sh
 # The repositories are cloned to ./deps/ and installed as editable local packages
-# For open source release, these will be converted to proper git dependencies in pyproject.toml
 brevitas = {path = "deps/brevitas", develop = true, python = ">=3.11,<3.13"}
 qonnx = {path = "deps/qonnx", develop = true}
 finn = {path = "deps/finn", develop = true}

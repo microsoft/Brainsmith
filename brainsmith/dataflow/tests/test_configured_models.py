@@ -11,17 +11,17 @@ import pytest
 from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.dse_models import (
-    InterfaceDesignSpace,
-    KernelDesignSpace,
     InterfaceDesignPoint,
+    InterfaceDesignSpace,
     KernelDesignPoint,
+    KernelDesignSpace,
 )
 from brainsmith.dataflow.types import ShapeHierarchy
-
 
 # =============================================================================
 # Test InterfaceDesignPoint
 # =============================================================================
+
 
 def test_configured_interface_model_creation():
     """Test InterfaceDesignPoint can be created."""
@@ -161,6 +161,7 @@ def test_configured_interface_model_immutable():
 # =============================================================================
 # Test KernelDesignPoint
 # =============================================================================
+
 
 def test_design_point_creation():
     """Test KernelDesignPoint can be created."""

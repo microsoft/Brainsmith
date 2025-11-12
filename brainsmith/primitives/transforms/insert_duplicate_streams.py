@@ -5,14 +5,16 @@
 
 """Insert DuplicateStreams layers for tensor fanout."""
 
+
 import logging
-from onnx import helper, TensorProto
+
+from onnx import TensorProto, helper
 from onnx.onnx_pb import StringStringEntryProto
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.transformation.base import Transformation
 from qonnx.transformation.general import SortGraph
-from qonnx.transformation.infer_shapes import InferShapes
 from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.infer_shapes import InferShapes
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +86,7 @@ class InsertDuplicateStreams(Transformation):
         return successors is not None and len(successors) >= 2
 
     def _insert_duplicator(
-        self,
-        model: ModelWrapper,
-        output_tensor: str,
-        insert_index: int
+        self, model: ModelWrapper, output_tensor: str, insert_index: int
     ) -> None:
         """Insert DuplicateStreams node and rewire consumers.
 
@@ -108,9 +107,7 @@ class InsertDuplicateStreams(Transformation):
         out_tensor_clones = []
         for i in range(n_outputs):
             clone = helper.make_tensor_value_info(
-                model.make_new_valueinfo_name(),
-                TensorProto.FLOAT,
-                out_shape
+                model.make_new_valueinfo_name(), TensorProto.FLOAT, out_shape
             )
             graph.value_info.append(clone)
             model.set_tensor_datatype(clone.name, dt)  # Preserve datatype
@@ -128,9 +125,7 @@ class InsertDuplicateStreams(Transformation):
 
         # Set backend attribute to enable specialization
         # Required by FINN's SpecializeKernel transform (line 68-76)
-        dup_node.attribute.append(
-            helper.make_attribute("backend", "fpgadataflow")
-        )
+        dup_node.attribute.append(helper.make_attribute("backend", "fpgadataflow"))
 
         # Copy PyTorch hierarchy metadata for MLO loop rolling
         # Infrastructure kernels must inherit hierarchy from consumers (they exist to serve them)

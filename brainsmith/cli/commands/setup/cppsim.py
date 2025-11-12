@@ -7,12 +7,10 @@ import shutil
 
 import click
 
-from brainsmith._internal.io.dependencies import DependencyManager, DEPENDENCIES
-from ...utils import (
-    console, error_exit, success, warning,
-    progress_spinner, confirm_or_abort
-)
-from .helpers import _is_cnpy_installed, _are_hlslib_headers_installed
+from brainsmith._internal.io.dependencies import DEPENDENCIES, DependencyManager
+
+from ...utils import confirm_or_abort, console, error_exit, progress_spinner, success, warning
+from .helpers import _are_hlslib_headers_installed, _is_cnpy_installed
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -28,8 +26,11 @@ def cppsim(ctx, force: bool, remove: bool, yes: bool) -> None:
     deps_mgr = DependencyManager()
 
     if remove:
-        cppsim_deps = [k for k, v in DEPENDENCIES.items()
-                       if v.get("group") == "cppsim" and (deps_mgr.deps_dir / k).exists()]
+        cppsim_deps = [
+            k
+            for k, v in DEPENDENCIES.items()
+            if v.get("group") == "cppsim" and (deps_mgr.deps_dir / k).exists()
+        ]
 
         if not cppsim_deps:
             warning("No C++ simulation dependencies are installed")
@@ -41,7 +42,9 @@ def cppsim(ctx, force: bool, remove: bool, yes: bool) -> None:
 
         confirm_or_abort("\nAre you sure you want to remove these dependencies?", skip=yes)
 
-        with progress_spinner("Removing C++ simulation dependencies...", no_progress=ctx.no_progress) as task:
+        with progress_spinner(
+            "Removing C++ simulation dependencies...", no_progress=ctx.no_progress
+        ):
             results = deps_mgr.remove_group("cppsim")
             # remove_group returns Dict[str, Optional[Exception]] where None = success
             failed = [k for k, v in results.items() if v is not None]
@@ -58,7 +61,7 @@ def cppsim(ctx, force: bool, remove: bool, yes: bool) -> None:
         warning("C++ simulation dependencies already installed (use --force to reinstall)")
         return
 
-    with progress_spinner("Setting up C++ simulation dependencies...", no_progress=ctx.no_progress) as task:
+    with progress_spinner("Setting up C++ simulation dependencies...", no_progress=ctx.no_progress):
         try:
             results = deps_mgr.install_group("cppsim", force=force)
             # install_group returns Dict[str, Optional[Exception]] where None = success
@@ -72,7 +75,7 @@ def cppsim(ctx, force: bool, remove: bool, yes: bool) -> None:
             if not shutil.which("g++"):
                 details = [
                     "C++ compiler (g++) is required for C++ simulation.",
-                    "Install it with: sudo apt install g++"
+                    "Install it with: sudo apt install g++",
                 ]
             error_exit(f"Failed to setup C++ simulation: {e}", details=details)
 

@@ -20,10 +20,12 @@ design_space:
 | `brainsmith` | Core framework | Automatic (direct import) | Yes |
 | `finn` (or custom) | Entry point plugins | `setup.cfg`: `brainsmith.plugins = pkg.module:func` | Yes |
 | `project` | Filesystem | Automatic (`kernels/`, `steps/` subdirs) | Yes |
-| Custom (e.g., `team`) | Filesystem | `component_sources.team = "/path"` in config | Yes |
+| e.g. `team` | Filesystem | `component_sources.team = "/path"` in config | Yes |
 | `custom` | Runtime registration | Programmatic (no namespace/domain) | No |
 
 **Source priority** (configurable): `['project', 'brainsmith', 'finn', 'custom']` - first match wins for short names
+
+Check registered components with `brainsmith registry`
 
 ## Registering Components
 
@@ -65,11 +67,11 @@ brainsmith.plugins =
 
 **Configuration** (`brainsmith.yaml`): `cache_components` (default: true), `components_strict` (default: true), `source_priority`, `component_sources`
 
----
 
 ## API Patterns
 
 All components follow `get_*/has_*/list_*` pattern:
+
 - **get** - Load component (imports module): `get_step()`, `get_kernel()`, `get_backend()`
 - **has** - Check existence (no import): `has_step()`, `has_kernel()`
 - **list** - Enumerate: `list_steps()`, `list_kernels()`, `list_backends()`
@@ -78,7 +80,6 @@ All components follow `get_*/has_*/list_*` pattern:
 
 **Special**: `get_kernel_infer()` for ONNX transforms, `list_backends_for_kernel(name, language='hls')` for backend discovery, `get_component_metadata()` for inspection.
 
----
 
 ## Advanced Patterns
 
@@ -95,7 +96,3 @@ for src in ['brainsmith', 'finn', 'project']:
 ```
 
 **Component introspection:** Use `get_component_metadata(name, type)` to inspect without loading.
-
----
-
-**See also**: [Component Registry API](../api/registry.md), [Settings API](../api/settings.md), [Hardware Kernels Guide](hardware-kernels.md)

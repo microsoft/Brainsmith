@@ -18,32 +18,38 @@ Logging Strategy:
     - ERROR: Import failures in strict mode, entry point load failures
 """
 
-import os
-import sys
 import importlib
 import importlib.util
 import logging
+import os
+import sys
 import time
 from contextlib import contextmanager
-from pathlib import Path
 from importlib.metadata import entry_points
-from typing import Dict, List, Any
+from pathlib import Path
+from typing import Any
 
-from ._state import _component_index, _components_discovered, _discovered_sources
-from ._decorators import _register_kernel, _register_backend, _register_step, source_context, _convert_lazy_import_spec
-from ._metadata import ComponentMetadata, ComponentType, ImportSpec, resolve_lazy_class
-from .constants import (
-    SOURCE_BRAINSMITH,
-    SOURCE_FINN,
-    SOURCE_PROJECT,
-    DEFAULT_SOURCE_PRIORITY,
+from ._decorators import (
+    _convert_lazy_import_spec,
+    _register_backend,
+    _register_kernel,
+    _register_step,
+    source_context,
 )
 from ._manifest import (
     _build_manifest_from_index,
-    _save_manifest,
-    _load_manifest,
     _is_manifest_stale,
+    _load_manifest,
     _populate_index_from_manifest,
+    _save_manifest,
+)
+from ._metadata import ComponentMetadata, ComponentType, ImportSpec, resolve_lazy_class
+from ._state import _component_index, _components_discovered, _discovered_sources
+from .constants import (
+    DEFAULT_SOURCE_PRIORITY,
+    SOURCE_BRAINSMITH,
+    SOURCE_FINN,
+    SOURCE_PROJECT,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +59,7 @@ logger = logging.getLogger(__name__)
 # Performance Instrumentation
 # ============================================================================
 
+
 @contextmanager
 def _measure_load(operation: str, component: str = ""):
     """Time and log component loading (only when BRAINSMITH_PROFILE is set).
@@ -60,7 +67,7 @@ def _measure_load(operation: str, component: str = ""):
     Set BRAINSMITH_PROFILE=1 to enable performance timing logs.
     """
     # Only measure when explicitly enabled
-    if not os.environ.get('BRAINSMITH_PROFILE'):
+    if not os.environ.get("BRAINSMITH_PROFILE"):
         yield
         return
 
@@ -86,6 +93,7 @@ def _is_strict_mode() -> bool:
     """
     try:
         from brainsmith.settings import get_config
+
         return get_config().components_strict
     except (ImportError, AttributeError):
         return False
@@ -95,7 +103,8 @@ def _is_strict_mode() -> bool:
 # Component Name Resolution
 # ============================================================================
 
-def _resolve_component_name(name_or_qualified: str, component_type: str = 'step') -> str:
+
+def _resolve_component_name(name_or_qualified: str, component_type: str = "step") -> str:
     """Resolve 'LayerNorm' or 'brainsmith:LayerNorm' → 'brainsmith:LayerNorm'.
 
     Returns the full name even if component doesn't exist - the caller is
@@ -114,12 +123,13 @@ def _resolve_component_name(name_or_qualified: str, component_type: str = 'step'
     component_type_enum = ComponentType.from_string(component_type)
 
     # Already qualified?
-    if ':' in name_or_qualified:
+    if ":" in name_or_qualified:
         return name_or_qualified
 
     # Get source priority from config
     try:
         from brainsmith.settings import get_config
+
         source_priority = get_config().source_priority
     except (ImportError, AttributeError) as e:
         logger.debug(f"Using default source priority (config unavailable): {e}")
@@ -143,11 +153,8 @@ def _resolve_component_name(name_or_qualified: str, component_type: str = 'step'
 # Component Indexing
 # ============================================================================
 
-def _index_entry_point_components(
-    source: str,
-    component_type: str,
-    metas: List[Dict]
-):
+
+def _index_entry_point_components(source: str, component_type: str, metas: list[dict]):
     """Index entry point components - unified for all types.
 
     Supports both patterns (no AST parsing needed):
@@ -165,10 +172,10 @@ def _index_entry_point_components(
     # Convert string to enum
     component_type_enum = ComponentType.from_string(component_type)
 
-    attr_field = 'func_name' if component_type_enum == ComponentType.STEP else 'class_name'
+    attr_field = "func_name" if component_type_enum == ComponentType.STEP else "class_name"
 
     for meta in metas:
-        name = meta['name']
+        name = meta["name"]
         full_name = f"{source}:{name}"
 
         # Check if already registered via decorator
@@ -183,21 +190,18 @@ def _index_entry_point_components(
                 name=name,
                 source=source,
                 component_type=component_type_enum,
-                import_spec=ImportSpec(
-                    module=module_name,
-                    attr=class_name
-                ),
-                loaded_obj=existing
+                import_spec=ImportSpec(module=module_name, attr=class_name),
+                loaded_obj=existing,
             )
 
             # Populate type-specific metadata fields (inline)
             if component_type_enum == ComponentType.KERNEL:
-                infer_spec = meta.get('infer_transform')
+                infer_spec = meta.get("infer_transform")
                 metadata.kernel_infer = _convert_lazy_import_spec(infer_spec)
-                metadata.is_infrastructure = meta.get('is_infrastructure', False)
+                metadata.is_infrastructure = meta.get("is_infrastructure", False)
             elif component_type_enum == ComponentType.BACKEND:
-                metadata.backend_target = meta.get('target_kernel')
-                metadata.backend_language = meta.get('language')
+                metadata.backend_target = meta.get("target_kernel")
+                metadata.backend_language = meta.get("language")
 
             _component_index[full_name] = metadata
             logger.debug(f"Indexed eager {component_type}: {full_name}")
@@ -208,20 +212,17 @@ def _index_entry_point_components(
                 name=name,
                 source=source,
                 component_type=component_type_enum,
-                import_spec=ImportSpec(
-                    module=meta['module'],
-                    attr=meta[attr_field]
-                )
+                import_spec=ImportSpec(module=meta["module"], attr=meta[attr_field]),
             )
 
             # Populate type-specific metadata fields (inline)
             if component_type_enum == ComponentType.KERNEL:
-                infer_spec = meta.get('infer_transform')
+                infer_spec = meta.get("infer_transform")
                 metadata.kernel_infer = _convert_lazy_import_spec(infer_spec)
-                metadata.is_infrastructure = meta.get('is_infrastructure', False)
+                metadata.is_infrastructure = meta.get("is_infrastructure", False)
             elif component_type_enum == ComponentType.BACKEND:
-                metadata.backend_target = meta.get('target_kernel')
-                metadata.backend_language = meta.get('language')
+                metadata.backend_target = meta.get("target_kernel")
+                metadata.backend_language = meta.get("language")
 
             _component_index[full_name] = metadata
             logger.debug(f"Indexed lazy {component_type}: {full_name}")
@@ -265,7 +266,9 @@ def _link_backends_to_kernels() -> None:
             kernel_meta.kernel_backends.append(full_name)
             logger.debug(f"Linked backend {full_name} to kernel {target}")
         else:
-            logger.debug(f"Backend {full_name} already linked to kernel {target} (skipping duplicate)")
+            logger.debug(
+                f"Backend {full_name} already linked to kernel {target} (skipping duplicate)"
+            )
 
     logger.debug("Linked backends to their target kernels")
 
@@ -273,6 +276,7 @@ def _link_backends_to_kernels() -> None:
 # ============================================================================
 # Component Loading
 # ============================================================================
+
 
 def _load_component(meta: ComponentMetadata) -> Any:
     """Load a component on demand - unified direct import.
@@ -364,10 +368,7 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
 
     elif meta.component_type == ComponentType.BACKEND:
         _register_backend(
-            obj,
-            name=meta.name,
-            target_kernel=meta.backend_target,
-            language=meta.backend_language
+            obj, name=meta.name, target_kernel=meta.backend_target, language=meta.backend_language
         )
         logger.debug(f"Registered backend: {meta.full_name}")
 
@@ -382,6 +383,7 @@ def _register_component(obj: Any, meta: ComponentMetadata) -> None:
 # ============================================================================
 # Main Discovery Entry Point
 # ============================================================================
+
 
 def discover_components(use_cache: bool = True, force_refresh: bool = False):
     """Discover components from all configured sources.
@@ -411,14 +413,15 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
     if _components_discovered:
         return
 
-    with _measure_load('discover_components'):
+    with _measure_load("discover_components"):
         # Check cache_components setting and get project_dir
         from brainsmith.settings import get_config
+
         config = get_config()
         cache_enabled = config.cache_components
 
         # Use project_dir for manifest location (not CWD)
-        manifest_path = config.project_dir / '.brainsmith' / 'component_manifest.json'
+        manifest_path = config.project_dir / ".brainsmith" / "component_manifest.json"
 
         if not cache_enabled:
             logger.debug("Component caching disabled via cache_components setting")
@@ -438,9 +441,7 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
                     _populate_index_from_manifest(manifest)
                     _components_discovered = True
 
-                    logger.debug(
-                        f"Loaded {len(_component_index)} components from cache"
-                    )
+                    logger.debug(f"Loaded {len(_component_index)} components from cache")
                     return
             except Exception as e:
                 logger.warning(f"Failed to load manifest cache: {e}")
@@ -456,10 +457,9 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         # Decorators fire during import and auto-populate registry + index
         _discovered_sources.add(SOURCE_BRAINSMITH)
         with source_context(SOURCE_BRAINSMITH):
-            import brainsmith.kernels  # noqa: E402
-            import brainsmith.steps    # noqa: E402
+            pass  # noqa: E402
 
-        logger.debug(f"Loaded core brainsmith components")
+        logger.debug("Loaded core brainsmith components")
 
         # 2. Entry point components (FINN, etc.)
         _load_entry_point_components()
@@ -476,7 +476,7 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         _link_backends_to_kernels()
 
         # Count components by type
-        counts = {'step': 0, 'kernel': 0, 'backend': 0}
+        counts = {"step": 0, "kernel": 0, "backend": 0}
         for meta in _component_index.values():
             counts[str(meta.component_type)] += 1
 
@@ -525,9 +525,9 @@ def _load_project_components(config):
     _discovered_sources.add(SOURCE_PROJECT)
 
     # Load structured layout (project_dir/kernels/, project_dir/steps/)
-    for component_type in ['kernels', 'steps']:
+    for component_type in ["kernels", "steps"]:
         type_dir = source_path / component_type
-        init_file = type_dir / '__init__.py'
+        init_file = type_dir / "__init__.py"
 
         if init_file.exists():
             _load_component_package(SOURCE_PROJECT, type_dir)
@@ -578,7 +578,7 @@ def _load_component_package(source_name: str, source_path: Path):
     - Exports COMPONENTS dict (lazy loading, recommended)
     - Imports modules with @kernel/@step decorators (eager, legacy)
     """
-    init_file = source_path / '__init__.py'
+    init_file = source_path / "__init__.py"
     if not init_file.exists():
         logger.debug(
             f"Component source '{source_name}' has no __init__.py, skipping. "
@@ -597,7 +597,7 @@ def _load_component_package(source_name: str, source_path: Path):
 
     # Import package
     module_name = source_path.name
-    init_path = source_path / '__init__.py'
+    init_path = source_path / "__init__.py"
 
     try:
         # Handle module name collisions using spec-based import
@@ -645,7 +645,7 @@ def _load_entry_point_components():
     logger.debug("Scanning entry points")
 
     try:
-        eps = entry_points(group='brainsmith.plugins')
+        eps = entry_points(group="brainsmith.plugins")
 
         for ep in eps:
             source_name = ep.name  # Use entry point name (e.g., 'finn') as source
@@ -659,7 +659,9 @@ def _load_entry_point_components():
                 components = register_func()
 
                 if not isinstance(components, dict):
-                    logger.error(f"Entry point '{ep.name}' returned {type(components)}, expected dict")
+                    logger.error(
+                        f"Entry point '{ep.name}' returned {type(components)}, expected dict"
+                    )
                     continue
 
                 # Register this source as discovered
@@ -669,9 +671,13 @@ def _load_entry_point_components():
                 # Register all components under this source
                 with source_context(source_name):
                     # Index all component types using unified helper
-                    _index_entry_point_components(source_name, 'kernel', components.get('kernels', []))
-                    _index_entry_point_components(source_name, 'backend', components.get('backends', []))
-                    _index_entry_point_components(source_name, 'step', components.get('steps', []))
+                    _index_entry_point_components(
+                        source_name, "kernel", components.get("kernels", [])
+                    )
+                    _index_entry_point_components(
+                        source_name, "backend", components.get("backends", [])
+                    )
+                    _index_entry_point_components(source_name, "step", components.get("steps", []))
 
                 logger.debug(
                     f"✓ Loaded {source_name}: "

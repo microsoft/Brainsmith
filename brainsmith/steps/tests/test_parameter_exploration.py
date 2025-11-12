@@ -7,17 +7,16 @@
 """Tests for parameter exploration step (Phase 7)."""
 
 import json
-import pytest
-from pathlib import Path
-from onnx import helper, TensorProto
+
+from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.steps.parameter_exploration import explore_kernel_params_step
-from brainsmith.kernels.layernorm import LayerNorm
 
 
 class MockConfig:
     """Mock FINN config for testing."""
+
     def __init__(self, output_dir):
         self.output_dir = output_dir
 
@@ -36,15 +35,10 @@ def create_layernorm_model():
         SIMD=1,
         epsilon=1e-5,
         input0Datatype="FLOAT32",
-        output0Datatype="FLOAT32"
+        output0Datatype="FLOAT32",
     )
 
-    graph = helper.make_graph(
-        [node],
-        "layernorm_graph",
-        [input_tensor],
-        [output_tensor]
-    )
+    graph = helper.make_graph([node], "layernorm_graph", [input_tensor], [output_tensor])
 
     model = helper.make_model(graph)
     model_w = ModelWrapper(model)
@@ -59,7 +53,7 @@ def create_multi_kernel_model():
     require proper shape inference and may have additional complexity.
     """
     input_tensor = helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 1, 768])
-    intermediate = helper.make_tensor_value_info("intermediate", TensorProto.FLOAT, [1, 1, 768])
+    helper.make_tensor_value_info("intermediate", TensorProto.FLOAT, [1, 1, 768])
     output_tensor = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, 1, 768])
 
     node1 = helper.make_node(
@@ -71,7 +65,7 @@ def create_multi_kernel_model():
         SIMD=1,
         epsilon=1e-5,
         input0Datatype="FLOAT32",
-        output0Datatype="FLOAT32"
+        output0Datatype="FLOAT32",
     )
 
     node2 = helper.make_node(
@@ -83,14 +77,11 @@ def create_multi_kernel_model():
         SIMD=1,
         epsilon=1e-5,
         input0Datatype="FLOAT32",
-        output0Datatype="FLOAT32"
+        output0Datatype="FLOAT32",
     )
 
     graph = helper.make_graph(
-        [node1, node2],
-        "multi_layernorm_graph",
-        [input_tensor],
-        [output_tensor]
+        [node1, node2], "multi_layernorm_graph", [input_tensor], [output_tensor]
     )
 
     model = helper.make_model(graph)
@@ -105,19 +96,9 @@ def create_model_without_kernels():
     output_tensor = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, 1, 768])
 
     # Add a regular ONNX node (not a KernelOp)
-    node = helper.make_node(
-        "Relu",
-        inputs=["input"],
-        outputs=["output"],
-        name="relu_0"
-    )
+    node = helper.make_node("Relu", inputs=["input"], outputs=["output"], name="relu_0")
 
-    graph = helper.make_graph(
-        [node],
-        "no_kernels_graph",
-        [input_tensor],
-        [output_tensor]
-    )
+    graph = helper.make_graph([node], "no_kernels_graph", [input_tensor], [output_tensor])
 
     model = helper.make_model(graph)
     model_w = ModelWrapper(model)
@@ -128,6 +109,7 @@ def create_model_without_kernels():
 # ====================================================================
 # Tests for explore_kernel_params_step
 # ====================================================================
+
 
 def test_explore_single_kernel(tmp_path):
     """Test parameter exploration with single LayerNorm kernel."""
@@ -275,12 +257,15 @@ def test_explore_performance(tmp_path):
     # Performance target: should complete in reasonable time
     # Target: ~1ms per config (generous for CI), so 100 configs in 100ms
     # Use 5x margin for CI variability
-    max_time = (total_configs * 0.005)  # 5ms per config max
-    assert elapsed < max_time, \
-        f"Exploration took {elapsed:.2f}s for {total_configs} configs (target <{max_time:.2f}s)"
+    max_time = total_configs * 0.005  # 5ms per config max
+    assert (
+        elapsed < max_time
+    ), f"Exploration took {elapsed:.2f}s for {total_configs} configs (target <{max_time:.2f}s)"
 
-    print(f"\n  Explored {total_configs} configs in {elapsed:.2f}s "
-          f"({elapsed*1000/total_configs:.2f}ms/config)")
+    print(
+        f"\n  Explored {total_configs} configs in {elapsed:.2f}s "
+        f"({elapsed*1000/total_configs:.2f}ms/config)"
+    )
 
 
 def test_explore_without_output_dir(tmp_path):
@@ -312,7 +297,9 @@ def test_explore_all_configs_valid(tmp_path):
 
     # All configs should succeed (no failures)
     summary = results["summary"]
-    assert summary["total_failed"] == 0, \
-        "All configs should succeed (no invalid configs should be generated)"
-    assert summary["total_successful"] == summary["total_configs"], \
-        "All explored configs should be successful"
+    assert (
+        summary["total_failed"] == 0
+    ), "All configs should succeed (no invalid configs should be generated)"
+    assert (
+        summary["total_successful"] == summary["total_configs"]
+    ), "All explored configs should be successful"

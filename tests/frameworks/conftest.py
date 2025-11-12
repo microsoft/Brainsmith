@@ -28,6 +28,3 @@ Usage:
         # Now runs with custom parameterization!
         pass
 """
-
-import pytest
-from qonnx.core.datatype import DataType

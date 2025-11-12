@@ -63,15 +63,11 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "pipeline: Pipeline integration tests (full ONNX → Hardware flow)"
     )
-    config.addinivalue_line(
-        "markers", "golden: Tests that validate against golden reference"
-    )
+    config.addinivalue_line("markers", "golden: Tests that validate against golden reference")
     config.addinivalue_line(
         "markers", "phase1: Phase 1 pipeline tests (pipeline + golden reference)"
     )
     config.addinivalue_line(
         "markers", "phase2: Phase 2 pipeline tests (cross-backend + parametric)"
     )
-    config.addinivalue_line(
-        "markers", "phase3: Phase 3 pipeline tests (snapshots + properties)"
-    )
+    config.addinivalue_line("markers", "phase3: Phase 3 pipeline tests (snapshots + properties)")

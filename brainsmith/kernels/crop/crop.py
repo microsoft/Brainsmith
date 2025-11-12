@@ -28,26 +28,35 @@ Hardware Mapping:
     Crop edges: north/south (height), east/west (width)
 """
 
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 from onnx import NodeProto, helper
-from typing import Optional, Dict, Any, Callable
-
 from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
 from qonnx.util.basic import get_by_name
 
-from brainsmith.dataflow import KernelOp, FULL_DIM
+import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_DIM, KernelOp
+from brainsmith.dataflow.constraints import (
+    CustomConstraint,
+    DatatypeInteger,
+    DimensionDivisible,
+    DimensionEquals,
+    IsDynamic,
+)
 from brainsmith.dataflow.spec_helpers import derive_dim
 from brainsmith.dataflow.types import ShapeHierarchy
-import brainsmith.dataflow as df
 from brainsmith.registry import kernel
-
 
 # =============================================================================
 # Helper Functions for Custom Dimension Computation
 # =============================================================================
 
-def _compute_output_height(interfaces: Dict[str, Any], param_getter: Callable, model: Any, tensor_name: str) -> int:
+
+def _compute_output_height(
+    interfaces: dict[str, Any], param_getter: Callable, model: Any, tensor_name: str
+) -> int:
     """Compute cropped height from input and crop parameters.
 
     Output height = input height - crop_north - crop_south
@@ -79,7 +88,9 @@ def _compute_output_height(interfaces: Dict[str, Any], param_getter: Callable, m
     return output_h
 
 
-def _compute_output_width(interfaces: Dict[str, Any], param_getter: Callable, model: Any, tensor_name: str) -> int:
+def _compute_output_width(
+    interfaces: dict[str, Any], param_getter: Callable, model: Any, tensor_name: str
+) -> int:
     """Compute cropped width from input and crop parameters.
 
     Output width = input width - crop_east - crop_west
@@ -111,7 +122,7 @@ def _compute_output_width(interfaces: Dict[str, Any], param_getter: Callable, mo
     return output_w
 
 
-def _validate_crop_bounds(ctx) -> Optional[str]:
+def _validate_crop_bounds(ctx) -> str | None:
     """Validate crop bounds are within input dimensions.
 
     Checks:
@@ -155,7 +166,6 @@ def _validate_crop_bounds(ctx) -> Optional[str]:
 
 CROP_SCHEMA = df.KernelSchema(
     name="Crop",
-
     # ========== STRUCTURE ==========
     # Note: Crop hardware kernel has 1 input (data tensor).
     # Gather nodes have 2 inputs (data + indices), but indices are consumed
@@ -173,49 +183,47 @@ CROP_SCHEMA = df.KernelSchema(
             name="output",
             # Output shape depends on crop parameters - use custom dimension functions
             block_tiling=[
-                FULL_DIM,                    # N dimension (unchanged)
-                _compute_output_height,      # Cropped height
-                _compute_output_width,       # Cropped width
-                FULL_DIM,                    # C dimension (unchanged)
+                FULL_DIM,  # N dimension (unchanged)
+                _compute_output_height,  # Cropped height
+                _compute_output_width,  # Cropped width
+                FULL_DIM,  # C dimension (unchanged)
             ],
-            stream_tiling=[1, 1, 1, derive_dim("input", ShapeHierarchy.STREAM, -1)],  # Match input SIMD
+            stream_tiling=[
+                1,
+                1,
+                1,
+                derive_dim("input", ShapeHierarchy.STREAM, -1),
+            ],  # Match input SIMD
             datatype="input",  # Pass-through datatype
             required_layout="NHWC",
         )
     ],
-
     # ========== KERNEL PARAMETERS ==========
     kernel_params={
         "crop_north": ("i", True, 0),  # Rows to remove from top
         "crop_south": ("i", True, 0),  # Rows to remove from bottom
-        "crop_east": ("i", True, 0),   # Columns to remove from right
-        "crop_west": ("i", True, 0),   # Columns to remove from left
+        "crop_east": ("i", True, 0),  # Columns to remove from right
+        "crop_west": ("i", True, 0),  # Columns to remove from left
         "channel_fold": ("i", False, 1),  # Batch processing factor
     },
-
     # ========== VALIDATION ==========
     # Note: These constraints validate the Crop hardware kernel structure (1 input).
     # Additional Gather-specific validation (2 inputs, indices are initializer)
     # is done in can_infer_from() override.
     constraints=[
         # Data input must be dynamic (not an initializer)
-        df.IsDynamic(("input",)),
-
+        IsDynamic(("input",)),
         # Data input must be integer datatype
-        df.DatatypeInteger(("input",)),
-
+        DatatypeInteger(("input",)),
         # Batch size must be 1 (NHWC: dimension 0)
-        df.DimensionEquals("input", 0, 1, hierarchy=df.ShapeHierarchy.TENSOR),
-
+        DimensionEquals("input", 0, 1, hierarchy=df.ShapeHierarchy.TENSOR),
         # SIMD must divide channel dimension (parametric constraint)
-        df.DimensionDivisible("input", -1, "SIMD", hierarchy=df.ShapeHierarchy.STREAM),
-
+        DimensionDivisible("input", -1, "SIMD", hierarchy=df.ShapeHierarchy.STREAM),
         # Custom crop bounds validation
-        df.CustomConstraint(_validate_crop_bounds, "Crop bounds must be within input dimensions"),
+        CustomConstraint(_validate_crop_bounds, "Crop bounds must be within input dimensions"),
     ],
-
     # ========== TRANSFORMATION ==========
-    attribute_mapping={},   # No direct ONNX attrs → kernel params (computed from indices)
+    attribute_mapping={},  # No direct ONNX attrs → kernel params (computed from indices)
 )
 
 
@@ -223,9 +231,10 @@ CROP_SCHEMA = df.KernelSchema(
 # Crop Kernel Implementation
 # =============================================================================
 
+
 @kernel(
     description="Hardware cropping operation for spatial dimensions (KernelOp version)",
-    author="Josh Monson, migrated by Thomas Keller"
+    author="Josh Monson, migrated by Thomas Keller",
 )
 class Crop(KernelOp):
     """Hardware kernel for 2D spatial cropping with schema-driven design.
@@ -268,7 +277,7 @@ class Crop(KernelOp):
     # ================================================================
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         """Build Crop schema (constant for all instances)."""
         return CROP_SCHEMA
 
@@ -317,10 +326,7 @@ class Crop(KernelOp):
 
     @classmethod
     def infer_from(
-        cls,
-        node: NodeProto,
-        model: ModelWrapper,
-        insert_index: int
+        cls, node: NodeProto, model: ModelWrapper, insert_index: int
     ) -> df.TransformationResult:
         """Create Crop HW node from ONNX Gather node.
 
@@ -422,7 +428,7 @@ class Crop(KernelOp):
                 "source_pattern": "Gather",
                 "crop_bounds": (crop_north, crop_south, crop_east, crop_west),
                 "axis": axis,
-            }
+            },
         )
 
     # ================================================================
@@ -492,5 +498,5 @@ class Crop(KernelOp):
             inputs=[self.onnx_node.input[0]],
             outputs=[self.onnx_node.output[0]],
             in_shape=list(in_shape),
-            out_shape=list(out_shape)
+            out_shape=list(out_shape),
         )

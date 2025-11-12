@@ -14,8 +14,9 @@ Temporary shuffle sizing fix for BERT builds.
 """
 
 import logging
-from qonnx.transformation.base import Transformation
+
 import qonnx.custom_op.registry as registry
+from qonnx.transformation.base import Transformation
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class TempShuffleFixer(Transformation):
                 if (inner_moves == 1) and (simd > 1):
                     logger.warning(
                         "Safety precaution: changing shuffle SIMD to 1 where inner_moves=1 (node: %s)",
-                        node.name
+                        node.name,
                     )
                     inst.set_nodeattr("SIMD", 1)
                     graph_modified = True

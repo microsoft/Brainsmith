@@ -22,15 +22,14 @@ Phase 2/3 (Future):
 """
 
 import logging
-import os
-import numpy as np
 from dataclasses import dataclass
 from math import ceil
-from typing import Optional
-from qonnx.core.datatype import DataType
 
+import numpy as np
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 from finn.util.data_packing import numpy_to_hls_code
+from qonnx.core.datatype import DataType
+
 from brainsmith.kernels.elementwise_binary.elementwise_binary import ElementwiseBinaryOp
 from brainsmith.registry import backend
 
@@ -48,6 +47,7 @@ class BufferDeclaration:
         declaration: C++ array declaration (e.g., "LhsType lhs[1][64][2];")
         partition_pragma: HLS pragma for array partitioning
     """
+
     declaration: str
     partition_pragma: str
 
@@ -63,7 +63,7 @@ class BufferDeclaration:
 @backend(
     target_kernel="brainsmith:ElementwiseBinaryOp",
     language="hls",
-    author="Migrated from AMD FINN by Thomas Keller"
+    author="Migrated from AMD FINN by Thomas Keller",
 )
 class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
     """HLS backend for ElementwiseBinaryOp (KernelOp-based).
@@ -127,8 +127,8 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         bram_blocks = self._calculate_bram_usage()
 
         # Validate against target device (if known)
-        target_device = getattr(self, 'target_device', None)
-        if target_device is not None and hasattr(target_device, 'bram_count'):
+        target_device = getattr(self, "target_device", None)
+        if target_device is not None and hasattr(target_device, "bram_count"):
             max_bram = target_device.bram_count
             if bram_blocks > max_bram:
                 logger.warning(
@@ -187,8 +187,8 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         lut_count = self._calculate_lut_usage()
 
         # Validate against target device (if known)
-        target_device = getattr(self, 'target_device', None)
-        if target_device is not None and hasattr(target_device, 'lut_count'):
+        target_device = getattr(self, "target_device", None)
+        if target_device is not None and hasattr(target_device, "lut_count"):
             max_luts = target_device.lut_count
             if lut_count > max_luts:
                 logger.warning(
@@ -277,7 +277,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         else:
             raise ValueError(f"Unknown input_pattern: {input_pattern}")
 
-    def _get_buffer_declaration(self, input_name: str, pe: int) -> Optional[BufferDeclaration]:
+    def _get_buffer_declaration(self, input_name: str, pe: int) -> BufferDeclaration | None:
         """Generate buffer array declaration for an input.
 
         Args:
@@ -316,10 +316,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         ndim = len(buffer_shape)
         partition_pragma = f"#pragma HLS ARRAY_PARTITION variable={input_name} complete dim={ndim}"
 
-        return BufferDeclaration(
-            declaration=declaration,
-            partition_pragma=partition_pragma
-        )
+        return BufferDeclaration(declaration=declaration, partition_pragma=partition_pragma)
 
     def _get_read_condition(self, input_name, loop_counters):
         """Generate C++ condition for when to read from input stream.
@@ -426,16 +423,14 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
                 lhs_shape = (len(out_shape) - len(lhs_shape)) * (1,) + lhs_shape
                 lhs_parameters = lhs_parameters.reshape(*lhs_shape)
 
-                lhs_code = numpy_to_hls_code(
-                    lhs_parameters, lhs_dtype, "lhs", False, False
-                )
+                lhs_code = numpy_to_hls_code(lhs_parameters, lhs_dtype, "lhs", False, False)
 
-                param_code_sections.append(f"// LHS parameter tensor\n")
+                param_code_sections.append("// LHS parameter tensor\n")
                 param_code_sections.append(lhs_code)
 
                 # Add HLS pragmas for parameter storage and partitioning
                 self.code_gen_dict["$PRAGMAS$"].append(
-                    f"#pragma HLS BIND_STORAGE variable=lhs type=ROM_2P impl=distributed"
+                    "#pragma HLS BIND_STORAGE variable=lhs type=ROM_2P impl=distributed"
                 )
                 self.code_gen_dict["$PRAGMAS$"].append(
                     f"#pragma HLS ARRAY_PARTITION variable=lhs complete dim={len(lhs_shape)}"
@@ -457,25 +452,21 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
 
             # Broadcast to PE dimension if needed
             if rhs_parameters.shape[-1] != pe:
-                rhs_parameters = np.broadcast_to(
-                    rhs_parameters, rhs_parameters.shape[:-1] + (pe,)
-                )
+                rhs_parameters = np.broadcast_to(rhs_parameters, rhs_parameters.shape[:-1] + (pe,))
 
             # Pad dimensions from left to align with output shape
             rhs_shape = rhs_parameters.shape
             rhs_shape = (len(out_shape) - len(rhs_shape)) * (1,) + rhs_shape
             rhs_parameters = rhs_parameters.reshape(*rhs_shape)
 
-            rhs_code = numpy_to_hls_code(
-                rhs_parameters, rhs_dtype, "rhs", False, False
-            )
+            rhs_code = numpy_to_hls_code(rhs_parameters, rhs_dtype, "rhs", False, False)
 
-            param_code_sections.append(f"// RHS parameter tensor\n")
+            param_code_sections.append("// RHS parameter tensor\n")
             param_code_sections.append(rhs_code)
 
             # Add HLS pragmas for parameter storage and partitioning
             self.code_gen_dict["$PRAGMAS$"].append(
-                f"#pragma HLS BIND_STORAGE variable=rhs type=ROM_2P impl=distributed"
+                "#pragma HLS BIND_STORAGE variable=rhs type=ROM_2P impl=distributed"
             )
             self.code_gen_dict["$PRAGMAS$"].append(
                 f"#pragma HLS ARRAY_PARTITION variable=rhs complete dim={len(rhs_shape)}"
@@ -536,8 +527,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             super().execute_node(context, graph)
         else:
             raise ValueError(
-                f"Invalid or unset exec_mode: '{mode}'. "
-                f"Must be 'python', 'cppsim', or 'rtlsim'"
+                f"Invalid or unset exec_mode: '{mode}'. " f"Must be 'python', 'cppsim', or 'rtlsim'"
             )
 
     def _execute_python(self, context, graph):
@@ -627,7 +617,9 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         elif len(tensor_shape) == 2:  # [N, C] - fully connected
             spatial_dim = 1
         else:
-            raise Exception(f"Unexpected tensor shape {tensor_shape}. Expected 2D [N,C], 3D [N,Seq,C], or 4D [N,H,W,C]")
+            raise Exception(
+                f"Unexpected tensor shape {tensor_shape}. Expected 2D [N,C], 3D [N,Seq,C], or 4D [N,H,W,C]"
+            )
 
         # Get HLS type strings for inputs/outputs
         lhs_hls_type = self.get_input_datatype(0).get_hls_datatype_str()
@@ -639,7 +631,6 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             f"using LhsType = {lhs_hls_type};",
             f"using RhsType = {rhs_hls_type};",
             f"using OutType = {out_hls_type};",
-
             # Constant definitions
             # TODO(post-release): Remove unused macros (NumChannels, SpatialDim, numReps)
             # These are computed but never referenced in generated HLS code.
@@ -649,10 +640,9 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             f"#define PE {pe}",  # Used in generated code
             f"#define SpatialDim {spatial_dim}",  # UNUSED - remove post-release
             f"#define numReps {numReps}",  # UNUSED - remove post-release
-
             # Include params.hpp AFTER type definitions
             # (params.hpp contains arrays like: LhsType lhs[...], RhsType rhs[...])
-            '#include "params.hpp"'
+            '#include "params.hpp"',
         ]
 
     def read_npy_data(self):
@@ -671,7 +661,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             npy_in_lhs = f"{code_gen_dir}/input_0.npy"
 
             self.code_gen_dict["$READNPYDATA$"].append(
-                f'npy2apintstream<{lhs_packed_hls_type}, {lhs_elem_hls_type}, {lhs_elem_bits}, '
+                f"npy2apintstream<{lhs_packed_hls_type}, {lhs_elem_hls_type}, {lhs_elem_bits}, "
                 f'{npy_type}>("{npy_in_lhs}", in0_V, false);'
             )
 
@@ -686,7 +676,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             npy_in_rhs = f"{code_gen_dir}/input_1.npy"
 
             self.code_gen_dict["$READNPYDATA$"].append(
-                f'npy2apintstream<{rhs_packed_hls_type}, {rhs_elem_hls_type}, {rhs_elem_bits}, '
+                f"npy2apintstream<{rhs_packed_hls_type}, {rhs_elem_hls_type}, {rhs_elem_bits}, "
                 f'{npy_type}>("{npy_in_rhs}", in1_V, false);'
             )
 
@@ -739,8 +729,12 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         code.extend(self._generate_header(tmpl_args))
         code.extend(self._generate_buffer_declarations(pe, lhs_is_streaming, rhs_is_streaming))
         code.extend(self._generate_loop_headers(output_shape, ndim))
-        code.extend(self._generate_lhs_stream_read(tmpl_args, loop_counters, ndim, lhs_is_streaming))
-        code.extend(self._generate_rhs_stream_read(tmpl_args, loop_counters, ndim, rhs_is_streaming))
+        code.extend(
+            self._generate_lhs_stream_read(tmpl_args, loop_counters, ndim, lhs_is_streaming)
+        )
+        code.extend(
+            self._generate_rhs_stream_read(tmpl_args, loop_counters, ndim, rhs_is_streaming)
+        )
         code.extend(self._generate_pe_operations(op_str, loop_counters, ndim))
         code.extend(self._generate_loop_closings(ndim))
 
@@ -763,10 +757,12 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
             f"// Elementwise binary operation: {func} ({input_pattern})",
             f"{tmpl_args['OutType']} out[PE];",
             "#pragma HLS ARRAY_PARTITION variable=out complete dim=1",
-            ""
+            "",
         ]
 
-    def _generate_buffer_declarations(self, pe: int, lhs_is_streaming: bool, rhs_is_streaming: bool) -> list[str]:
+    def _generate_buffer_declarations(
+        self, pe: int, lhs_is_streaming: bool, rhs_is_streaming: bool
+    ) -> list[str]:
         """Generate input buffer declarations for broadcasting.
 
         Declares LHS and RHS buffers with appropriate shapes based on
@@ -824,7 +820,9 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
 
         return code
 
-    def _generate_lhs_stream_read(self, tmpl_args: dict, loop_counters: tuple, ndim: int, lhs_is_streaming: bool) -> list[str]:
+    def _generate_lhs_stream_read(
+        self, tmpl_args: dict, loop_counters: tuple, ndim: int, lhs_is_streaming: bool
+    ) -> list[str]:
         """Generate LHS stream read with unpacking.
 
         Args:
@@ -864,7 +862,9 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
 
         return code
 
-    def _generate_rhs_stream_read(self, tmpl_args: dict, loop_counters: tuple, ndim: int, rhs_is_streaming: bool) -> list[str]:
+    def _generate_rhs_stream_read(
+        self, tmpl_args: dict, loop_counters: tuple, ndim: int, rhs_is_streaming: bool
+    ) -> list[str]:
         """Generate RHS stream read with broadcast-aware conditional.
 
         Args:
@@ -973,7 +973,7 @@ class ElementwiseBinaryOp_hls(ElementwiseBinaryOp, HLSBackend):
         shape_cpp_str = str(shape).replace("(", "{").replace(")", "}")
 
         self.code_gen_dict["$DATAOUTSTREAM$"] = [
-            f'apintstream2npy<{packed_hls_type}, {elem_hls_type}, {elem_bits}, '
+            f"apintstream2npy<{packed_hls_type}, {elem_hls_type}, {elem_bits}, "
             f'{npy_type}>(out0_V, {shape_cpp_str}, "{npy_out}", false);'
         ]
 

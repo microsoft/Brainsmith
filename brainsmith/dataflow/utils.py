@@ -7,19 +7,21 @@
 
 """Shared utilities for the dataflow system."""
 
-from typing import Any, Dict, Iterator, Optional, Callable, TYPE_CHECKING
+from collections.abc import Callable, Iterator
 from itertools import product
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from qonnx.core.modelwrapper import ModelWrapper
+
     from .kernel_op import KernelOp
 
 
 def iter_valid_configurations(
-    kernel_op: 'KernelOp',
-    model_w: 'ModelWrapper',
-    param_filters: Optional[Dict[str, Callable[[int], bool]]] = None,
-) -> Iterator[Dict[str, int]]:
+    kernel_op: "KernelOp",
+    model_w: "ModelWrapper",
+    param_filters: dict[str, Callable[[int], bool]] | None = None,
+) -> Iterator[dict[str, int]]:
     """Iterate over all valid parallelization configurations.
 
     Generates Cartesian product of valid parameter ranges from kernel's
@@ -97,9 +99,7 @@ def iter_valid_configurations(
         for param_name, filter_fn in param_filters.items():
             if param_name in valid_ranges:
                 # Filter the valid range
-                valid_ranges[param_name] = {
-                    v for v in valid_ranges[param_name] if filter_fn(v)
-                }
+                valid_ranges[param_name] = {v for v in valid_ranges[param_name] if filter_fn(v)}
 
     # Remove parameters with empty ranges (after filtering)
     valid_ranges = {k: v for k, v in valid_ranges.items() if v}
@@ -118,4 +118,4 @@ def iter_valid_configurations(
         yield dict(zip(param_names, value_tuple))
 
 
-__all__ = ['iter_valid_configurations']
+__all__ = ["iter_valid_configurations"]

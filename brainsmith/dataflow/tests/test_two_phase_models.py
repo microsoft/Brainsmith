@@ -12,16 +12,14 @@ from qonnx.core.datatype import DataType
 
 from brainsmith.dataflow.dse_models import (
     InterfaceDesignSpace,
-    KernelDesignSpace,
     KernelDesignPoint,
+    KernelDesignSpace,
 )
-from brainsmith.dataflow.types import ShapeHierarchy
-from brainsmith.dataflow.validation import ValidationError
-
 
 # =============================================================================
 # Test KernelDesignSpace.configure()
 # =============================================================================
+
 
 def test_configure_valid_params():
     """Test configure() with valid parallelization parameters."""

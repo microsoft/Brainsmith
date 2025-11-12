@@ -331,7 +331,6 @@ KeyError: "Kernel 'MyKernel' not found."
 → Manifest auto-invalidates on file modification
 → Force refresh with `discover_components(force_refresh=True)`
 
----
 
 ## Summary
 

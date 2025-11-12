@@ -24,13 +24,14 @@ Verbosity levels:
 import logging
 import re
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from brainsmith.settings.schema import LoggingConfig
 
 
 def setup_logging(
-    level: str = "normal",
-    output_dir: Optional[Path] = None,
-    config: Optional['LoggingConfig'] = None
+    level: str = "normal", output_dir: Path | None = None, config: Optional["LoggingConfig"] = None
 ) -> None:
     """Configure logging for Brainsmith and FINN.
 
@@ -41,6 +42,7 @@ def setup_logging(
     """
     if config is None:
         from brainsmith.settings import get_config
+
         config = get_config().logging
 
     # Use config.level if not explicitly overridden
@@ -52,7 +54,7 @@ def setup_logging(
     _setup_finn(level, config)
 
 
-def _setup_root(output_dir: Optional[Path], config: 'LoggingConfig') -> None:
+def _setup_root(output_dir: Path | None, config: "LoggingConfig") -> None:
     """Configure root logger with file handler.
 
     Root logger is permissive (DEBUG) and propagates everything to file.
@@ -69,6 +71,7 @@ def _setup_root(output_dir: Optional[Path], config: 'LoggingConfig') -> None:
         # Support rotation if configured
         if config.max_log_size_mb > 0:
             from logging.handlers import RotatingFileHandler
+
             handler = RotatingFileHandler(
                 log_file,
                 maxBytes=config.max_log_size_mb * 1024 * 1024,
@@ -79,14 +82,13 @@ def _setup_root(output_dir: Optional[Path], config: 'LoggingConfig') -> None:
 
         handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
-            '[%(asctime)s] [%(name)s] %(levelname)s: %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            "[%(asctime)s] [%(name)s] %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
         )
         handler.setFormatter(formatter)
         root.addHandler(handler)
 
 
-def _setup_brainsmith(level: str, config: 'LoggingConfig') -> None:
+def _setup_brainsmith(level: str, config: "LoggingConfig") -> None:
     """Configure brainsmith.* logger with Rich console handler."""
     if level == "quiet":
         return  # No console output
@@ -120,7 +122,7 @@ def _setup_brainsmith(level: str, config: 'LoggingConfig') -> None:
     logger.addHandler(handler)
 
 
-def _setup_finn(level: str, config: 'LoggingConfig') -> None:
+def _setup_finn(level: str, config: "LoggingConfig") -> None:
     """Configure FINN loggers (finn.builder.* and finn.*)."""
     if level == "quiet":
         return  # No console output
@@ -131,6 +133,7 @@ def _setup_finn(level: str, config: 'LoggingConfig') -> None:
     builder_logger.propagate = True
 
     from rich.logging import RichHandler
+
     builder_handler = RichHandler(
         rich_tracebacks=False,
         show_path=False,
@@ -150,13 +153,14 @@ def _setup_finn(level: str, config: 'LoggingConfig') -> None:
             _setup_finn_simple(level, config)
 
 
-def _setup_finn_simple(level: str, config: 'LoggingConfig') -> None:
+def _setup_finn_simple(level: str, config: "LoggingConfig") -> None:
     """Configure FINN tool loggers with default levels."""
     finn_logger = logging.getLogger("finn")
     finn_logger.setLevel(logging.DEBUG)
     finn_logger.propagate = True
 
     from rich.logging import RichHandler
+
     handler = RichHandler(
         rich_tracebacks=(level == "debug"),
         show_path=(level == "debug"),
@@ -178,7 +182,7 @@ def _setup_finn_simple(level: str, config: 'LoggingConfig') -> None:
     finn_logger.addHandler(handler)
 
 
-def _setup_finn_per_tool(level: str, config: 'LoggingConfig') -> None:
+def _setup_finn_per_tool(level: str, config: "LoggingConfig") -> None:
     """Configure per-tool FINN loggers with custom levels."""
     from rich.logging import RichHandler
 
@@ -196,10 +200,10 @@ def _setup_finn_per_tool(level: str, config: 'LoggingConfig') -> None:
 
         # Parse level string to logging constant
         level_map = {
-            'DEBUG': logging.DEBUG,
-            'INFO': logging.INFO,
-            'WARNING': logging.WARNING,
-            'ERROR': logging.ERROR,
+            "DEBUG": logging.DEBUG,
+            "INFO": logging.INFO,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR,
         }
         handler_level = level_map.get(log_level_str.upper(), logging.WARNING)
         handler.setLevel(handler_level)

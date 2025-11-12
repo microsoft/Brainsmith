@@ -26,13 +26,11 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+
 import numpy as np
-import warnings
+from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from qonnx.core.datatype import DataType
 from qonnx.custom_op.general.multithreshold import multithreshold
-from qonnx.util.basic import interleave_matrix_outer_dim_from_partitions
-
-from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 
 
 class Thresholding(HWCustomOp):
@@ -83,9 +81,9 @@ class Thresholding(HWCustomOp):
                 tdt = DataType.get_smallest_possible(-tdt_max - 1)
         else:
             tdt = DataType.get_smallest_possible(tdt_max)
-        assert np.vectorize(tdt.allowed)(
-            threshold_tensor
-        ).all(), "Thresholds can't be expressed with type %s" % str(tdt)
+        assert np.vectorize(tdt.allowed)(threshold_tensor).all(), (
+            "Thresholds can't be expressed with type %s" % str(tdt)
+        )
         self.set_nodeattr("weightDataType", tdt.name)
         # Update QONNX DataType of tensor for consistency
         model.set_tensor_datatype(self.onnx_node.input[1], tdt)

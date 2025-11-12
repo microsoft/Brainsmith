@@ -7,21 +7,20 @@
 
 """Unit tests for union type system (DimSpec, DatatypeSpec)."""
 
-import pytest
 import numpy as np
+import pytest
 from qonnx.core.datatype import DataType
 
-from brainsmith.dataflow.builder import DesignSpaceBuilder, BuildContext
-from brainsmith.dataflow.schemas import KernelSchema, InputSchema, OutputSchema
+from brainsmith.dataflow.builder import BuildContext, DesignSpaceBuilder
+from brainsmith.dataflow.schemas import InputSchema, KernelSchema, OutputSchema
+from brainsmith.dataflow.spec_helpers import (
+    derive_datatype,
+    derive_dim,
+)
 from brainsmith.dataflow.types import (
     FULL_DIM,
     FULL_SHAPE,
     VALUE_OPTIMIZED,
-)
-from brainsmith.dataflow.spec_helpers import (
-    derive_dim,
-    derive_datatype,
-    value_optimized_datatype,
 )
 
 
@@ -55,8 +54,8 @@ class MockModelWrapper:
 
 def test_dimspec_tuple_shorthand():
     """Test tuple shorthand (interface, dim_idx) for dimension derivation."""
-    from brainsmith.dataflow.types import ShapeHierarchy
     from brainsmith.dataflow.spec_helpers import derive_dim
+    from brainsmith.dataflow.types import ShapeHierarchy
 
     # Custom tuple resolver that specifies BLOCK hierarchy (available during build)
     def block_dim_tuple(interface_name, dim_idx):
@@ -75,7 +74,10 @@ def test_dimspec_tuple_shorthand():
         outputs=[
             OutputSchema(
                 name="output0",
-                block_tiling=[FULL_DIM, block_dim_tuple("input0", -1)],  # Derive from input's last block dim
+                block_tiling=[
+                    FULL_DIM,
+                    block_dim_tuple("input0", -1),
+                ],  # Derive from input's last block dim
                 stream_tiling=[1, "SIMD"],
             )
         ],
@@ -165,7 +167,10 @@ def test_dimspec_derive_dim_helper():
         outputs=[
             OutputSchema(
                 name="output0",
-                block_tiling=[FULL_DIM, derive_dim("input0", ShapeHierarchy.BLOCK, -1)],  # Helper with BLOCK hierarchy
+                block_tiling=[
+                    FULL_DIM,
+                    derive_dim("input0", ShapeHierarchy.BLOCK, -1),
+                ],  # Helper with BLOCK hierarchy
                 stream_tiling=[1, "SIMD"],
             )
         ],

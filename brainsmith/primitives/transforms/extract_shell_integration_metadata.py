@@ -4,17 +4,17 @@
 """Shell integration metadata extraction transform."""
 
 import json
-import os
-import shutil
+
 import numpy as np
-from qonnx.transformation.base import Transformation
-import qonnx.custom_op.registry as registry
 from finn.util.mlo_sim import dat_file_to_numpy_array
+import qonnx.custom_op.registry as registry
+from qonnx.transformation.base import Transformation
 
 
 class ExtractShellIntegrationMetadata(Transformation):
     """Walks the ONNX graph and extracts all relevant metadata for shell integration
     handover."""
+
     def __init__(self, metadata_file: str):
         super().__init__()
         self.metadata_file: str = metadata_file
@@ -71,17 +71,32 @@ class ExtractShellIntegrationMetadata(Transformation):
         for input_tensor in graph.input:
             consumer = model.find_consumer(input_tensor.name)
             inst = registry.getCustomOp(consumer)
+<<<<<<< HEAD
             instream = {}
             instream['width'] = inst.get_instream_width()
             instreams[input_tensor.name] = instream
             instream['shape'] = inst.get_normal_input_shape()
             instream['datatype'] = inst.get_input_datatype().name
         self.md['insteams'] = instreams
+||||||| merged common ancestors
+            instreams[input_tensor.name] = {
+                'width': inst.get_instream_width(),
+                'shape': inst.get_normal_input_shape()
+            }
+        self.md['instreams'] = instreams
+=======
+            instreams[input_tensor.name] = {
+                "width": inst.get_instream_width(),
+                "shape": inst.get_normal_input_shape(),
+            }
+        self.md["instreams"] = instreams
+>>>>>>> main
 
         outstreams = {}
         for output_tensor in graph.output:
             producer = model.find_producer(output_tensor.name)
             inst = registry.getCustomOp(producer)
+<<<<<<< HEAD
             outstream = {}
             outstream['width'] = inst.get_outstream_width()
             outstreams[output_tensor.name] = outstream
@@ -89,15 +104,30 @@ class ExtractShellIntegrationMetadata(Transformation):
             outstream['datatype'] = inst.get_output_datatype().name
         self.md['outsteams'] = outstreams
 
+||||||| merged common ancestors
+            outstreams[output_tensor.name] = {
+                'width': inst.get_outstream_width(),
+                'shape': inst.get_normal_output_shape()
+            }
+        self.md['outstreams'] = outstreams
+
+=======
+            outstreams[output_tensor.name] = {
+                "width": inst.get_outstream_width(),
+                "shape": inst.get_normal_output_shape(),
+            }
+        self.md["outstreams"] = outstreams
+
+>>>>>>> main
         static_matmuls = {}
         for node in graph.node:
-            if (node.op_type == "MVAU_rtl"):
+            if node.op_type == "MVAU_rtl":
                 inst = registry.getCustomOp(node)
                 mm = {}
-                mm['MH'] = inst.get_nodeattr("MH")
-                mm['MW'] = inst.get_nodeattr("MW")
-                mm['SIMD'] = inst.get_nodeattr("SIMD")
-                mm['PE'] = inst.get_nodeattr("PE")
+                mm["MH"] = inst.get_nodeattr("MH")
+                mm["MW"] = inst.get_nodeattr("MW")
+                mm["SIMD"] = inst.get_nodeattr("SIMD")
+                mm["PE"] = inst.get_nodeattr("PE")
                 static_matmuls[node.name] = mm
         self.md["static_matmuls"] = static_matmuls
 

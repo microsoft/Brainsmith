@@ -10,13 +10,11 @@ Timeout: 600-900 seconds per test
 IMPORTANT: Real FINN execution - validates actual DSE behavior!
 """
 
+
 import pytest
-from pathlib import Path
 
 from brainsmith.dse import build_tree, execute_tree, parse_blueprint
-from brainsmith.dse.types import SegmentStatus, OutputType
-from brainsmith.dse.runner import SegmentRunner
-from brainsmith._internal.finn.adapter import FINNAdapter
+from brainsmith.dse.types import SegmentStatus
 
 
 class TestSegmentExecution:
@@ -30,24 +28,19 @@ class TestSegmentExecution:
         Tests basic execution path: quantized model → finn:streamline
         Validates segment completion, artifacts, and model output.
         """
-        from tests.fixtures.dse.blueprints import create_finn_blueprint
-
         # Create minimal FINN blueprint with single fast step
-        from tests.fixtures.dse.blueprints import FINN_PIPELINE_MINIMAL
+        from tests.fixtures.dse.blueprints import FINN_PIPELINE_MINIMAL, create_finn_blueprint
 
         blueprint_path = create_finn_blueprint(
             tmp_path,
             name="single_segment",
             steps=FINN_PIPELINE_MINIMAL,
             clock_ns=10.0,
-            target_fps=None
+            target_fps=None,
         )
 
         # Parse blueprint
-        design_space, config = parse_blueprint(
-            str(blueprint_path),
-            str(quantized_onnx_model)
-        )
+        design_space, config = parse_blueprint(str(blueprint_path), str(quantized_onnx_model))
 
         # Build tree
         tree = build_tree(design_space, config)
@@ -58,7 +51,7 @@ class TestSegmentExecution:
             tree=tree,
             model_path=str(quantized_onnx_model),
             config=config,
-            output_dir=str(output_dir)
+            output_dir=str(output_dir),
         )
 
         # Verify execution completed
@@ -66,15 +59,14 @@ class TestSegmentExecution:
 
         # Verify at least one segment completed successfully
         completed = [
-            seg for seg in result.segment_results.values()
-            if seg.status == SegmentStatus.COMPLETED
+            seg for seg in result.segment_results.values() if seg.status == SegmentStatus.COMPLETED
         ]
         assert len(completed) > 0, "At least one segment should complete"
 
         # Verify output ONNX model exists
         for seg_id, seg_result in result.segment_results.items():
             if seg_result.status == SegmentStatus.COMPLETED:
-                output_model = seg_result.output_dir / "final_model.onnx"
+                seg_result.output_dir / "final_model.onnx"
                 # Note: FINN may use different naming, check for any .onnx file
                 onnx_files = list(seg_result.output_dir.glob("*.onnx"))
                 assert len(onnx_files) > 0, f"Segment {seg_id} should produce ONNX output"
@@ -87,7 +79,6 @@ class TestSegmentExecution:
         Tests branching: model → finn:streamline → [option1, skip]
         Validates both branch paths execute correctly.
         """
-        from tests.fixtures.dse.blueprints import create_blueprint_file, FULL_BLUEPRINT
 
         # Create branching blueprint
         blueprint_yaml = """
@@ -104,15 +95,12 @@ design_space:
         blueprint_path.write_text(blueprint_yaml)
 
         # Parse and build tree
-        design_space, config = parse_blueprint(
-            str(blueprint_path),
-            str(quantized_onnx_model)
-        )
+        design_space, config = parse_blueprint(str(blueprint_path), str(quantized_onnx_model))
         tree = build_tree(design_space, config)
 
         # Verify tree has branches
         stats = tree.get_statistics()
-        assert stats['total_paths'] == 2, "Should have 2 paths (branch + skip)"
+        assert stats["total_paths"] == 2, "Should have 2 paths (branch + skip)"
 
         # Execute tree
         output_dir = test_workspace / "branching"
@@ -120,7 +108,7 @@ design_space:
             tree=tree,
             model_path=str(quantized_onnx_model),
             config=config,
-            output_dir=str(output_dir)
+            output_dir=str(output_dir),
         )
 
         # Verify both paths attempted
@@ -128,8 +116,7 @@ design_space:
 
         # Verify at least the shared segment completed
         completed = [
-            seg for seg in result.segment_results.values()
-            if seg.status == SegmentStatus.COMPLETED
+            seg for seg in result.segment_results.values() if seg.status == SegmentStatus.COMPLETED
         ]
         assert len(completed) >= 1, "At least shared segment should complete"
 
@@ -141,7 +128,6 @@ design_space:
         Tests that when execution branches, child segments receive
         the parent's output model as their input.
         """
-        from tests.fixtures.dse.blueprints import create_blueprint_file
 
         # Create branching blueprint
         blueprint_yaml = """
@@ -158,18 +144,15 @@ design_space:
         blueprint_path.write_text(blueprint_yaml)
 
         # Parse and execute
-        design_space, config = parse_blueprint(
-            str(blueprint_path),
-            str(quantized_onnx_model)
-        )
+        design_space, config = parse_blueprint(str(blueprint_path), str(quantized_onnx_model))
         tree = build_tree(design_space, config)
 
         output_dir = test_workspace / "sharing"
-        result = execute_tree(
+        execute_tree(
             tree=tree,
             model_path=str(quantized_onnx_model),
             config=config,
-            output_dir=str(output_dir)
+            output_dir=str(output_dir),
         )
 
         # Find parent (shared) segment and children
@@ -198,15 +181,12 @@ design_space:
         blueprint_path = create_finn_blueprint(
             tmp_path,
             name="failure_test",
-            steps=['finn:streamline'],
-            clock_ns=0.1  # Extremely low clock may cause issues
+            steps=["finn:streamline"],
+            clock_ns=0.1,  # Extremely low clock may cause issues
         )
 
         # Parse blueprint
-        design_space, config = parse_blueprint(
-            str(blueprint_path),
-            str(quantized_onnx_model)
-        )
+        design_space, config = parse_blueprint(str(blueprint_path), str(quantized_onnx_model))
 
         # Build and execute tree
         tree = build_tree(design_space, config)
@@ -217,7 +197,7 @@ design_space:
                 tree=tree,
                 model_path=str(quantized_onnx_model),
                 config=config,
-                output_dir=str(output_dir)
+                output_dir=str(output_dir),
             )
 
             # If execution completes, verify we have results
@@ -225,8 +205,7 @@ design_space:
 
             # Check for any failed segments
             failed = [
-                seg for seg in result.segment_results.values()
-                if seg.status == SegmentStatus.FAILED
+                seg for seg in result.segment_results.values() if seg.status == SegmentStatus.FAILED
             ]
 
             # Either execution succeeds OR failures are properly captured
@@ -238,5 +217,6 @@ design_space:
         except RuntimeError as e:
             # Execution may raise if all segments fail
             # This is acceptable - verify error message is informative
-            assert "no successful builds" in str(e).lower() or "failed" in str(e).lower(), \
-                "Error message should indicate failure"
+            assert (
+                "no successful builds" in str(e).lower() or "failed" in str(e).lower()
+            ), "Error message should indicate failure"

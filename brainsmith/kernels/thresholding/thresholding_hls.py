@@ -7,22 +7,22 @@
 # Migration to KernelOp by Microsoft Corporation
 ############################################################################
 
-import numpy as np
 import os
 import textwrap
 from math import ceil, log2
-from qonnx.core.datatype import DataType
-from qonnx.util.basic import roundup_to_integer_multiple
 
+import numpy as np
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from finn.custom_op.fpgadataflow import templates
-from brainsmith.kernels.thresholding.thresholding import Thresholding
 from finn.util.data_packing import (
     npy_to_rtlsim_input,
     numpy_to_hls_code,
     pack_innermost_dim_as_hex_string,
     rtlsim_output_to_npy,
 )
+from qonnx.core.datatype import DataType
+from qonnx.util.basic import roundup_to_integer_multiple
+
+from brainsmith.kernels.thresholding.thresholding import Thresholding
 from brainsmith.registry import backend
 
 
@@ -31,7 +31,7 @@ from brainsmith.registry import backend
     target_kernel="brainsmith:Thresholding",
     language="hls",
     description="HLS implementation of Thresholding",
-    author="Microsoft Corporation"
+    author="Microsoft Corporation",
 )
 class Thresholding_hls(Thresholding, HLSBackend):
     """HLS backend for Thresholding kernel (KernelOp-based).
@@ -67,18 +67,19 @@ class Thresholding_hls(Thresholding, HLSBackend):
         my_attrs.update(HLSBackend.get_nodeattr_types(self))
 
         # Add HLS-specific nodeattrs
-        my_attrs.update({
-            # Memory mode for thresholds
-            "mem_mode": (
-                "s", False, "internal_decoupled",
-                {"internal_embedded", "internal_decoupled"}
-            ),
-            # String defining memory type (for internal_embedded)
-            "ram_style": (
-                "s", False, "distributed",
-                {"distributed", "block"}
-            ),
-        })
+        my_attrs.update(
+            {
+                # Memory mode for thresholds
+                "mem_mode": (
+                    "s",
+                    False,
+                    "internal_decoupled",
+                    {"internal_embedded", "internal_decoupled"},
+                ),
+                # String defining memory type (for internal_embedded)
+                "ram_style": ("s", False, "distributed", {"distributed", "block"}),
+            }
+        )
 
         return my_attrs
 
@@ -158,9 +159,9 @@ class Thresholding_hls(Thresholding, HLSBackend):
         threshold_tensor = self.get_hw_compatible_threshold_tensor(weights)
         tdt = self.get_input_datatype(1)
 
-        assert np.vectorize(tdt.allowed)(threshold_tensor).all(), (
-            f"Thresholds can't be expressed with type {str(tdt)}"
-        )
+        assert np.vectorize(tdt.allowed)(
+            threshold_tensor
+        ).all(), f"Thresholds can't be expressed with type {str(tdt)}"
 
         if weight_file_mode == "hls_header":
             # Save thresholds in thresh.h
@@ -287,18 +288,17 @@ class Thresholding_hls(Thresholding, HLSBackend):
         elif mode == "rtlsim":
             code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
         else:
-            raise Exception(
-                f"Invalid exec_mode: {mode}. Must be 'cppsim' or 'rtlsim'"
-            )
+            raise Exception(f"Invalid exec_mode: {mode}. Must be 'cppsim' or 'rtlsim'")
 
         # Create npy file for each input
         in_ind = 0
         for inputs in node.input:
             if in_ind == 0:
                 # Data input
-                assert str(context[inputs].dtype) in ["float32", "float16"], (
-                    "Input datatype is not float32 or float16 as expected."
-                )
+                assert str(context[inputs].dtype) in [
+                    "float32",
+                    "float16",
+                ], "Input datatype is not float32 or float16 as expected."
 
                 expected_inp_shape = self.get_folded_input_shape()
                 reshaped_input = context[inputs].reshape(expected_inp_shape)
@@ -312,10 +312,7 @@ class Thresholding_hls(Thresholding, HLSBackend):
 
                 # Make copy before saving
                 reshaped_input = reshaped_input.copy()
-                np.save(
-                    os.path.join(code_gen_dir, f"input_{in_ind}.npy"),
-                    reshaped_input
-                )
+                np.save(os.path.join(code_gen_dir, f"input_{in_ind}.npy"), reshaped_input)
 
             elif in_ind > 2:
                 raise Exception("Unexpected input found for Thresholding")
@@ -335,24 +332,18 @@ class Thresholding_hls(Thresholding, HLSBackend):
                 context[node.output[0]] = out
 
             oshape = self.get_normal_output_shape()
-            assert context[node.output[0]].shape == oshape, (
-                "Output shape is not as expected"
-            )
+            assert context[node.output[0]].shape == oshape, "Output shape is not as expected"
 
         elif mode == "rtlsim":
             sim = self.get_rtlsim()
             nbits = self.get_instream_width(0)
-            inp = npy_to_rtlsim_input(
-                f"{code_gen_dir}/input_0.npy", export_idt, nbits
-            )
+            inp = npy_to_rtlsim_input(f"{code_gen_dir}/input_0.npy", export_idt, nbits)
             super().reset_rtlsim(sim)
 
             if self.get_nodeattr("mem_mode") == "internal_decoupled":
                 wnbits = self.get_instream_width(1)
                 export_wdt = self.get_input_datatype(1)
-                wei = npy_to_rtlsim_input(
-                    f"{code_gen_dir}/thresholds.npy", export_wdt, wnbits
-                )
+                wei = npy_to_rtlsim_input(f"{code_gen_dir}/thresholds.npy", export_wdt, wnbits)
                 num_w_reps = np.prod(self.get_nodeattr("num_input_vectors"))
                 io_dict = {
                     "inputs": {"in0": inp, "in1": wei * num_w_reps},
@@ -376,9 +367,7 @@ class Thresholding_hls(Thresholding, HLSBackend):
             out_npy_path = f"{code_gen_dir}/output_0.npy"
             out_shape = self.get_folded_output_shape()
 
-            rtlsim_output_to_npy(
-                output, out_npy_path, odt, out_shape, packed_bits, target_bits
-            )
+            rtlsim_output_to_npy(output, out_npy_path, odt, out_shape, packed_bits, target_bits)
 
             # Load and reshape output
             output = np.load(out_npy_path)
@@ -386,9 +375,7 @@ class Thresholding_hls(Thresholding, HLSBackend):
             output = np.asarray([output], dtype=np.float32).reshape(*oshape)
             context[node.output[0]] = output
         else:
-            raise Exception(
-                f"Invalid exec_mode: {mode}. Must be 'cppsim' or 'rtlsim'"
-            )
+            raise Exception(f"Invalid exec_mode: {mode}. Must be 'cppsim' or 'rtlsim'")
 
     def global_includes(self):
         """Generate global include directives."""

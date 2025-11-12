@@ -7,22 +7,21 @@
 
 """Basic types for kernel modeling"""
 
-from typing import Tuple, Union, List, Dict, Any, Callable, Optional, TYPE_CHECKING
-from enum import Enum
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
 import functools
-
+from collections.abc import Callable
+from enum import Enum
+from typing import TYPE_CHECKING, Any
 
 # Type aliases
-Shape = Tuple[int, ...]
+Shape = tuple[int, ...]
 """Immutable tensor shape (e.g., (1, 784))"""
 
-ShapeExpr = Union[int, str]
+ShapeExpr = int | str
 """Single dimension expression: 784 or 'N'"""
 
-ShapeSpec = List[ShapeExpr]
+ShapeSpec = list[ShapeExpr]
 """Complete shape specification: [1, 784] or ['N', 768]"""
+
 
 # Sentinel for "copy full dimension" in tiling specs
 class _FullDimType:
@@ -34,10 +33,12 @@ class _FullDimType:
     Example:
         block_tiling=[FULL_DIM, FULL_DIM]  # Use complete tensor dimensions
     """
+
     __slots__ = ()  # No instance dict, true singleton
 
     def __repr__(self):
         return "FULL_DIM"
+
 
 FULL_DIM = _FullDimType()
 
@@ -56,15 +57,18 @@ class _FullShapeType:
         block_tiling=FULL_SHAPE  # For 4D tensor → [FULL_DIM, FULL_DIM, FULL_DIM, FULL_DIM]
         stream_tiling=FULL_SHAPE  # Copies resolved block_shape
     """
+
     __slots__ = ()  # No instance dict, true singleton
 
     def __repr__(self):
         return "FULL_SHAPE"
 
+
 FULL_SHAPE = _FullShapeType()
 
 
 # === Enums ===
+
 
 class ShapeHierarchy(Enum):
     """Shape hierarchy level for constraints and relationships.
@@ -74,6 +78,7 @@ class ShapeHierarchy(Enum):
         BLOCK: Block shape (tiling dimensions)
         TENSOR: Tensor shape (full logical dimensions)
     """
+
     STREAM = "stream"
     BLOCK = "block"
     TENSOR = "tensor"
@@ -81,6 +86,7 @@ class ShapeHierarchy(Enum):
 
 class ProtocolType(Enum):
     """Supported hardware protocols for kernel interfaces."""
+
     AXI_STREAM = "axi_stream"
     AXI_LITE = "axi_lite"
     CONTROL = "control"
@@ -88,6 +94,7 @@ class ProtocolType(Enum):
 
 class Direction(Enum):
     """Direction of ports."""
+
     INPUT = "input"
     OUTPUT = "output"
     INOUT = "inout"
@@ -108,14 +115,16 @@ class Direction(Enum):
 # Note: For rank-agnostic specs, use FULL_SHAPE (not a DimSpec, but a TilingSpec alternative)
 #       block_tiling=FULL_SHAPE expands to [FULL_DIM, FULL_DIM, ...] matching tensor rank
 # Example: block_tiling=[1, 1, ("input", -1)] means dims [1, 1, <last BLOCK dim of input>]
-DimSpec = Union[
-    int,                                               # Literal (1 only)
-    str,                                               # Parameter name
-    Tuple[str, int],                                   # Derive from interface (context hierarchy)
-    Tuple[str, int, 'ShapeHierarchy'],                # Derive with explicit hierarchy
-    Callable[[Dict[str, Any], Callable, Any, Optional[str]], int],  # Custom computation (unified signature)
-    type(FULL_DIM),                                    # Copy full dimension
-]
+DimSpec = (
+    int  # Literal (1 only)
+    | str  # Parameter name
+    | tuple[str, int]  # Derive from interface (context hierarchy)
+    | tuple[str, int, "ShapeHierarchy"]  # Derive with explicit hierarchy
+    | Callable[
+        [dict[str, Any], Callable, Any, str | None], int
+    ]  # Custom computation (unified signature)
+    | type(FULL_DIM)  # Copy full dimension
+)
 
 # NEW: Datatype specification (union type replaces ABC hierarchy)
 # Supported formats:
@@ -127,30 +136,34 @@ DimSpec = Union[
 if TYPE_CHECKING:
     from qonnx.core.datatype import BaseDataType
 
-    DatatypeSpec = Union[
-        BaseDataType,                                               # Fixed datatype
-        str,                                                        # Interface name (derive from)
-        Callable[[Dict, Callable, Any, str], BaseDataType],        # Custom computation
-        type(lambda: None),                                         # Sentinel type (VALUE_OPTIMIZED)
-    ]
+    DatatypeSpec = (
+        BaseDataType  # Fixed datatype
+        | str  # Interface name (derive from)
+        | Callable[[dict, Callable, Any, str], BaseDataType]  # Custom computation
+        | type(lambda: None)  # Sentinel type (VALUE_OPTIMIZED)
+    )
 
 
 # Sentinel for value-optimized datatype derivation
 class _ValueOptimizedType:
     """Sentinel type for VALUE_OPTIMIZED constant."""
+
     def __repr__(self):
         return "VALUE_OPTIMIZED"
+
     __str__ = __repr__
+
 
 VALUE_OPTIMIZED = _ValueOptimizedType()
 
 
 class InterfaceType(Enum):
     """Fundamental interface types for all kernels."""
-    INPUT = "input"      # AXI-Stream input for activation data
-    OUTPUT = "output"    # AXI-Stream output for result data
-    WEIGHT = "weight"    # AXI-Stream input for weight/parameter data
-    CONFIG = "config"    # AXI-Lite for runtime configuration
+
+    INPUT = "input"  # AXI-Stream input for activation data
+    OUTPUT = "output"  # AXI-Stream output for result data
+    WEIGHT = "weight"  # AXI-Stream input for weight/parameter data
+    CONFIG = "config"  # AXI-Lite for runtime configuration
     CONTROL = "control"  # Global control signals (clk, rst, etc.)
     UNKNOWN = "unknown"  # Unknown interface type
 
@@ -180,9 +193,10 @@ class InterfaceType(Enum):
         }
         return direction_map[self]
 
+
 # === Utility Functions ===
+
 
 def prod(shape: Shape) -> int:
     """Compute product of shape dimensions"""
     return functools.reduce(lambda a, b: a * b, shape, 1)
-

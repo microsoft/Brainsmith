@@ -15,13 +15,11 @@ Config passed as parameter (composition), not inherited.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Tuple, Type
 
 import numpy as np
 import pytest
 from finn.custom_op.fpgadataflow.hwcustomop import HWCustomOp
 from finn.util.basic import getHWCustomOp
-from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.core.onnx_exec import execute_onnx
 from qonnx.transformation.infer_datatypes import InferDataTypes
@@ -29,12 +27,11 @@ from qonnx.transformation.infer_shapes import InferShapes
 
 from brainsmith.primitives.transforms.infer_kernels import InferKernels
 from brainsmith.registry import get_backend, list_backends_for_kernel
-
 from tests.fixtures.model_annotation import annotate_model_datatypes
 from tests.fixtures.test_data import generate_test_data
 from tests.frameworks.test_config import KernelTestConfig
 from tests.support.backend_utils import specialize_to_backend
-from tests.support.executors import PythonExecutor, CppSimExecutor, RTLSimExecutor
+from tests.support.executors import CppSimExecutor, PythonExecutor, RTLSimExecutor
 from tests.support.validator import GoldenValidator
 
 
@@ -60,7 +57,7 @@ class KernelTestBase(ABC):
     @abstractmethod
     def make_test_model(
         self, kernel_test_config: KernelTestConfig
-    ) -> Tuple[ModelWrapper, List[str]]:
+    ) -> tuple[ModelWrapper, list[str]]:
         """Create ONNX model to test (framework adds DataType annotations).
 
         Args:
@@ -83,8 +80,7 @@ class KernelTestBase(ABC):
         """
         return 42
 
-
-    def get_backend_variants(self) -> Optional[List[Type]]:
+    def get_backend_variants(self) -> list[type] | None:
         """Backend variant classes for specialization in priority order.
 
         Returns:
@@ -98,7 +94,7 @@ class KernelTestBase(ABC):
     # ========================================================================
 
     @abstractmethod
-    def get_kernel_op(self) -> Type:
+    def get_kernel_op(self) -> type:
         """Return kernel operator class.
 
         Returns:
@@ -110,7 +106,7 @@ class KernelTestBase(ABC):
         self,
         model: ModelWrapper,
         target_node: str,
-    ) -> Tuple[HWCustomOp, ModelWrapper]:
+    ) -> tuple[HWCustomOp, ModelWrapper]:
         """Execute Stage 1 → Stage 2 kernel inference.
 
         Default: uses InferKernels([get_kernel_op()])
@@ -140,7 +136,7 @@ class KernelTestBase(ABC):
 
     def _prepare_model_with_annotations(
         self, kernel_test_config: "KernelTestConfig"
-    ) -> Tuple[ModelWrapper, str]:
+    ) -> tuple[ModelWrapper, str]:
         """Create model with QONNX DataType annotations (internal helper).
 
         Args:
@@ -179,7 +175,7 @@ class KernelTestBase(ABC):
 
     def _generate_test_inputs(
         self, kernel_test_config: "KernelTestConfig"
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """Generate test data with correct shapes and datatypes (internal helper).
 
         Args:
@@ -226,30 +222,30 @@ class KernelTestBase(ABC):
         op = getHWCustomOp(onnx_node, model)
 
         # Verify it's a HW node
-        assert isinstance(op, HWCustomOp), (
-            f"Node {target_node} is not a hardware operator (found {type(op).__name__})"
-        )
+        assert isinstance(
+            op, HWCustomOp
+        ), f"Node {target_node} is not a hardware operator (found {type(op).__name__})"
 
         # Type checking if expected_type provided
         if expected_type is not None:
             if isinstance(expected_type, type):
                 # Class check
-                assert isinstance(op, expected_type), (
-                    f"Node {target_node} is {type(op).__name__}, expected {expected_type.__name__}"
-                )
+                assert isinstance(
+                    op, expected_type
+                ), f"Node {target_node} is {type(op).__name__}, expected {expected_type.__name__}"
             elif isinstance(expected_type, str):
                 # op_type string check
-                assert op.onnx_node.op_type == expected_type, (
-                    f"Node {target_node} has op_type {op.onnx_node.op_type}, expected {expected_type}"
-                )
+                assert (
+                    op.onnx_node.op_type == expected_type
+                ), f"Node {target_node} has op_type {op.onnx_node.op_type}, expected {expected_type}"
 
         return op
 
     def _compute_golden_reference(
         self,
         quant_model: ModelWrapper,
-        inputs: Dict[str, np.ndarray],
-    ) -> Dict[str, np.ndarray]:
+        inputs: dict[str, np.ndarray],
+    ) -> dict[str, np.ndarray]:
         """Compute golden reference using QONNX execution on Stage 1 model.
 
         Args:
@@ -275,7 +271,7 @@ class KernelTestBase(ABC):
         model = model.transform(InferDataTypes())
         return model
 
-    def _build_test_inputs(self, kernel_test_config: "KernelTestConfig") -> Dict[str, np.ndarray]:
+    def _build_test_inputs(self, kernel_test_config: "KernelTestConfig") -> dict[str, np.ndarray]:
         """Build test inputs with deterministic seed.
 
         Args:
@@ -287,10 +283,8 @@ class KernelTestBase(ABC):
         return self._generate_test_inputs(kernel_test_config)
 
     def _build_golden_outputs(
-        self,
-        stage1_model: ModelWrapper,
-        test_inputs: Dict[str, np.ndarray]
-    ) -> Dict[str, np.ndarray]:
+        self, stage1_model: ModelWrapper, test_inputs: dict[str, np.ndarray]
+    ) -> dict[str, np.ndarray]:
         """Build golden outputs from Stage 1 model.
 
         Args:
@@ -308,9 +302,9 @@ class KernelTestBase(ABC):
 
     def _execute_and_validate_golden(
         self,
-        stage_model: Tuple[HWCustomOp, ModelWrapper],
-        test_inputs: Dict[str, np.ndarray],
-        golden_outputs: Dict[str, np.ndarray],
+        stage_model: tuple[HWCustomOp, ModelWrapper],
+        test_inputs: dict[str, np.ndarray],
+        golden_outputs: dict[str, np.ndarray],
         execution_mode: str,
         backend_name: str,
         config: KernelTestConfig,
@@ -367,7 +361,7 @@ class KernelTestBase(ABC):
     # Shared Utility 2: Backend Auto-Detection
     # ========================================================================
 
-    def _auto_detect_backends(self, op: HWCustomOp) -> List[Type]:
+    def _auto_detect_backends(self, op: HWCustomOp) -> list[type]:
         """Auto-detect backend variants from Brainsmith registry.
 
         Args:
@@ -394,8 +388,8 @@ class KernelTestBase(ABC):
         op: HWCustomOp,
         model: ModelWrapper,
         config: KernelTestConfig,
-        backend_variants_override: Optional[List[Type]] = None,
-    ) -> Tuple[HWCustomOp, ModelWrapper]:
+        backend_variants_override: list[type] | None = None,
+    ) -> tuple[HWCustomOp, ModelWrapper]:
         """Execute Stage 2 → Stage 3 backend specialization.
 
         Default: auto-detects backends from registry
@@ -456,18 +450,14 @@ class KernelTestBase(ABC):
             True if op has kernel_schema attribute (Brainsmith KernelOp)
             False if FINN HWCustomOp only
         """
-        return hasattr(op, 'kernel_schema')
+        return hasattr(op, "kernel_schema")
 
     # ========================================================================
     # Shared Utility 5: Auto-Configuration from Fixture
     # ========================================================================
 
     def auto_configure_from_fixture(
-        self,
-        op,
-        model: ModelWrapper,
-        stage: int,
-        config: KernelTestConfig
+        self, op, model: ModelWrapper, stage: int, config: KernelTestConfig
     ) -> None:
         """Auto-apply DSE parameters from test configuration.
 

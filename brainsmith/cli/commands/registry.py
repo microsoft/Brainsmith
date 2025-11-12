@@ -3,9 +3,10 @@
 
 """Component discovery and management commands."""
 
+from collections import defaultdict
+
 import click
 from rich.table import Table
-from collections import defaultdict
 
 # Import registry functions lazily inside function to keep --help fast
 from ..context import ApplicationContext
@@ -33,7 +34,9 @@ def _validate_components(names: list, getter) -> dict:
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed component information")
-@click.option("--rebuild", "-r", is_flag=True, help="Rebuild cache and validate all components (slower)")
+@click.option(
+    "--rebuild", "-r", is_flag=True, help="Rebuild cache and validate all components (slower)"
+)
 @click.pass_obj
 def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     """Shows all registered components (steps, kernels, backends) organized by source:
@@ -52,8 +55,10 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     # Import registry functions only when command executes (not for --help)
     from brainsmith.registry import (
         discover_components,
-        list_steps, list_kernels, list_backends,
-        get_all_component_metadata
+        get_all_component_metadata,
+        list_backends,
+        list_kernels,
+        list_steps,
     )
 
     # Trigger discovery (with rebuild if requested)
@@ -76,11 +81,13 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     backends_by_source = group_by_source(all_backends)
 
     # Get all sources
-    all_sources = sorted(set(
-        list(steps_by_source.keys()) +
-        list(kernels_by_source.keys()) +
-        list(backends_by_source.keys())
-    ))
+    all_sources = sorted(
+        set(
+            list(steps_by_source.keys())
+            + list(kernels_by_source.keys())
+            + list(backends_by_source.keys())
+        )
+    )
 
     # Show all component sources (configured + discovered)
     sources_table = Table(title="Component Sources")
@@ -90,18 +97,19 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     sources_table.add_column("Status", justify="center")
 
     # Add core namespace (brainsmith)
-    brainsmith_path = config.bsmith_dir / 'brainsmith'
+    brainsmith_path = config.bsmith_dir / "brainsmith"
     sources_table.add_row(
         "brainsmith",
         "core",
         str(brainsmith_path),
-        "[green]✓[/green]" if brainsmith_path.exists() else "[red]✗[/red]"
+        "[green]✓[/green]" if brainsmith_path.exists() else "[red]✗[/red]",
     )
 
     # Add discovered entry points
     try:
         from importlib.metadata import entry_points
-        eps = entry_points(group='brainsmith.plugins')
+
+        eps = entry_points(group="brainsmith.plugins")
         for ep in eps:
             # Entry point path is typically in deps_dir but could be anywhere
             # Show "auto-discovered" instead of guessing path
@@ -145,18 +153,10 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
         total_kernels += kernels_count
         total_backends += backends_count
 
-        summary_table.add_row(
-            source,
-            str(steps_count),
-            str(kernels_count),
-            str(backends_count)
-        )
+        summary_table.add_row(source, str(steps_count), str(kernels_count), str(backends_count))
 
     summary_table.add_row(
-        "[bold]Total",
-        f"[bold]{total_steps}",
-        f"[bold]{total_kernels}",
-        f"[bold]{total_backends}"
+        "[bold]Total", f"[bold]{total_steps}", f"[bold]{total_kernels}", f"[bold]{total_backends}"
     )
 
     console.print(summary_table)
@@ -164,9 +164,11 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
     # Validate components if requested (after showing tables)
     validation_errors = {}
     if rebuild:
-        from brainsmith.registry import get_kernel, get_backend, get_step
+        from brainsmith.registry import get_backend, get_kernel, get_step
 
-        with progress_spinner("Validating components...", transient=False, no_progress=ctx.no_progress) as task:
+        with progress_spinner(
+            "Validating components...", transient=False, no_progress=ctx.no_progress
+        ):
             validation_errors.update(_validate_components(all_kernels, get_kernel))
             validation_errors.update(_validate_components(all_backends, get_backend))
             validation_errors.update(_validate_components(all_steps, get_step))
@@ -195,7 +197,7 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
 
         # Kernels by source
         if all_kernels:
-            console.print(f"\n[bold cyan]KERNELS[/bold cyan]")
+            console.print("\n[bold cyan]KERNELS[/bold cyan]")
             all_metadata = get_all_component_metadata()
             for source in sorted(kernels_by_source.keys()):
                 console.print(f"\n  [green]{source}:[/green]")
@@ -212,14 +214,16 @@ def registry(ctx: ApplicationContext, verbose: bool, rebuild: bool) -> None:
 
                     try:
                         meta = all_metadata.get(full_name)
-                        has_infer = "[green]✓[/green]" if meta and meta.kernel_infer else "[red]✗[/red]"
+                        has_infer = (
+                            "[green]✓[/green]" if meta and meta.kernel_infer else "[red]✗[/red]"
+                        )
                         console.print(f"    • {name:30} (infer={has_infer}){validation_marker}")
                     except Exception as e:
                         console.print(f"    • {name:30} [red](error: {e})[/red]")
 
         # Backends by source
         if all_backends:
-            console.print(f"\n[bold cyan]BACKENDS[/bold cyan]")
+            console.print("\n[bold cyan]BACKENDS[/bold cyan]")
             all_metadata = get_all_component_metadata()
             for source in sorted(backends_by_source.keys()):
                 console.print(f"\n  [green]{source}:[/green]")

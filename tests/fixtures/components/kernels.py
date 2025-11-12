@@ -3,11 +3,12 @@
 from brainsmith.registry import kernel
 
 
-@kernel(name='TestKernel')
+@kernel(name="TestKernel")
 class TestKernel:
     """Basic test kernel for integration tests."""
-    op_type = 'TestOp'
-    domain = 'test.custom'
+
+    op_type = "TestOp"
+    domain = "test.custom"
 
     def __init__(self, onnx_node):
         self.onnx_node = onnx_node
@@ -17,21 +18,23 @@ class TestKernel:
         return context
 
 
-@kernel(name='AnotherTestKernel')
+@kernel(name="AnotherTestKernel")
 class AnotherTestKernel:
     """Another test kernel for multi-component tests."""
-    op_type = 'AnotherOp'
-    domain = 'test.custom'
+
+    op_type = "AnotherOp"
+    domain = "test.custom"
 
     def __init__(self, onnx_node):
         self.onnx_node = onnx_node
 
 
-@kernel(name='TestKernelWithInfer')
+@kernel(name="TestKernelWithInfer")
 class TestKernelWithInfer:
     """Test kernel without infer transform (removed broken reference to test.infer)."""
-    op_type = 'TestInferOp'
-    domain = 'test.custom'
+
+    op_type = "TestInferOp"
+    domain = "test.custom"
 
     def __init__(self, onnx_node):
         self.onnx_node = onnx_node

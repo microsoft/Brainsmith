@@ -4,15 +4,13 @@
 from __future__ import annotations  # PEP 563: Postponed evaluation of annotations
 
 import logging
-from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
-
-import click
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 # Type hints only - settings imported lazily inside methods
 if TYPE_CHECKING:
-    from brainsmith.settings import SystemConfig, load_config
+    from brainsmith.settings import SystemConfig
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +25,7 @@ class ApplicationContext:
     overrides: dict[str, Any] = field(default_factory=dict)
 
     # Loaded configuration
-    config: "SystemConfig | None" = None
+    config: SystemConfig | None = None
 
     @classmethod
     def from_cli_args(
@@ -36,8 +34,8 @@ class ApplicationContext:
         build_dir_override: Path | None,
         log_level: str,
         no_progress: bool,
-        cli_name: str
-    ) -> "ApplicationContext":
+        cli_name: str,
+    ) -> ApplicationContext:
         """Create context from CLI arguments and perform all initialization.
 
         IMPORTANT: Expects environment to be sourced before running CLI:
@@ -56,6 +54,7 @@ class ApplicationContext:
             Initialized ApplicationContext with loaded configuration
         """
         import logging
+
         from brainsmith._internal.logging import setup_logging
 
         logger = logging.getLogger(__name__)
@@ -79,10 +78,10 @@ class ApplicationContext:
         # Pydantic handles validation and priority (CLI overrides > env > file > defaults)
         self.config = load_config(
             project_file=self.config_file,
-            **self.overrides  # Pass overrides directly to Pydantic
+            **self.overrides,  # Pass overrides directly to Pydantic
         )
 
-    def get_effective_config(self) -> "SystemConfig":
+    def get_effective_config(self) -> SystemConfig:
         if not self.config:
             self.load_configuration()
         return self.config

@@ -26,17 +26,19 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import math
-import numpy as np
 import os
 import shutil
-import pyxsi_utils
-from qonnx.util.basic import roundup_to_integer_multiple
 
-from finnbrainsmith.custom_op.fpgadataflow.rotaryembedding import RotaryEmbedding
+import numpy as np
 from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
 from finn.util.basic import get_rtlsim_trace_depth, make_build_dir
-from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy, pack_innermost_dim_as_hex_string
+from finn.util.data_packing import (
+    npy_to_rtlsim_input,
+    pack_innermost_dim_as_hex_string,
+    rtlsim_output_to_npy,
+)
+from finnbrainsmith.custom_op.fpgadataflow.rotaryembedding import RotaryEmbedding
+from qonnx.util.basic import roundup_to_integer_multiple
 
 try:
     from pyverilator import PyVerilator
@@ -62,8 +64,8 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
         # Overload default HLSCustomOp implementation to add axilite control IF
         intf_names = super().get_verilog_top_module_intf_names()
         # Override the AXIS I/O
-        intf_names["s_axis"] = [("in_"+self.hls_sname(), self.get_instream_width_padded())]
-        intf_names["m_axis"] = [("out_"+self.hls_sname(), self.get_outstream_width_padded())]
+        intf_names["s_axis"] = [("in_" + self.hls_sname(), self.get_instream_width_padded())]
+        intf_names["m_axis"] = [("out_" + self.hls_sname(), self.get_outstream_width_padded())]
         return intf_names
 
     def assert_context_has_input(self, context, inp_name):
@@ -73,20 +75,26 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
         assert str(dt) == "float32", "Only float32 datatype supported"
 
     def assert_expected_shape(self, shape, exp_shape, help_explain_shape=""):
-        assert shape == exp_shape, f"Expected Shape {exp_shape} Actual Shape: {shape}" + f"\n{help_explain_shape}"
+        assert shape == exp_shape, (
+            f"Expected Shape {exp_shape} Actual Shape: {shape}" + f"\n{help_explain_shape}"
+        )
 
     def validate_input(self, context, name):
         self.assert_context_has_input(context, name)
         self.assert_datatype_is_float(context[name].dtype)
-        self.assert_expected_shape(context[name].shape,
-                                   self.get_normal_input_shape(),
-                                   "Input Shape (1, NumberOfHeads, SequenceLength, HiddenDimension)")
+        self.assert_expected_shape(
+            context[name].shape,
+            self.get_normal_input_shape(),
+            "Input Shape (1, NumberOfHeads, SequenceLength, HiddenDimension)",
+        )
 
     def validate_output(self, context, otensor):
         self.assert_context_has_input(context, otensor)
-        self.assert_expected_shape(context[otensor],
-                                   self.get_normal_output_shape(),
-                                   "Output Shape (1, NumberOfHeads, SequenceLength, HiddenDimension)")
+        self.assert_expected_shape(
+            context[otensor],
+            self.get_normal_output_shape(),
+            "Output Shape (1, NumberOfHeads, SequenceLength, HiddenDimension)",
+        )
 
     def export_to_npy(self, directory, filename, itensor):
         np.save(os.path.join(directory, filename), itensor)
@@ -116,13 +124,16 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
 
     def apply_output_unfolding(self, name_to_data_dict):
         for name in name_to_data_dict:
-            name_to_data_dict[name] = name_to_data_dict[name].reshape(self.get_normal_output_shape())
+            name_to_data_dict[name] = name_to_data_dict[name].reshape(
+                self.get_normal_output_shape()
+            )
         return name_to_data_dict
-
 
     def convert_npy_to_rtlsim(self, name_to_data_dict):
         for name in name_to_data_dict:
-            name_to_data_dict[name] = npy_to_rtlsim_input(name_to_data_dict[name], self.get_input_datatype(), self.get_instream_width())
+            name_to_data_dict[name] = npy_to_rtlsim_input(
+                name_to_data_dict[name], self.get_input_datatype(), self.get_instream_width()
+            )
         return name_to_data_dict
 
     def convert_rtlsim_to_npy(self, name_to_data_dict):
@@ -143,9 +154,9 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
         if mode == "rtlsim":
             # Prepare Input For RTL Simulation
             io_dict = self.import_io_from_onnx_node()
-            io_dict['inputs'] = self.import_test_vectors_from_context(context, io_dict['inputs'])
-            io_dict['inputs'] = self.apply_folding(io_dict['inputs'])
-            io_dict['inputs'] = self.convert_npy_to_rtlsim(io_dict['inputs'])
+            io_dict["inputs"] = self.import_test_vectors_from_context(context, io_dict["inputs"])
+            io_dict["inputs"] = self.apply_folding(io_dict["inputs"])
+            io_dict["inputs"] = self.convert_npy_to_rtlsim(io_dict["inputs"])
 
             # Run RTL Simulation
             sim = self.get_rtlsim()
@@ -154,16 +165,14 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
             self.rtlsim_multi_io(sim, io_dict)
 
             # Process RTL Simulation Output
-            io_dict['outputs'] = self.convert_rtlsim_to_npy(io_dict['outputs'])
-            io_dict['outputs'] = self.apply_output_unfolding(io_dict['outputs'])
-            self.export_outputs_to_context(context, io_dict['outputs'])
+            io_dict["outputs"] = self.convert_rtlsim_to_npy(io_dict["outputs"])
+            io_dict["outputs"] = self.apply_output_unfolding(io_dict["outputs"])
+            self.export_outputs_to_context(context, io_dict["outputs"])
 
         else:
             raise Exception(
-                """Invalid value for attribute exec_mode! Is currently set to: {}
-            has to be set to one of the following value ("cppsim", "rtlsim")""".format(
-                    mode
-                )
+                f"""Invalid value for attribute exec_mode! Is currently set to: {mode}
+            has to be set to one of the following value ("cppsim", "rtlsim")"""
             )
 
     def get_template_values(self, head_dim, seq_len, hidden, simd, idt, wdt):
@@ -179,8 +188,8 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
             "WEIGHT_BITS": wdt.bitwidth(),
             "TOP_MODULE_NAME": topname,
             "STREAM_BITS": int(stream_bits),
-            "COS_INIT_FILE": '\"cos_values.dat\"',
-            "SIN_INIT_FILE": '\"sin_values.dat\"'
+            "COS_INIT_FILE": '"cos_values.dat"',
+            "SIN_INIT_FILE": '"sin_values.dat"',
         }
         return code_gen_dict
 
@@ -209,9 +218,9 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
 
     def generate_hdl(self, model, fpgapart, clk):
         head_dim = self.get_nodeattr("HeadDimension")
-        hidden  = self.get_nodeattr("HiddenDimension")
+        hidden = self.get_nodeattr("HiddenDimension")
         seq_len = self.get_nodeattr("SequenceLength")
-        simd  = self.get_nodeattr("SIMD")
+        simd = self.get_nodeattr("SIMD")
         idt = self.get_input_datatype()
         wdt = self.get_weight_datatype()
         code_gen_dict = self.get_template_values(head_dim, seq_len, hidden, simd, idt, wdt)
@@ -229,7 +238,7 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
         # (e.g. by GiveUniqueNodeNames(prefix) during MakeZynqProject)
         self.set_nodeattr("gen_top_module", self.get_verilog_top_module_name())
 
-        finnbrainsmith_rtllib = os.environ["FINN_ROOT"] + '/deps/finnbrainsmith/rtllib/rope/hdl'
+        finnbrainsmith_rtllib = os.environ["FINN_ROOT"] + "/deps/finnbrainsmith/rtllib/rope/hdl"
         finn_rtllib = os.environ["FINN_ROOT"] + "/finn-rtllib"
 
         sv_files = []
@@ -240,11 +249,11 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
 
         # apply code generation to templates
         code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
-        with open(finnbrainsmith_rtllib + '/rope_template.v', "r") as f:
-             template = f.read()
+        with open(finnbrainsmith_rtllib + "/rope_template.v") as f:
+            template = f.read()
         for key_name in code_gen_dict:
-             key = "$%s$" % key_name
-             template = template.replace(key, str(code_gen_dict[key_name]))
+            key = "$%s$" % key_name
+            template = template.replace(key, str(code_gen_dict[key_name]))
 
         with open(
             os.path.join(code_gen_dir, self.get_verilog_top_module_name() + ".v"),
@@ -261,8 +270,8 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
 
     def prepare_rtlsim(self):
         """Creates a Verilator emulation library for the RTL code generated
-           for this node, sets the rtlsim_so attribute to its path and returns
-           a PyVerilator wrapper around it."""
+        for this node, sets the rtlsim_so attribute to its path and returns
+        a PyVerilator wrapper around it."""
         # Modified to use generated (System-)Verilog instead of HLS output products
 
         # if PyVerilator is None:
@@ -280,17 +289,17 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
 
         # ret = pyxsi_utils.compile_sim_obj(
         #        self.get_verilog_top_module_name(), verilog_files, code_gen_dir
-        #)
+        # )
         # save generated lib filename in attribute
-        #self.set_nodeattr("rtlsim_so", ret[0] + "/" + ret[1])
+        # self.set_nodeattr("rtlsim_so", ret[0] + "/" + ret[1])
 
         # build the Verilator emu library
         sim = PyVerilator.build(
-              verilog_files,
-              build_dir=make_build_dir("pyverilator_" + self.onnx_node.name + "_"),
-              verilog_path=verilog_paths,
-              trace_depth=get_rtlsim_trace_depth(),
-              top_module_name=self.get_verilog_top_module_name(),
+            verilog_files,
+            build_dir=make_build_dir("pyverilator_" + self.onnx_node.name + "_"),
+            verilog_path=verilog_paths,
+            trace_depth=get_rtlsim_trace_depth(),
+            top_module_name=self.get_verilog_top_module_name(),
         )
         # save generated lib filename in attribute
         self.set_nodeattr("rtlsim_so", sim.lib._name)
@@ -301,11 +310,11 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
         code_gen_dir = self.get_nodeattr("code_gen_dir_ipgen")
 
         sourcefiles = [
-             "rope_axi.sv",
-             "rope.sv",
-             "memstream.sv",
-             "Q_srl.v",
-             self.get_nodeattr("gen_top_module") + ".v",
+            "rope_axi.sv",
+            "rope.sv",
+            "memstream.sv",
+            "Q_srl.v",
+            self.get_nodeattr("gen_top_module") + ".v",
         ]
 
         sourcefiles = [os.path.join(code_gen_dir, f) for f in sourcefiles]
@@ -314,14 +323,13 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
         for f in sourcefiles:
             cmd += ["add_files -norecurse %s" % (f)]
         cmd += [
-            "create_bd_cell -type module -reference %s %s"
-            % (self.get_nodeattr("gen_top_module"), self.onnx_node.name)
+            "create_bd_cell -type module -reference {} {}".format(
+                self.get_nodeattr("gen_top_module"), self.onnx_node.name
+            )
         ]
         return cmd
 
-
     def make_weight_file(self, weight_file_name, wdt, weights):
-
         weight_stream = []
 
         simd = self.get_nodeattr("SIMD")
@@ -339,14 +347,14 @@ class RotaryEmbedding_rtl(RotaryEmbedding, RTLBackend):
                 ).item()
                 weight_stream.append(t_packed)
 
-            #t_packed = pack_innermost_dim_as_hex_string(
+            # t_packed = pack_innermost_dim_as_hex_string(
             #                    [w], wdt, bw_hexdigit, prefix=""
             #                ).item()
-            #weight_stream.append(t_packed)
+            # weight_stream.append(t_packed)
         print("weight file name:", weight_file_name)
         with open(weight_file_name, "w") as f:
-                for val in weight_stream:
-                    f.write(val + "\n")
+            for val in weight_stream:
+                f.write(val + "\n")
 
     def get_rtl_file_list(self):
         pass

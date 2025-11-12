@@ -4,10 +4,10 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from brainsmith.dse.design_space import GlobalDesignSpace
@@ -26,6 +26,7 @@ class SegmentStatus(Enum):
         FAILED: Segment execution failed
         SKIPPED: Segment skipped due to parent failure
     """
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -41,31 +42,35 @@ class OutputType(Enum):
         RTL: RTL simulation and IP generation
         BITFILE: Full bitstream generation (slowest)
     """
+
     ESTIMATES = "estimates"
     RTL = "rtl"
     BITFILE = "bitfile"
 
-    def to_finn_products(self) -> List[str]:
+    def to_finn_products(self) -> list[str]:
         """Convert to FINN output_products configuration."""
         return {
             OutputType.ESTIMATES: ["estimates"],
             OutputType.RTL: ["rtl_sim", "ip_gen"],
-            OutputType.BITFILE: ["bitfile"]
+            OutputType.BITFILE: ["bitfile"],
         }[self]
 
-    def to_finn_outputs(self) -> List[str]:
+    def to_finn_outputs(self) -> list[str]:
         """Convert to FINN generate_outputs configuration."""
         return {
             OutputType.ESTIMATES: ["estimate_reports"],
             OutputType.RTL: ["estimate_reports", "rtlsim_performance", "stitched_ip"],
             OutputType.BITFILE: [
-                "estimate_reports", "rtlsim_performance",
-                "stitched_ip", "bitfile", "deployment_package"
-            ]
+                "estimate_reports",
+                "rtlsim_performance",
+                "stitched_ip",
+                "bitfile",
+                "deployment_package",
+            ],
         }[self]
 
     @classmethod
-    def from_finn_product(cls, product: str) -> 'OutputType':
+    def from_finn_product(cls, product: str) -> OutputType:
         """Get OutputType from FINN product string.
 
         Args:
@@ -90,8 +95,7 @@ class OutputType(Enum):
         # Product not found - create helpful error message
         all_products = [p for ot in cls for p in ot.to_finn_products()]
         raise ValueError(
-            f"Unknown FINN product '{product}'. "
-            f"Valid products: {', '.join(all_products)}"
+            f"Unknown FINN product '{product}'. " f"Valid products: {', '.join(all_products)}"
         )
 
 
@@ -108,11 +112,12 @@ class SegmentResult:
         execution_time: Execution time in seconds
         cached: Whether result was retrieved from cache
     """
+
     segment_id: str
     status: SegmentStatus
-    output_model: Optional[Path] = None
-    output_dir: Optional[Path] = None
-    error: Optional[str] = None
+    output_model: Path | None = None
+    output_dir: Path | None = None
+    error: str | None = None
     execution_time: float = 0
     cached: bool = False
 
@@ -127,12 +132,13 @@ class TreeExecutionResult:
         design_space: Original design space (if available)
         dse_tree: Execution tree structure (if available)
     """
-    segment_results: Dict[str, SegmentResult]
-    total_time: float
-    design_space: Optional[GlobalDesignSpace] = None
-    dse_tree: Optional[DSETree] = None
 
-    def compute_stats(self) -> Dict[str, int]:
+    segment_results: dict[str, SegmentResult]
+    total_time: float
+    design_space: GlobalDesignSpace | None = None
+    dse_tree: DSETree | None = None
+
+    def compute_stats(self) -> dict[str, int]:
         """Compute execution statistics.
 
         Returns:
@@ -153,11 +159,11 @@ class TreeExecutionResult:
                 skipped += 1
 
         return {
-            'total': total,
-            'successful': successful,
-            'failed': failed,
-            'cached': cached,
-            'skipped': skipped
+            "total": total,
+            "successful": successful,
+            "failed": failed,
+            "cached": cached,
+            "skipped": skipped,
         }
 
     def validate_success(self, output_dir: Path) -> None:
@@ -170,7 +176,7 @@ class TreeExecutionResult:
             ExecutionError: If no valid builds exist
         """
         stats = self.compute_stats()
-        valid_builds = stats['successful'] + stats['cached']
+        valid_builds = stats["successful"] + stats["cached"]
 
         if valid_builds == 0:
             raise ExecutionError(
@@ -181,7 +187,7 @@ class TreeExecutionResult:
                 f"  Run with --log-level debug for detailed output"
             )
 
-        if stats['successful'] == 0 and stats['cached'] > 0:
+        if stats["successful"] == 0 and stats["cached"] > 0:
             logger.warning(
                 f"All builds used cached results ({stats['cached']} cached). "
                 f"No new builds were executed."
@@ -190,5 +196,5 @@ class TreeExecutionResult:
 
 class ExecutionError(Exception):
     """Exception raised during DSE execution failures."""
-    pass
 
+    pass

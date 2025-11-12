@@ -42,8 +42,9 @@ Example usage (Configuration):
 """
 
 import logging
-from typing import Any, List, Optional, Callable, Dict
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from qonnx.core.datatype import DataType
 
@@ -56,7 +57,8 @@ logger = logging.getLogger(__name__)
 # Helper Functions
 # =============================================================================
 
-def _find_interface_in_dicts(name: str, inputs: Dict, outputs: Dict) -> Any:
+
+def _find_interface_in_dicts(name: str, inputs: dict, outputs: dict) -> Any:
     """Find interface by name from input/output dicts.
 
     Args:
@@ -83,6 +85,7 @@ def _find_interface_in_dicts(name: str, inputs: Dict, outputs: Dict) -> Any:
 # =============================================================================
 # ValidationError (Structured Error Type)
 # =============================================================================
+
 
 class ValidationError(ValueError):
     """Validation error with context and suggestions.
@@ -125,6 +128,7 @@ class ValidationError(ValueError):
 # Design Space Validation Context (Structural Constraints)
 # =============================================================================
 
+
 @dataclass
 class DesignSpaceValidationContext:
     """Validation context for structural constraints during design space build.
@@ -150,10 +154,10 @@ class DesignSpaceValidationContext:
                 raise ValueError(error)
     """
 
-    inputs: Dict[str, Any]  # InterfaceDesignSpace
-    outputs: Dict[str, Any]  # InterfaceDesignSpace
-    internal_datatypes: Dict[str, DataType]
-    param_getter: Optional[Callable[[str], Any]] = None
+    inputs: dict[str, Any]  # InterfaceDesignSpace
+    outputs: dict[str, Any]  # InterfaceDesignSpace
+    internal_datatypes: dict[str, DataType]
+    param_getter: Callable[[str], Any] | None = None
 
     def _find_interface(self, name: str) -> Any:
         """Find interface from inputs or outputs."""
@@ -179,9 +183,7 @@ class DesignSpaceValidationContext:
         return self._find_interface(name).datatype
 
     def get_shape(
-        self,
-        name: str,
-        hierarchy: ShapeHierarchy = ShapeHierarchy.TENSOR
+        self, name: str, hierarchy: ShapeHierarchy = ShapeHierarchy.TENSOR
     ) -> tuple[int, ...]:
         """Get shape at hierarchy level.
 
@@ -247,9 +249,7 @@ class DesignSpaceValidationContext:
             KeyError: If parameter not found
         """
         if self.param_getter is None:
-            raise RuntimeError(
-                f"No param_getter available. Cannot get parameter '{name}'."
-            )
+            raise RuntimeError(f"No param_getter available. Cannot get parameter '{name}'.")
 
         try:
             return self.param_getter(name)
@@ -260,6 +260,7 @@ class DesignSpaceValidationContext:
 # =============================================================================
 # Configuration Validation Context (Parametric Constraints)
 # =============================================================================
+
 
 @dataclass
 class ConfigurationValidationContext:
@@ -283,14 +284,12 @@ class ConfigurationValidationContext:
     """
 
     configured_model: Any  # KernelDesignPoint
-    params: Dict[str, int]
+    params: dict[str, int]
 
     def _find_interface(self, name: str) -> Any:
         """Find interface from configured model."""
         return _find_interface_in_dicts(
-            name,
-            self.configured_model.inputs,
-            self.configured_model.outputs
+            name, self.configured_model.inputs, self.configured_model.outputs
         )
 
     def get_datatype(self, name: str) -> DataType:
@@ -313,9 +312,7 @@ class ConfigurationValidationContext:
         return self._find_interface(name).datatype
 
     def get_shape(
-        self,
-        name: str,
-        hierarchy: ShapeHierarchy = ShapeHierarchy.TENSOR
+        self, name: str, hierarchy: ShapeHierarchy = ShapeHierarchy.TENSOR
     ) -> tuple[int, ...]:
         """Get shape at hierarchy level.
 
@@ -373,7 +370,7 @@ class ConfigurationValidationContext:
 
 
 __all__ = [
-    'ValidationError',
-    'DesignSpaceValidationContext',
-    'ConfigurationValidationContext',
+    "ValidationError",
+    "DesignSpaceValidationContext",
+    "ConfigurationValidationContext",
 ]

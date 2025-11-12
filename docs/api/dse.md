@@ -150,7 +150,6 @@ for seg_id, seg_result in results.segment_results.items():
 
 ::: brainsmith.dse.DSESegment
 
----
 
 ## See Also
 

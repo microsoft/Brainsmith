@@ -15,32 +15,32 @@ This package contains all pragma implementations organized by type:
 """
 
 # Re-export all pragma classes for backward compatibility
-from .base import Pragma, InterfacePragma, PragmaError
-from .source import TopModulePragma, IncludeRTLPragma
-from .interface import DatatypeConstraintPragma, DatatypePragma, WeightPragma
-from .parameter import AliasPragma, DerivedParameterPragma, AxiLiteParamPragma
+from .base import InterfacePragma, Pragma, PragmaError
 from .dimension import BDimPragma, SDimPragma
+from .interface import DatatypeConstraintPragma, DatatypePragma, WeightPragma
+from .parameter import AliasPragma, AxiLiteParamPragma, DerivedParameterPragma
 from .relationship import RelationshipPragma
+from .source import IncludeRTLPragma, TopModulePragma
 
 __all__ = [
     # Base classes
-    'Pragma',
-    'InterfacePragma',
-    'PragmaError',
+    "Pragma",
+    "InterfacePragma",
+    "PragmaError",
     # Source pragmas
-    'TopModulePragma',
-    'IncludeRTLPragma',
+    "TopModulePragma",
+    "IncludeRTLPragma",
     # Interface pragmas
-    'DatatypeConstraintPragma',
-    'DatatypePragma',
-    'WeightPragma',
+    "DatatypeConstraintPragma",
+    "DatatypePragma",
+    "WeightPragma",
     # Parameter pragmas
-    'AliasPragma',
-    'DerivedParameterPragma',
-    'AxiLiteParamPragma',
+    "AliasPragma",
+    "DerivedParameterPragma",
+    "AxiLiteParamPragma",
     # Dimension pragmas
-    'BDimPragma',
-    'SDimPragma',
+    "BDimPragma",
+    "SDimPragma",
     # Relationship pragmas
-    'RelationshipPragma',
+    "RelationshipPragma",
 ]

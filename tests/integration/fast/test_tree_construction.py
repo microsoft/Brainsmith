@@ -8,9 +8,10 @@ Execution time: < 1 min (no FINN execution)
 """
 
 import pytest
+
 from brainsmith.dse import build_tree, parse_blueprint
-from brainsmith.dse.tree import DSETree
 from brainsmith.dse.segment import DSESegment
+from brainsmith.dse.tree import DSETree
 
 
 class TestTreeBuilding:
@@ -27,11 +28,13 @@ class TestTreeBuilding:
 
         # Linear tree should have single path
         stats = tree.get_statistics()
-        assert stats['total_paths'] == 1
-        assert stats['total_segments'] >= 1
+        assert stats["total_paths"] == 1
+        assert stats["total_segments"] >= 1
 
     @pytest.mark.fast
-    def test_single_branch_tree(self, tmp_path, simple_onnx_model, branching_design_space, blueprint_config):
+    def test_single_branch_tree(
+        self, tmp_path, simple_onnx_model, branching_design_space, blueprint_config
+    ):
         """Build tree with one branch point."""
         tree = build_tree(branching_design_space, blueprint_config)
 
@@ -39,11 +42,13 @@ class TestTreeBuilding:
         stats = tree.get_statistics()
 
         # Branch creates multiple paths
-        assert stats['total_paths'] > 1
-        assert stats['max_depth'] > 0
+        assert stats["total_paths"] > 1
+        assert stats["max_depth"] > 0
 
     @pytest.mark.fast
-    def test_multi_branch_tree(self, tmp_path, simple_onnx_model, multi_branch_design_space, blueprint_config):
+    def test_multi_branch_tree(
+        self, tmp_path, simple_onnx_model, multi_branch_design_space, blueprint_config
+    ):
         """Build tree with multiple branch levels."""
         tree = build_tree(multi_branch_design_space, blueprint_config)
 
@@ -51,8 +56,8 @@ class TestTreeBuilding:
         stats = tree.get_statistics()
 
         # Multiple branches create exponentially more paths
-        assert stats['total_paths'] >= 4  # At least 2 branches * 2 options
-        assert stats['max_depth'] >= 2
+        assert stats["total_paths"] >= 4  # At least 2 branches * 2 options
+        assert stats["max_depth"] >= 2
 
     @pytest.mark.fast
     def test_tree_from_blueprint(self, tmp_path, simple_onnx_model):
@@ -62,12 +67,11 @@ class TestTreeBuilding:
         blueprint_path = create_minimal_blueprint(
             tmp_path,
             name="test_tree",
-            steps=["custom:test_step", "custom:test_step1", "custom:test_step2"]
+            steps=["custom:test_step", "custom:test_step1", "custom:test_step2"],
         )
 
         design_space, blueprint_config = parse_blueprint(
-            str(blueprint_path),
-            str(simple_onnx_model)
+            str(blueprint_path), str(simple_onnx_model)
         )
 
         tree = build_tree(design_space, blueprint_config)
@@ -80,35 +84,41 @@ class TestTreeStatistics:
     """Test suite for tree statistics."""
 
     @pytest.mark.fast
-    def test_tree_statistics_linear(self, tmp_path, simple_onnx_model, simple_design_space, blueprint_config):
+    def test_tree_statistics_linear(
+        self, tmp_path, simple_onnx_model, simple_design_space, blueprint_config
+    ):
         """Verify statistics for linear tree."""
         tree = build_tree(simple_design_space, blueprint_config)
         stats = tree.get_statistics()
 
         # Validate stat structure
-        assert 'total_paths' in stats
-        assert 'total_segments' in stats
-        assert 'max_depth' in stats
-        assert 'segment_efficiency' in stats
+        assert "total_paths" in stats
+        assert "total_segments" in stats
+        assert "max_depth" in stats
+        assert "segment_efficiency" in stats
 
         # Linear tree properties
-        assert stats['total_paths'] == 1
-        assert stats['total_segments'] >= 1
+        assert stats["total_paths"] == 1
+        assert stats["total_segments"] >= 1
 
     @pytest.mark.fast
-    def test_tree_statistics_branching(self, tmp_path, simple_onnx_model, branching_design_space, blueprint_config):
+    def test_tree_statistics_branching(
+        self, tmp_path, simple_onnx_model, branching_design_space, blueprint_config
+    ):
         """Verify statistics for branched tree."""
         tree = build_tree(branching_design_space, blueprint_config)
         stats = tree.get_statistics()
 
         # Branched tree has multiple paths
-        assert stats['total_paths'] > 1
+        assert stats["total_paths"] > 1
 
         # Segment efficiency should be > 0 (segments are shared)
-        assert stats['segment_efficiency'] >= 0
+        assert stats["segment_efficiency"] >= 0
 
     @pytest.mark.fast
-    def test_execution_order(self, tmp_path, simple_onnx_model, branching_design_space, blueprint_config):
+    def test_execution_order(
+        self, tmp_path, simple_onnx_model, branching_design_space, blueprint_config
+    ):
         """Test BFS execution order."""
         tree = build_tree(branching_design_space, blueprint_config)
         execution_order = tree.get_execution_order()
@@ -124,7 +134,9 @@ class TestSegmentIDDeterminism:
     """Test suite for segment ID consistency (critical for caching)."""
 
     @pytest.mark.fast
-    def test_segment_ids_deterministic(self, tmp_path, simple_onnx_model, simple_design_space, blueprint_config):
+    def test_segment_ids_deterministic(
+        self, tmp_path, simple_onnx_model, simple_design_space, blueprint_config
+    ):
         """Segment IDs must be deterministic across multiple builds."""
         # Build tree twice
         tree1 = build_tree(simple_design_space, blueprint_config)
@@ -141,7 +153,9 @@ class TestSegmentIDDeterminism:
         assert ids1 == ids2, "Segment IDs must be deterministic for caching to work"
 
     @pytest.mark.fast
-    def test_segment_ids_unique(self, tmp_path, simple_onnx_model, branching_design_space, blueprint_config):
+    def test_segment_ids_unique(
+        self, tmp_path, simple_onnx_model, branching_design_space, blueprint_config
+    ):
         """All segment IDs must be unique within a tree."""
         tree = build_tree(branching_design_space, blueprint_config)
         segments = tree.get_all_segments()

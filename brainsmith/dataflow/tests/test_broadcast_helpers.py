@@ -5,7 +5,7 @@
 """Tests for broadcasting helpers."""
 
 import pytest
-import numpy as np
+
 from brainsmith.dataflow.broadcast_helpers import BroadcastInfo, compute_broadcast_info
 
 
@@ -84,7 +84,7 @@ class TestBroadcastInfoCompute:
 
         assert info.output_shape == (8, 64, 64, 128)
         assert info.broadcast_dims_lhs == (0, 1)  # LHS broadcasts batch, height
-        assert info.broadcast_dims_rhs == (2,)     # RHS broadcasts width
+        assert info.broadcast_dims_rhs == (2,)  # RHS broadcasts width
         assert info.has_broadcast
         assert not info.broadcast_last_axis
 

@@ -11,12 +11,11 @@ like LayerNorm and AddStreams.
 """
 
 import time
-import pytest
-from onnx import helper, TensorProto, numpy_helper
-import numpy as np
 
+import pytest
+from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
-import brainsmith.dataflow as df
+
 from brainsmith.kernels.layernorm import LayerNorm
 
 
@@ -36,15 +35,10 @@ def create_layernorm_model():
         SIMD=1,
         epsilon=1e-5,
         input0Datatype="FLOAT32",
-        output0Datatype="FLOAT32"
+        output0Datatype="FLOAT32",
     )
 
-    graph = helper.make_graph(
-        [node],
-        "layernorm_graph",
-        [input_tensor],
-        [output_tensor]
-    )
+    graph = helper.make_graph([node], "layernorm_graph", [input_tensor], [output_tensor])
 
     model = helper.make_model(graph)
     model_w = ModelWrapper(model)
@@ -55,6 +49,7 @@ def create_layernorm_model():
 # ====================================================================
 # Integration Test 1: End-to-End LayerNorm DSE
 # ====================================================================
+
 
 def test_end_to_end_layernorm_dse():
     """Test end-to-end DSE exploration with LayerNorm kernel.
@@ -129,8 +124,9 @@ def test_layernorm_design_space_stability():
         kernel_op.get_design_point(model_w)
 
         # Invariant model should NEVER change
-        assert kernel_op._design_space is design_space, \
-            f"Invariant model invalidated at SIMD={simd}"
+        assert (
+            kernel_op._design_space is design_space
+        ), f"Invariant model invalidated at SIMD={simd}"
 
 
 def test_layernorm_derived_dimension_across_configs():
@@ -148,13 +144,15 @@ def test_layernorm_derived_dimension_across_configs():
         input_stream_shape = configured.input_list[0].stream_shape
         output_stream_shape = configured.output_list[0].stream_shape
 
-        assert output_stream_shape == input_stream_shape, \
-            f"DerivedDim failed at SIMD={simd}: {output_stream_shape} != {input_stream_shape}"
+        assert (
+            output_stream_shape == input_stream_shape
+        ), f"DerivedDim failed at SIMD={simd}: {output_stream_shape} != {input_stream_shape}"
 
 
 # ====================================================================
 # Integration Test 2: Performance Validation
 # ====================================================================
+
 
 def test_layernorm_performance_meets_targets():
     """Test that LayerNorm meets Phase 3 performance targets."""
@@ -167,8 +165,7 @@ def test_layernorm_performance_meets_targets():
     first_call_time = time.time() - start
 
     # Use generous 50ms for CI variability
-    assert first_call_time < 0.05, \
-        f"First build took {first_call_time*1000:.2f}ms, target <50ms"
+    assert first_call_time < 0.05, f"First build took {first_call_time*1000:.2f}ms, target <50ms"
 
     print(f"\n  First build: {first_call_time*1000:.2f}ms")
 
@@ -179,8 +176,7 @@ def test_layernorm_performance_meets_targets():
     cache_hit_time = (time.time() - start) / 100
 
     # Use generous 1ms for CI variability
-    assert cache_hit_time < 0.001, \
-        f"Cache hit took {cache_hit_time*1000:.2f}ms avg, target <1ms"
+    assert cache_hit_time < 0.001, f"Cache hit took {cache_hit_time*1000:.2f}ms avg, target <1ms"
 
     print(f"  Cache hit: {cache_hit_time*1000:.3f}ms avg (100 calls)")
 
@@ -191,8 +187,7 @@ def test_layernorm_performance_meets_targets():
     reconfig_time = time.time() - start
 
     # Use generous 5ms for CI variability
-    assert reconfig_time < 0.005, \
-        f"Reconfiguration took {reconfig_time*1000:.2f}ms, target <5ms"
+    assert reconfig_time < 0.005, f"Reconfiguration took {reconfig_time*1000:.2f}ms, target <5ms"
 
     print(f"  Reconfiguration: {reconfig_time*1000:.2f}ms")
 
@@ -213,8 +208,9 @@ def test_layernorm_memory_efficiency():
 
     # All configurations should share same design space
     invariants = [cfg.design_space for cfg in configurations]
-    assert all(inv is invariants[0] for inv in invariants), \
-        "All configurations should share same design space (flyweight)"
+    assert all(
+        inv is invariants[0] for inv in invariants
+    ), "All configurations should share same design space (flyweight)"
 
     print(f"\n  {len(configurations)} configurations share 1 design space")
 
@@ -222,6 +218,7 @@ def test_layernorm_memory_efficiency():
 # ====================================================================
 # Integration Test 3: Backward Compatibility
 # ====================================================================
+
 
 def test_layernorm_backward_compatibility():
     """Test that LayerNorm works exactly as before (backward compatibility)."""
@@ -244,13 +241,14 @@ def test_layernorm_backward_compatibility():
     # design_point property should work
     ki = kernel_op.design_point
     assert ki is not None
-    assert hasattr(ki, 'inputs')
-    assert hasattr(ki, 'outputs')
+    assert hasattr(ki, "inputs")
+    assert hasattr(ki, "outputs")
 
 
 # ====================================================================
 # Integration Test 4: Real-World DSE Scenarios
 # ====================================================================
+
 
 def test_realistic_dse_workflow():
     """Test realistic DSE workflow: explore, filter, select best."""
@@ -274,23 +272,25 @@ def test_realistic_dse_workflow():
         configured = kernel_op.get_design_point(model_w)
 
         # Simulate profiling (just capture configuration)
-        results.append({
-            'simd': simd,
-            'stream_width': configured.input_list[0].stream_width_bits,
-            'cycles': configured.initiation_interval
-        })
+        results.append(
+            {
+                "simd": simd,
+                "stream_width": configured.input_list[0].stream_width_bits,
+                "cycles": configured.initiation_interval,
+            }
+        )
 
     assert len(results) == len(filtered_simd), "All filtered configs should be valid"
 
     # Step 4: Select "best" (e.g., highest SIMD that fits)
-    best = max(results, key=lambda r: r['simd'])
+    best = max(results, key=lambda r: r["simd"])
     print(f"  Best config: SIMD={best['simd']}, cycles={best['cycles']}")
 
     # Step 5: Apply best configuration
-    kernel_op.set_nodeattr("SIMD", best['simd'])
+    kernel_op.set_nodeattr("SIMD", best["simd"])
     final_instance = kernel_op.get_design_point(model_w)
 
-    assert final_instance.params["SIMD"] == best['simd']
+    assert final_instance.params["SIMD"] == best["simd"]
 
 
 def test_multi_kernel_dse_simulation():

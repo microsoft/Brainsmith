@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Dict, List, Optional, Any
 from pathlib import Path
+from typing import Any
 
 from brainsmith.dse.types import SegmentStatus
 
@@ -27,22 +27,23 @@ class DSESegment:
     steps from the last branch point (or root) to the next branch point
     (or leaf).
     """
+
     # Core identity
-    steps: List[Dict[str, Any]]  # Execution steps for this segment
-    branch_choice: Optional[str] = None
+    steps: list[dict[str, Any]]  # Execution steps for this segment
+    branch_choice: str | None = None
 
     # Tree structure
-    parent: Optional[DSESegment] = None
-    children: Dict[str, DSESegment] = field(default_factory=dict)
+    parent: DSESegment | None = None
+    children: dict[str, DSESegment] = field(default_factory=dict)
 
     # Execution state
     status: SegmentStatus = SegmentStatus.PENDING
-    output_dir: Optional[Path] = None
-    error: Optional[str] = None
-    execution_time: Optional[float] = None
+    output_dir: Path | None = None
+    error: str | None = None
+    execution_time: float | None = None
 
     # FINN configuration
-    finn_config: Dict[str, Any] = field(default_factory=dict)
+    finn_config: dict[str, Any] = field(default_factory=dict)
 
     @cached_property
     def segment_id(self) -> str:
@@ -55,7 +56,7 @@ class DSESegment:
             node = node.parent
         path_parts.reverse()
         return "/".join(path_parts) if path_parts else "root"
-    
+
     @property
     def is_branch_point(self) -> bool:
         return len(self.children) > 1
@@ -63,19 +64,16 @@ class DSESegment:
     @property
     def is_leaf(self) -> bool:
         return len(self.children) == 0
-    
-    def add_child(self, branch_id: str, steps: List[Dict[str, Any]]) -> DSESegment:
+
+    def add_child(self, branch_id: str, steps: list[dict[str, Any]]) -> DSESegment:
         """Create a child segment for a branch."""
         child = DSESegment(
-            steps=steps,
-            branch_choice=branch_id,
-            parent=self,
-            finn_config=self.finn_config.copy()
+            steps=steps, branch_choice=branch_id, parent=self, finn_config=self.finn_config.copy()
         )
         self.children[branch_id] = child
         return child
-    
-    def get_path(self) -> List[DSESegment]:
+
+    def get_path(self) -> list[DSESegment]:
         """Get all segments from root to here."""
         path = []
         node = self
@@ -84,8 +82,8 @@ class DSESegment:
             node = node.parent
         path.reverse()
         return path
-    
-    def get_all_steps(self) -> List[Dict[str, Any]]:
+
+    def get_all_steps(self) -> list[dict[str, Any]]:
         """Get all steps from root to end of this segment."""
         steps = []
         for segment in self.get_path():

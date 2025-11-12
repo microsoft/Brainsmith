@@ -11,20 +11,21 @@ This module tests the complete flow of internal datatypes from schema
 definition through resolution during model building.
 """
 
-import pytest
 from dataclasses import dataclass
 
+import pytest
 from qonnx.core.datatype import DataType
+
 from brainsmith.dataflow import (
-    # Schemas
-    InputSchema,
-    OutputSchema,
-    KernelSchema,
+    ComputedDatatype,
     # Datatype sources
     DerivedDatatype,
-    WidenedDatatype,
+    # Schemas
+    InputSchema,
+    KernelSchema,
+    OutputSchema,
     UnionDatatype,
-    ComputedDatatype,
+    WidenedDatatype,
 )
 
 
@@ -32,6 +33,7 @@ from brainsmith.dataflow import (
 @dataclass
 class MockInterface:
     """Mock interface for testing internal datatype resolution."""
+
     name: str
     datatype: DataType
 
@@ -47,6 +49,7 @@ def param_getter():
 # Internal Datatype Schema Definition Tests
 # ============================================================================
 
+
 class TestInternalDatatypeSchemaDefinition:
     """Tests for defining internal datatypes in KernelSchema."""
 
@@ -56,9 +59,7 @@ class TestInternalDatatypeSchemaDefinition:
             name="TestKernel",
             inputs=[InputSchema("input")],
             outputs=[OutputSchema("output")],
-            internal_datatypes={
-                "accumulator": DerivedDatatype("input")
-            }
+            internal_datatypes={"accumulator": DerivedDatatype("input")},
         )
 
         assert "accumulator" in schema.internal_datatypes
@@ -68,15 +69,12 @@ class TestInternalDatatypeSchemaDefinition:
         """Test schema with multiple internal datatypes."""
         schema = KernelSchema(
             name="TestKernel",
-            inputs=[
-                InputSchema("input"),
-                InputSchema("weight")
-            ],
+            inputs=[InputSchema("input"), InputSchema("weight")],
             outputs=[OutputSchema("output")],
             internal_datatypes={
                 "accumulator": WidenedDatatype("input", extra_bits=8),
-                "bias": DerivedDatatype("input")
-            }
+                "bias": DerivedDatatype("input"),
+            },
         )
 
         assert len(schema.internal_datatypes) == 2
@@ -92,7 +90,7 @@ class TestInternalDatatypeSchemaDefinition:
                 outputs=[OutputSchema("output")],
                 internal_datatypes={
                     "input": DerivedDatatype("input")  # Same name as input
-                }
+                },
             )
 
     def test_internal_datatype_name_conflict_with_output(self):
@@ -104,7 +102,7 @@ class TestInternalDatatypeSchemaDefinition:
                 outputs=[OutputSchema("output")],
                 internal_datatypes={
                     "output": DerivedDatatype("input")  # Same name as output
-                }
+                },
             )
 
     def test_protected_attr_names_includes_internals(self):
@@ -115,8 +113,8 @@ class TestInternalDatatypeSchemaDefinition:
             outputs=[OutputSchema("output")],
             internal_datatypes={
                 "accumulator": DerivedDatatype("input"),
-                "bias": DerivedDatatype("input")
-            }
+                "bias": DerivedDatatype("input"),
+            },
         )
 
         protected = schema.protected_attr_names
@@ -131,9 +129,7 @@ class TestInternalDatatypeSchemaDefinition:
             name="TestKernel",
             inputs=[InputSchema("input")],
             outputs=[OutputSchema("output")],
-            internal_datatypes={
-                "accumulator": DerivedDatatype("input")
-            }
+            internal_datatypes={"accumulator": DerivedDatatype("input")},
         )
 
         nodeattr_types = schema.get_nodeattr_types()
@@ -150,14 +146,13 @@ class TestInternalDatatypeSchemaDefinition:
 # Internal Datatype Resolution Tests
 # ============================================================================
 
+
 class TestInternalDatatypeResolution:
     """Tests for resolving internal datatypes during model building."""
 
     def test_derived_internal_from_input(self, param_getter):
         """Test DerivedDatatype for internal referencing input."""
-        interfaces = {
-            "input": MockInterface("input", DataType["INT8"])
-        }
+        interfaces = {"input": MockInterface("input", DataType["INT8"])}
 
         source = DerivedDatatype("input")
         result = source.resolve(interfaces, param_getter)
@@ -165,9 +160,7 @@ class TestInternalDatatypeResolution:
 
     def test_widened_internal_from_input(self, param_getter):
         """Test WidenedDatatype for internal referencing input."""
-        interfaces = {
-            "input": MockInterface("input", DataType["INT8"])
-        }
+        interfaces = {"input": MockInterface("input", DataType["INT8"])}
 
         source = WidenedDatatype("input", extra_bits=8)
         result = source.resolve(interfaces, param_getter)
@@ -178,7 +171,7 @@ class TestInternalDatatypeResolution:
         interfaces = {
             "input0": MockInterface("input0", DataType["INT4"]),
             "input1": MockInterface("input1", DataType["UINT4"]),
-            "input2": MockInterface("input2", DataType["INT8"])
+            "input2": MockInterface("input2", DataType["INT8"]),
         }
 
         source = UnionDatatype(("input0", "input1", "input2"))
@@ -190,7 +183,7 @@ class TestInternalDatatypeResolution:
         """Test ComputedDatatype for internal with custom logic."""
         interfaces = {
             "input": MockInterface("input", DataType["INT8"]),
-            "weight": MockInterface("weight", DataType["INT4"])
+            "weight": MockInterface("weight", DataType["INT4"]),
         }
 
         def compute_matmul_acc(ifs, pg):
@@ -206,9 +199,7 @@ class TestInternalDatatypeResolution:
 
     def test_internal_not_found_error_message(self, param_getter):
         """Test that error message mentions interfaces/internals."""
-        interfaces = {
-            "input": MockInterface("input", DataType["INT8"])
-        }
+        interfaces = {"input": MockInterface("input", DataType["INT8"])}
 
         source = DerivedDatatype("nonexistent")
         with pytest.raises(ValueError, match="Source.*'nonexistent' not found"):
@@ -223,6 +214,7 @@ class TestInternalDatatypeResolution:
 # Output Referencing Internal Datatype Tests
 # ============================================================================
 
+
 class TestOutputReferencingInternalDatatype:
     """Tests for outputs referencing internal datatypes."""
 
@@ -231,7 +223,7 @@ class TestOutputReferencingInternalDatatype:
         # Simulate after internal resolution
         interfaces = {
             "input": MockInterface("input", DataType["INT8"]),
-            "accumulator": MockInterface("accumulator", DataType["INT16"])
+            "accumulator": MockInterface("accumulator", DataType["INT16"]),
         }
 
         # Output references internal
@@ -244,7 +236,7 @@ class TestOutputReferencingInternalDatatype:
         # Simulate after internal resolution
         interfaces = {
             "input": MockInterface("input", DataType["INT8"]),
-            "bias": MockInterface("bias", DataType["INT8"])
+            "bias": MockInterface("bias", DataType["INT8"]),
         }
 
         # Output widens internal bias
@@ -257,7 +249,7 @@ class TestOutputReferencingInternalDatatype:
         # Simulate after internal resolution
         interfaces = {
             "input": MockInterface("input", DataType["INT8"]),
-            "bias": MockInterface("bias", DataType["INT16"])
+            "bias": MockInterface("bias", DataType["INT16"]),
         }
 
         # Output is union of input and internal
@@ -270,6 +262,7 @@ class TestOutputReferencingInternalDatatype:
 # End-to-End Scenario Tests
 # ============================================================================
 
+
 class TestInternalDatatypeEndToEnd:
     """End-to-end tests for realistic kernel scenarios with internal datatypes."""
 
@@ -277,22 +270,21 @@ class TestInternalDatatypeEndToEnd:
         """Test MatMul-like kernel with accumulator internal datatype."""
         schema = KernelSchema(
             name="MatMul",
-            inputs=[
-                InputSchema("input"),
-                InputSchema("weight", is_weight=True)
-            ],
+            inputs=[InputSchema("input"), InputSchema("weight", is_weight=True)],
             outputs=[
                 OutputSchema(
                     "output",
-                    datatype=DerivedDatatype("accumulator")  # Output uses accumulator
+                    datatype=DerivedDatatype("accumulator"),  # Output uses accumulator
                 )
             ],
             internal_datatypes={
                 "accumulator": ComputedDatatype(
-                    lambda ifs, pg: DataType[f"INT{ifs['input'].datatype.bitwidth() + ifs['weight'].datatype.bitwidth() + 8}"],
-                    "MatMul accumulator with headroom"
+                    lambda ifs, pg: DataType[
+                        f"INT{ifs['input'].datatype.bitwidth() + ifs['weight'].datatype.bitwidth() + 8}"
+                    ],
+                    "MatMul accumulator with headroom",
                 )
-            }
+            },
         )
 
         # Verify schema structure
@@ -303,7 +295,7 @@ class TestInternalDatatypeEndToEnd:
         # Simulate resolution
         interfaces = {
             "input": MockInterface("input", DataType["INT8"]),
-            "weight": MockInterface("weight", DataType["INT4"])
+            "weight": MockInterface("weight", DataType["INT4"]),
         }
 
         # Resolve internal
@@ -325,18 +317,16 @@ class TestInternalDatatypeEndToEnd:
             outputs=[
                 OutputSchema(
                     "output",
-                    datatype=UnionDatatype(("input", "bias"))  # Output accommodates input and bias
+                    datatype=UnionDatatype(("input", "bias")),  # Output accommodates input and bias
                 )
             ],
             internal_datatypes={
                 "bias": DerivedDatatype("input")  # Bias has same type as input
-            }
+            },
         )
 
         # Simulate resolution
-        interfaces = {
-            "input": MockInterface("input", DataType["INT8"])
-        }
+        interfaces = {"input": MockInterface("input", DataType["INT8"])}
 
         # Resolve internal
         bias_datatype = schema.internal_datatypes["bias"].resolve(interfaces, param_getter)
@@ -356,26 +346,23 @@ class TestInternalDatatypeEndToEnd:
 
         schema = KernelSchema(
             name="ComplexKernel",
-            inputs=[
-                InputSchema("input"),
-                InputSchema("weight")
-            ],
+            inputs=[InputSchema("input"), InputSchema("weight")],
             outputs=[
                 OutputSchema(
                     "output",
-                    datatype=UnionDatatype(("accumulator", "bias"))  # Output uses both internals
+                    datatype=UnionDatatype(("accumulator", "bias")),  # Output uses both internals
                 )
             ],
             internal_datatypes={
                 "accumulator": WidenedDatatype("input", extra_bits=8),
-                "bias": DerivedDatatype("weight")
-            }
+                "bias": DerivedDatatype("weight"),
+            },
         )
 
         # Simulate resolution
         interfaces = {
             "input": MockInterface("input", DataType["INT8"]),
-            "weight": MockInterface("weight", DataType["INT4"])
+            "weight": MockInterface("weight", DataType["INT4"]),
         }
 
         # Resolve internals
@@ -397,6 +384,7 @@ class TestInternalDatatypeEndToEnd:
 # Error Handling Tests
 # ============================================================================
 
+
 class TestInternalDatatypeErrorHandling:
     """Tests for error handling with internal datatypes."""
 
@@ -406,14 +394,10 @@ class TestInternalDatatypeErrorHandling:
             name="TestKernel",
             inputs=[InputSchema("input")],
             outputs=[OutputSchema("output")],
-            internal_datatypes={
-                "accumulator": DerivedDatatype("nonexistent")
-            }
+            internal_datatypes={"accumulator": DerivedDatatype("nonexistent")},
         )
 
-        interfaces = {
-            "input": MockInterface("input", DataType["INT8"])
-        }
+        interfaces = {"input": MockInterface("input", DataType["INT8"])}
 
         # Should fail during resolution
         with pytest.raises(ValueError, match="'nonexistent' not found"):
@@ -425,20 +409,13 @@ class TestInternalDatatypeErrorHandling:
         schema = KernelSchema(
             name="TestKernel",
             inputs=[InputSchema("input")],
-            outputs=[
-                OutputSchema(
-                    "output",
-                    datatype=DerivedDatatype("nonexistent_internal")
-                )
-            ],
-            internal_datatypes={
-                "accumulator": DerivedDatatype("input")
-            }
+            outputs=[OutputSchema("output", datatype=DerivedDatatype("nonexistent_internal"))],
+            internal_datatypes={"accumulator": DerivedDatatype("input")},
         )
 
         interfaces = {
             "input": MockInterface("input", DataType["INT8"]),
-            "accumulator": MockInterface("accumulator", DataType["INT16"])
+            "accumulator": MockInterface("accumulator", DataType["INT16"]),
         }
 
         # Should fail when output tries to reference non-existent internal
@@ -455,13 +432,11 @@ class TestInternalDatatypeErrorHandling:
             outputs=[OutputSchema("output")],
             internal_datatypes={
                 "accumulator": DerivedDatatype("input"),
-                "bias": DerivedDatatype("accumulator")  # Try to reference another internal
-            }
+                "bias": DerivedDatatype("accumulator"),  # Try to reference another internal
+            },
         )
 
-        interfaces = {
-            "input": MockInterface("input", DataType["INT8"])
-        }
+        interfaces = {"input": MockInterface("input", DataType["INT8"])}
 
         # First internal resolves fine
         acc_dt = schema.internal_datatypes["accumulator"].resolve(interfaces, param_getter)

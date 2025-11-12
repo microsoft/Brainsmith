@@ -13,20 +13,19 @@ component namespace system with ONNX domain conventions.
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 # Component type to subdomain mapping
 _SUBDOMAIN_MAP = {
-    'kernel': 'kernels',
-    'backend': 'kernels',  # Backends use same domain as kernels
-    'step': 'steps',
+    "kernel": "kernels",
+    "backend": "kernels",  # Backends use same domain as kernels
+    "step": "steps",
 }
 
 
-def get_subdomain_for_type(component_type: str) -> Optional[str]:
+def get_subdomain_for_type(component_type: str) -> str | None:
     """Get subdomain for a component type.
 
     Args:
@@ -70,7 +69,7 @@ def match_domain_to_source(domain: str) -> str:
     matches = []
     for source_prefix in _discovered_sources:
         # Exact match or prefix match with dot separator
-        if domain == source_prefix or domain.startswith(source_prefix + '.'):
+        if domain == source_prefix or domain.startswith(source_prefix + "."):
             matches.append((source_prefix, len(source_prefix)))
 
     if not matches:
@@ -78,12 +77,13 @@ def match_domain_to_source(domain: str) -> str:
         logger.debug(f"No source match for domain '{domain}', using fallback")
         try:
             from brainsmith.settings import get_config
+
             config = get_config()
             if config.source_priority:
                 return config.source_priority[0]
         except (ImportError, AttributeError):
             pass
-        return 'custom'
+        return "custom"
 
     # Return longest match (most specific)
     matches.sort(key=lambda x: x[1], reverse=True)
@@ -127,13 +127,13 @@ def derive_domain_from_module(module_name: str) -> str:
 
     # Pattern 3: FINN special case (keep full path to language)
     if module_name.startswith("finn.custom_op.fpgadataflow."):
-        parts = module_name.split('.')
+        parts = module_name.split(".")
         # finn.custom_op.fpgadataflow.hls.X → finn.custom_op.fpgadataflow.hls
-        if len(parts) > 4 and parts[3] in ('hls', 'rtl'):
-            return '.'.join(parts[:4])
+        if len(parts) > 4 and parts[3] in ("hls", "rtl"):
+            return ".".join(parts[:4])
         # finn.custom_op.fpgadataflow.X → finn.custom_op.fpgadataflow
         # Return base domain (first 3 segments)
-        return '.'.join(parts[:3])
+        return ".".join(parts[:3])
 
     # Pattern 4: Generic hierarchical - match against discovered sources
     # Check both component_sources (filesystem) and discovered sources (entrypoints)
@@ -145,15 +145,15 @@ def derive_domain_from_module(module_name: str) -> str:
             # Check for both standard and unique module name patterns
             # Standard: "acme.kernels.my_kernel"
             # Unique: "acme__custom_ops.my_kernel" (from discovery)
-            if module_name.startswith(source_prefix + '.') or \
-               module_name.startswith(source_prefix + '__'):
-
+            if module_name.startswith(source_prefix + ".") or module_name.startswith(
+                source_prefix + "__"
+            ):
                 # Extract category (first segment after prefix)
-                if '.' in module_name:
+                if "." in module_name:
                     # Handle unique module names: "acme__custom_ops" → "custom_ops"
-                    if '__' in source_prefix:
+                    if "__" in source_prefix:
                         # For unique names like "project__kernels", use the part after __
-                        root_parts = source_prefix.split('__')
+                        root_parts = source_prefix.split("__")
                         if len(root_parts) > 1:
                             return f"{source_prefix}.kernels"
 
@@ -161,7 +161,7 @@ def derive_domain_from_module(module_name: str) -> str:
                     after_prefix_idx = len(source_prefix) + 1
                     if after_prefix_idx < len(module_name):
                         remaining = module_name[after_prefix_idx:]
-                        category = remaining.split('.')[0] if '.' in remaining else remaining
+                        category = remaining.split(".")[0] if "." in remaining else remaining
 
                         # Validate category is a known subdomain
                         if category in _SUBDOMAIN_MAP.values():
@@ -175,11 +175,11 @@ def derive_domain_from_module(module_name: str) -> str:
         logger.debug("Registry state unavailable during domain derivation")
 
     # Fallback: First two segments or root + .kernels
-    parts = module_name.split('.')
+    parts = module_name.split(".")
     if len(parts) >= 2:
         # Check if second segment is a known category
         if parts[1] in _SUBDOMAIN_MAP.values():
-            return '.'.join(parts[:2])
+            return ".".join(parts[:2])
 
     # Last resort: root segment + .kernels
     return f"{parts[0]}.kernels"
@@ -212,13 +212,13 @@ def expand_short_form(name: str, component_type: str) -> str:
         'LayerNorm'  # No colon, return as-is
     """
     # Not qualified - return as-is
-    if ':' not in name:
+    if ":" not in name:
         return name
 
-    prefix, component = name.split(':', 1)
+    prefix, component = name.split(":", 1)
 
     # Already full domain (has dot in prefix)
-    if '.' in prefix:
+    if "." in prefix:
         return name
 
     # Expand short prefix based on component type

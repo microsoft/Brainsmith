@@ -22,22 +22,25 @@ Broadcasting Support (Phase 2):
 """
 
 import logging
+
 import numpy as np
 from onnx import NodeProto, helper
-from typing import Optional
-
 from qonnx.core.datatype import DataType
 from qonnx.core.modelwrapper import ModelWrapper
 
-from brainsmith.dataflow import KernelOp, FULL_DIM
-from brainsmith.dataflow.types import VALUE_OPTIMIZED
-from brainsmith.dataflow.transformation import TransformationResult
-from brainsmith.dataflow.spec_helpers import (
-    add_datatype, sub_datatype, smallest_datatype_for_range, derive_dim
-)
-from brainsmith.dataflow.types import ShapeHierarchy
 import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_DIM, KernelOp
+from brainsmith.dataflow.constraints import CustomConstraint
+from brainsmith.dataflow.spec_helpers import (
+    add_datatype,
+    derive_dim,
+    smallest_datatype_for_range,
+    sub_datatype,
+)
+from brainsmith.dataflow.transformation import TransformationResult
+from brainsmith.dataflow.types import VALUE_OPTIMIZED, ShapeHierarchy
 from brainsmith.registry import kernel
+
 from .operations import BinaryOperations
 
 logger = logging.getLogger(__name__)
@@ -46,6 +49,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Datatype Derivation Helpers
 # =============================================================================
+
 
 def _derive_div_datatype(interfaces, param_getter, model, tensor_name):
     """Compute division output datatype according to FINN/UG1399 rules.
@@ -109,6 +113,7 @@ def _elementwise_binary_output_datatype():
     Returns:
         Callable resolver function with unified signature
     """
+
     def resolver(interfaces, param_getter, model, tensor_name):
         func = param_getter("func")
         lhs_dt = interfaces["lhs"].datatype
@@ -174,6 +179,7 @@ def _elementwise_binary_output_datatype():
 # Schema Definition
 # =============================================================================
 
+
 def _validate_input_pattern(ctx):
     """Validate input pattern and broadcasting compatibility.
 
@@ -223,12 +229,11 @@ def _validate_input_pattern(ctx):
 
 ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
     name="ElementwiseBinaryOp",
-
     inputs=[
         df.InputSchema(
             name="lhs",
-            block_tiling=[FULL_DIM],       # Process full tensor (no blocking)
-            stream_tiling=["PE"],          # PE parallelism on last dimension
+            block_tiling=[FULL_DIM],  # Process full tensor (no blocking)
+            stream_tiling=["PE"],  # PE parallelism on last dimension
             required_layout=None,
         ),
         df.InputSchema(
@@ -236,65 +241,54 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
             # Note: Tiling is minimal for backward compatibility with Phase 1 (static)
             # For Phase 2 dynamic+dynamic, HLS backend will create streaming interface
             # based on input_pattern parameter
-            block_tiling=[FULL_DIM],       # Full tensor (needed for shape inference)
-            stream_tiling=["PE"],          # PE parallelism (used only if dynamic)
-            datatype=VALUE_OPTIMIZED,      # Optimize from actual values
+            block_tiling=[FULL_DIM],  # Full tensor (needed for shape inference)
+            stream_tiling=["PE"],  # PE parallelism (used only if dynamic)
+            datatype=VALUE_OPTIMIZED,  # Optimize from actual values
             required_layout=None,
         ),
     ],
-
     outputs=[
         df.OutputSchema(
             name="output",
-            block_tiling=[FULL_DIM],                      # Full tensor
+            block_tiling=[FULL_DIM],  # Full tensor
             stream_tiling=[derive_dim("lhs", ShapeHierarchy.STREAM, -1)],  # Match LHS PE
             datatype=_elementwise_binary_output_datatype(),  # Polymorphic dispatch
             required_layout=None,
         )
     ],
-
     # STRUCTURAL (fixed at inference)
     kernel_params={
         # Operation type: matches ONNX op_type (from operations registry)
-        "func": (
-            "s", True, "Add",
-            BinaryOperations.all_operation_names()
-        ),
+        "func": ("s", True, "Add", BinaryOperations.all_operation_names()),
         # Input pattern: determines which inputs are streaming
-        "input_pattern": (
-            "s", True, "dynamic_static",
-            {"dynamic_static", "dynamic_dynamic"}
-        ),
+        "input_pattern": ("s", True, "dynamic_static", {"dynamic_static", "dynamic_dynamic"}),
         # Direction for BitShift operations (optional, only used when func="BitShift")
         "direction": (
-            "s", False, "",  # Optional parameter
-            {"LEFT", "RIGHT", ""}
+            "s",
+            False,
+            "",  # Optional parameter
+            {"LEFT", "RIGHT", ""},
         ),
     },
-
     # DSE PARAMETERS (explorable resource parameters)
     dse_parameters={
         # RAM style for parameter storage (HLS-specific, only for static inputs)
         "ram_style": df.ParameterSpec(
-            name="ram_style",
-            values={"auto", "distributed", "block", "ultra"},
-            default="auto"
+            name="ram_style", values={"auto", "distributed", "block", "ultra"}, default="auto"
         ),
         # Memory mode for constant parameters
         "mem_mode": df.ParameterSpec(
             name="mem_mode",
             values={"internal_embedded", "internal_decoupled"},
-            default="internal_embedded"
+            default="internal_embedded",
         ),
     },
-
     constraints=[
         # Pattern-specific validation (dynamic vs static, broadcasting)
-        df.CustomConstraint(
+        CustomConstraint(
             check_fn=_validate_input_pattern,
-            description="Validate input pattern (dynamic_static or dynamic_dynamic)"
+            description="Validate input pattern (dynamic_static or dynamic_dynamic)",
         ),
-
         # Shapes must be broadcastable (ONNX semantics)
         # Note: This is implicitly validated by BroadcastInfo.compute() during HLS codegen
     ],
@@ -305,9 +299,10 @@ ELEMENTWISE_BINARY_SCHEMA = df.KernelSchema(
 # ElementwiseBinaryOp Kernel Implementation
 # =============================================================================
 
+
 @kernel(
     description="Elementwise binary operations (arithmetic, logical, comparison, bitwise) with PE parallelism and broadcasting",
-    author="Migrated from AMD FINN by Thomas Keller"
+    author="Migrated from AMD FINN by Thomas Keller",
 )
 class ElementwiseBinaryOp(KernelOp):
     """Hardware kernel for elementwise binary operations.
@@ -342,7 +337,7 @@ class ElementwiseBinaryOp(KernelOp):
     # ================================================================
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         return ELEMENTWISE_BINARY_SCHEMA
 
     # ================================================================
@@ -365,9 +360,9 @@ class ElementwiseBinaryOp(KernelOp):
             True if node can be inferred as this kernel
         """
         from brainsmith.dataflow.inference_helpers import (
-            find_static_dynamic_pair,
+            check_shapes_broadcastable,
             find_dynamic_dynamic_pair,
-            check_shapes_broadcastable
+            find_static_dynamic_pair,
         )
 
         # Must be supported operation
@@ -401,7 +396,9 @@ class ElementwiseBinaryOp(KernelOp):
         return False
 
     @classmethod
-    def infer_from(cls, node: NodeProto, model: ModelWrapper, insert_index: int) -> TransformationResult:
+    def infer_from(
+        cls, node: NodeProto, model: ModelWrapper, insert_index: int
+    ) -> TransformationResult:
         """Infer ElementwiseBinaryOp from ONNX binary operation.
 
         Detects input pattern and creates appropriate HW node:
@@ -416,12 +413,12 @@ class ElementwiseBinaryOp(KernelOp):
         Returns:
             TransformationResult with new HW node
         """
-        from brainsmith.dataflow.inference_helpers import (
-            find_static_dynamic_pair,
-            find_dynamic_dynamic_pair,
-            get_broadcast_info
-        )
         from brainsmith.dataflow import lift_scalar_to_rank1
+        from brainsmith.dataflow.inference_helpers import (
+            find_dynamic_dynamic_pair,
+            find_static_dynamic_pair,
+            get_broadcast_info,
+        )
 
         # IMPORTANT: Normalize scalar inputs before pattern detection and validation
         # ONNX semantics: [] (scalar) broadcasts identically to [1] in all contexts
@@ -474,15 +471,14 @@ class ElementwiseBinaryOp(KernelOp):
         # Copy direction attribute for BitShift operations
         if node.op_type == "BitShift":
             from onnx import helper as onnx_helper
+
             direction_attr = None
             for attr in node.attribute:
                 if attr.name == "direction":
                     direction_attr = onnx_helper.get_attribute_value(attr)
                     break
             if direction_attr:
-                hw_node.attribute.append(
-                    onnx_helper.make_attribute("direction", direction_attr)
-                )
+                hw_node.attribute.append(onnx_helper.make_attribute("direction", direction_attr))
             else:
                 raise ValueError(
                     f"BitShift node {node.name} missing required 'direction' attribute"
@@ -516,8 +512,9 @@ class ElementwiseBinaryOp(KernelOp):
         Returns:
             NumPy ufunc for the operation
         """
-        from .operations import BinaryOperations
         import numpy as np
+
+        from .operations import BinaryOperations
 
         func = self.get_nodeattr("func")
 
@@ -605,7 +602,7 @@ class ElementwiseBinaryOp(KernelOp):
         Raises:
             ValueError: If PE doesn't divide channels, with suggested alternatives
         """
-        if not hasattr(self, 'design_point') or self.design_point is None:
+        if not hasattr(self, "design_point") or self.design_point is None:
             # Skip if design_point not initialized yet
             return
 
@@ -654,7 +651,7 @@ class ElementwiseBinaryOp(KernelOp):
             # Only validate for dynamic_dynamic pattern
             return
 
-        if not hasattr(self, 'design_point') or self.design_point is None:
+        if not hasattr(self, "design_point") or self.design_point is None:
             # Skip if design_point not initialized yet
             return
 
@@ -662,7 +659,7 @@ class ElementwiseBinaryOp(KernelOp):
         rhs_shape = self.design_point.inputs["rhs"].tensor_shape
 
         try:
-            output_shape = np.broadcast_shapes(lhs_shape, rhs_shape)
+            np.broadcast_shapes(lhs_shape, rhs_shape)
         except ValueError as e:
             raise ValueError(
                 f"{self.onnx_node.name}: Input shapes not broadcastable.\n"
@@ -719,11 +716,12 @@ class ElementwiseBinaryOp(KernelOp):
             rhs_data = model.get_initializer(rhs_name)
             if rhs_data is not None and np.any(rhs_data == 0):
                 import warnings
+
                 warnings.warn(
                     f"{self.onnx_node.name}: RHS initializer contains zeros. "
                     f"Division by zero will produce undefined results.",
                     RuntimeWarning,
-                    stacklevel=2
+                    stacklevel=2,
                 )
 
     def _check_overflow_risk(self):
@@ -736,7 +734,7 @@ class ElementwiseBinaryOp(KernelOp):
         if operation not in {"Add", "Mul"}:
             return  # Sub/Div less likely to overflow
 
-        if not hasattr(self, 'design_point') or self.design_point is None:
+        if not hasattr(self, "design_point") or self.design_point is None:
             return
 
         lhs_dt = self.design_point.inputs["lhs"].datatype
@@ -748,6 +746,7 @@ class ElementwiseBinaryOp(KernelOp):
 
         if out_dt.bitwidth() < required_bits:
             import warnings
+
             warnings.warn(
                 f"{self.onnx_node.name}: Output datatype {out_dt} may be too "
                 f"small for {operation} operation on {lhs_dt} inputs.\n"
@@ -756,7 +755,7 @@ class ElementwiseBinaryOp(KernelOp):
                 f"  Recommended minimum: {required_bits} bits\n"
                 f"  Consider using a wider output type or adding saturation.",
                 RuntimeWarning,
-                stacklevel=2
+                stacklevel=2,
             )
 
     def execute_node(self, context, graph):
@@ -842,8 +841,4 @@ class ElementwiseBinaryOp(KernelOp):
             ONNX NodeProto compatible with shape inference
         """
         # Use Add for shape inference (supports broadcasting)
-        return helper.make_node(
-            "Add",
-            self.onnx_node.input,
-            self.onnx_node.output
-        )
+        return helper.make_node("Add", self.onnx_node.input, self.onnx_node.output)

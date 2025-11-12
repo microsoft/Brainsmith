@@ -38,7 +38,6 @@ Brainsmith is an end-to-end compiler to transform ONNX models into dataflow acce
 [Get Started](getting-started.md){ .md-button .md-button--primary }
 [View on GitHub](https://github.com/microsoft/brainsmith){ .md-button }
 
----
 
 ## Key Features
 
@@ -66,7 +65,7 @@ Brainsmith is an end-to-end compiler to transform ONNX models into dataflow acce
 
     ---
 
-    Built-in support for MVAU, LayerNorm, Softmax, and other common operations. Extensible architecture for adding custom kernels.
+    Built-in support for MatMul, LayerNorm, Softmax, and other common operations. Extensible architecture for adding custom kernels.
 
 -   :material-speedometer:{ .lg .middle } **Performance Estimation**
 
@@ -82,7 +81,6 @@ Brainsmith is an end-to-end compiler to transform ONNX models into dataflow acce
 
 </div>
 
----
 
 ## Basic Usage
 
@@ -95,7 +93,6 @@ smith model.onnx blueprint.yaml
 # Output: RTL + performance estimates + resource reports
 ```
 
----
 
 ## Example: BERT Accelerator
 
@@ -132,7 +129,6 @@ The example targets V80 platform using Vivado 2024.2 and is compatible with Xili
 
 *See examples/bert for full implementation*
 
----
 
 ## Open Source & Collaborative
 
@@ -148,13 +144,10 @@ Developed through collaboration between **Microsoft** and **AMD**.
 
 **License**: MIT - see [LICENSE](https://github.com/microsoft/brainsmith/blob/main/LICENSE)
 
----
 
 ## Community & Support
 
 - [Feature Roadmap](https://github.com/orgs/microsoft/projects/2017) - See what's planned and in progress
 - [GitHub Issues](https://github.com/microsoft/brainsmith/issues) - Report bugs or request features
 - [GitHub Discussions](https://github.com/microsoft/brainsmith/discussions) - Ask questions and share experiences
-- [Contributing Guide](https://github.com/microsoft/brainsmith/blob/main/CONTRIBUTING.md) - Learn how to contribute
 
-**New to Brainsmith?** [Get started with the quickstart guide →](getting-started.md)

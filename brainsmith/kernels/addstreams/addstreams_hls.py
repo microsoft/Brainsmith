@@ -32,15 +32,13 @@
 
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
 
-from .addstreams import AddStreams
 from brainsmith.registry import backend
+
+from .addstreams import AddStreams
 
 
 @backend(
-    name="AddStreamsHLS",
-    target_kernel="brainsmith:AddStreams",
-    language="hls",
-    author="FINN Team"
+    name="AddStreamsHLS", target_kernel="brainsmith:AddStreams", language="hls", author="FINN Team"
 )
 class AddStreams_hls(AddStreams, HLSBackend):
     """Class that corresponds to finn-hlslib AddStreams_Batch function."""
@@ -88,13 +86,13 @@ class AddStreams_hls(AddStreams, HLSBackend):
     def strm_decl(self):
         self.code_gen_dict["$STREAMDECLARATIONS$"] = []
         self.code_gen_dict["$STREAMDECLARATIONS$"].append(
-            'hls::stream<ap_uint<{}>> in0_V ("in0_V");'.format(self.get_instream_width(0))
+            f'hls::stream<ap_uint<{self.get_instream_width(0)}>> in0_V ("in0_V");'
         )
         self.code_gen_dict["$STREAMDECLARATIONS$"].append(
-            'hls::stream<ap_uint<{}>> in1_V ("in1_V");'.format(self.get_instream_width(1))
+            f'hls::stream<ap_uint<{self.get_instream_width(1)}>> in1_V ("in1_V");'
         )
         self.code_gen_dict["$STREAMDECLARATIONS$"].append(
-            'hls::stream<ap_uint<{}>> out0_V ("out0_V");'.format(self.get_outstream_width())
+            f'hls::stream<ap_uint<{self.get_outstream_width()}>> out0_V ("out0_V");'
         )
 
     def docompute(self):

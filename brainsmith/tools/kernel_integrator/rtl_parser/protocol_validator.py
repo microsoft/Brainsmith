@@ -14,13 +14,13 @@ Provides functionality to:
 Protocol definitions (signal names, requirements) are defined as constants in this module.
 """
 
-import re
 import logging
-from typing import Dict, Set, List, Tuple, Optional
+import re
 
-from brainsmith.dataflow.types import Direction, ProtocolType, InterfaceType
+from brainsmith.dataflow.types import Direction, ProtocolType
 from brainsmith.tools.kernel_integrator.metadata import InterfaceMetadata
-from .types import Port, PortGroup
+
+from .types import Port
 
 # --- Protocol Definitions ---
 # Define known signal patterns based on RTL_Parser-Data-Analysis.md
@@ -37,7 +37,7 @@ AXI_STREAM_SUFFIXES = {
     "TDATA": {"direction": Direction.INPUT, "required": True},
     "TVALID": {"direction": Direction.INPUT, "required": True},
     "TREADY": {"direction": Direction.OUTPUT, "required": True},
-    "TLAST": {"direction": Direction.INPUT, "required": False}, # Optional
+    "TLAST": {"direction": Direction.INPUT, "required": False},  # Optional
 }
 
 # Suffixes for AXI-Lite signals
@@ -45,7 +45,7 @@ AXI_STREAM_SUFFIXES = {
 AXI_LITE_SUFFIXES = {
     # Write Address Channel
     "AWADDR": {"direction": Direction.INPUT, "required": True},
-    "AWPROT": {"direction": Direction.INPUT, "required": False}, # Optional
+    "AWPROT": {"direction": Direction.INPUT, "required": False},  # Optional
     "AWVALID": {"direction": Direction.INPUT, "required": True},
     "AWREADY": {"direction": Direction.OUTPUT, "required": True},
     # Write Data Channel
@@ -59,7 +59,7 @@ AXI_LITE_SUFFIXES = {
     "BREADY": {"direction": Direction.INPUT, "required": True},
     # Read Address Channel
     "ARADDR": {"direction": Direction.INPUT, "required": True},
-    "ARPROT": {"direction": Direction.INPUT, "required": False}, # Optional
+    "ARPROT": {"direction": Direction.INPUT, "required": False},  # Optional
     "ARVALID": {"direction": Direction.INPUT, "required": True},
     "ARREADY": {"direction": Direction.OUTPUT, "required": True},
     # Read Data Channel
@@ -70,8 +70,14 @@ AXI_LITE_SUFFIXES = {
 }
 
 # Helper sets for channel identification
-AXI_LITE_WRITE_SUFFIXES = {k: v for k, v in AXI_LITE_SUFFIXES.items() if k.startswith('AW') or k.startswith('W') or k.startswith('B')}
-AXI_LITE_READ_SUFFIXES = {k: v for k, v in AXI_LITE_SUFFIXES.items() if k.startswith('AR') or k.startswith('R')}
+AXI_LITE_WRITE_SUFFIXES = {
+    k: v
+    for k, v in AXI_LITE_SUFFIXES.items()
+    if k.startswith("AW") or k.startswith("W") or k.startswith("B")
+}
+AXI_LITE_READ_SUFFIXES = {
+    k: v for k, v in AXI_LITE_SUFFIXES.items() if k.startswith("AR") or k.startswith("R")
+}
 
 
 logger = logging.getLogger(__name__)
@@ -94,18 +100,18 @@ class ProtocolScanner:
         self.suffixes = {
             ProtocolType.CONTROL: GLOBAL_SIGNAL_SUFFIXES,
             ProtocolType.AXI_STREAM: AXI_STREAM_SUFFIXES,
-            ProtocolType.AXI_LITE: AXI_LITE_SUFFIXES
+            ProtocolType.AXI_LITE: AXI_LITE_SUFFIXES,
         }
-        
+
         # Create regex maps for each interface type
         self.regex_maps = {
             ProtocolType.CONTROL: self._generate_interface_regex(GLOBAL_SIGNAL_SUFFIXES),
             ProtocolType.AXI_STREAM: self._generate_interface_regex(AXI_STREAM_SUFFIXES),
-            ProtocolType.AXI_LITE: self._generate_interface_regex(AXI_LITE_SUFFIXES)
+            ProtocolType.AXI_LITE: self._generate_interface_regex(AXI_LITE_SUFFIXES),
         }
-        
+
     @staticmethod
-    def _generate_interface_regex(suffixes: Dict[str, Dict]) -> Dict[str, re.Pattern]:
+    def _generate_interface_regex(suffixes: dict[str, dict]) -> dict[str, re.Pattern]:
         """
         Generates regex patterns for matching interface signals and maps them to canonical suffixes.
 
@@ -123,13 +129,14 @@ class ProtocolScanner:
         for canonical_suffix in suffixes.keys():
             # Create a case-insensitive pattern for this specific suffix
             pattern = re.compile(
-                rf"^(?:(?P<prefix>.*?)_)?(?P<suffix>{re.escape(canonical_suffix)})$", 
-                re.IGNORECASE
+                rf"^(?:(?P<prefix>.*?)_)?(?P<suffix>{re.escape(canonical_suffix)})$", re.IGNORECASE
             )
             regex_map[canonical_suffix] = pattern
         return regex_map
-    
-    def scan(self, ports: List[Port]) -> Tuple[Dict[ProtocolType, Dict[str, InterfaceMetadata]], List[Port]]:
+
+    def scan(
+        self, ports: list[Port]
+    ) -> tuple[dict[ProtocolType, dict[str, InterfaceMetadata]], list[Port]]:
         """Classify raw `Port` objects into protocol interface candidate groups.
 
         Performs pattern matching of each port name against the compiled regex map for
@@ -155,8 +162,10 @@ class ProtocolScanner:
             ValueError: If one or more ports cannot be classified into a known protocol.
         """
         # Buckets for each protocol type
-        interfaces_by_protocol: Dict[ProtocolType, Dict[str, InterfaceMetadata]] = {protocol: {} for protocol in self.suffixes}
-        unassigned_ports: List[Port] = []
+        interfaces_by_protocol: dict[ProtocolType, dict[str, InterfaceMetadata]] = {
+            protocol: {} for protocol in self.suffixes
+        }
+        unassigned_ports: list[Port] = []
 
         for port in ports:
             port_assigned = False
@@ -166,19 +175,29 @@ class ProtocolScanner:
                     if not match:
                         continue
                     prefix = match.group("prefix") or "<NO_PREFIX>"
-                    logger.debug("Matched '%s' with prefix '%s' and protocol suffix '%s'", port.name, prefix, protocol_suffix)
+                    logger.debug(
+                        "Matched '%s' with prefix '%s' and protocol suffix '%s'",
+                        port.name,
+                        prefix,
+                        protocol_suffix,
+                    )
 
                     # Fetch / create interface metadata bucket for this prefix
                     if prefix not in interfaces_by_protocol[protocol_type]:
                         interfaces_by_protocol[protocol_type][prefix] = InterfaceMetadata(
-                            name=prefix,
-                            ports={}
+                            name=prefix, ports={}
                         )
                         logger.debug("Created new potential %s group '%s'", protocol_type, prefix)
 
                     # Record the port keyed by canonical suffix
                     interfaces_by_protocol[protocol_type][prefix].ports[protocol_suffix] = port
-                    logger.debug("Assigned '%s' (suffix '%s') to %s group '%s'", port.name, protocol_suffix, protocol_type, prefix)
+                    logger.debug(
+                        "Assigned '%s' (suffix '%s') to %s group '%s'",
+                        port.name,
+                        protocol_suffix,
+                        protocol_type,
+                        prefix,
+                    )
                     port_assigned = True
                     break  # Stop after first suffix match for this protocol
                 if port_assigned:
@@ -186,7 +205,10 @@ class ProtocolScanner:
 
             if not port_assigned:
                 unassigned_ports.append(port)
-                logger.debug("Port '%s' did not match any known interface type regex and is unassigned", port.name)
+                logger.debug(
+                    "Port '%s' did not match any known interface type regex and is unassigned",
+                    port.name,
+                )
 
         if unassigned_ports:
             unassigned_list = ", ".join(p.name for p in unassigned_ports)
@@ -218,32 +240,50 @@ class ProtocolScanner:
         # Keys are already uppercase
         present_keys = set(interface.ports.keys())
         required_keys = {key for key, spec in protocol_suffixes.items() if spec["required"] is True}
-        optional_keys = {key for key, spec in protocol_suffixes.items() if spec["required"] is False}
+        optional_keys = {
+            key for key, spec in protocol_suffixes.items() if spec["required"] is False
+        }
         missing = required_keys - present_keys
         unexpected = present_keys - required_keys - optional_keys
 
         # Special handling for AXI-Lite: support read-only, write-only, etc.
-        if protocol == ProtocolType.AXI_LITE:   
+        if protocol == ProtocolType.AXI_LITE:
             # Check for required signals in write/read channels
             write_missing = {sig for sig in missing if sig in AXI_LITE_WRITE_SUFFIXES}
             read_missing = {sig for sig in missing if sig in AXI_LITE_READ_SUFFIXES}
-            has_write_channel = any(sig in interface.ports and AXI_LITE_WRITE_SUFFIXES[sig]['required'] for sig in AXI_LITE_WRITE_SUFFIXES)
-            has_read_channel = any(sig in interface.ports and AXI_LITE_READ_SUFFIXES[sig]['required'] for sig in AXI_LITE_READ_SUFFIXES)
+            has_write_channel = any(
+                sig in interface.ports and AXI_LITE_WRITE_SUFFIXES[sig]["required"]
+                for sig in AXI_LITE_WRITE_SUFFIXES
+            )
+            has_read_channel = any(
+                sig in interface.ports and AXI_LITE_READ_SUFFIXES[sig]["required"]
+                for sig in AXI_LITE_READ_SUFFIXES
+            )
             if has_write_channel and write_missing:
-                raise ValueError(f"AXI-Lite {interface.name}: Partial write interface, missing required signal(s): {write_missing}")
+                raise ValueError(
+                    f"AXI-Lite {interface.name}: Partial write interface, missing required signal(s): {write_missing}"
+                )
             if has_read_channel and read_missing:
-                raise ValueError(f"AXI-Lite {interface.name}: Partial read interface, missing required signal(s): {read_missing}")
+                raise ValueError(
+                    f"AXI-Lite {interface.name}: Partial read interface, missing required signal(s): {read_missing}"
+                )
             if not has_write_channel and not has_read_channel:
-                raise ValueError(f"AXI-Lite {interface.name}: Not enough valid signals for read or write, missing: {missing}")
+                raise ValueError(
+                    f"AXI-Lite {interface.name}: Not enough valid signals for read or write, missing: {missing}"
+                )
             if unexpected:
                 raise ValueError(f"AXI-Lite {interface.name}: Unexpected signal(s): {unexpected}")
-            metadata['has_write'] = has_write_channel
-            metadata['has_read'] = has_read_channel
+            metadata["has_write"] = has_write_channel
+            metadata["has_read"] = has_read_channel
         else:
             if missing:
-                raise ValueError(f"{protocol.name} {interface.name}: Missing required signal(s): {missing}")
+                raise ValueError(
+                    f"{protocol.name} {interface.name}: Missing required signal(s): {missing}"
+                )
             if unexpected:
-                raise ValueError(f"{protocol.name} {interface.name}: Unexpected signal(s): {unexpected}")
+                raise ValueError(
+                    f"{protocol.name} {interface.name}: Unexpected signal(s): {unexpected}"
+                )
 
         return metadata
 

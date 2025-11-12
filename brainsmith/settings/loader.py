@@ -6,10 +6,11 @@
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any
 from unittest.mock import patch
-from rich.console import Console
+
 from pydantic import ValidationError
+from rich.console import Console
 
 from .schema import SystemConfig
 
@@ -22,10 +23,10 @@ def _is_path_field(key: str) -> bool:
     Uses naming convention: fields ending with _dir, _path, _file, _root, or _cache
     are treated as paths.
     """
-    return key.endswith(('_dir', '_path', '_file', '_root', '_cache'))
+    return key.endswith(("_dir", "_path", "_file", "_root", "_cache"))
 
 
-def _resolve_cli_paths(cli_overrides: Dict[str, Any]) -> Dict[str, Any]:
+def _resolve_cli_paths(cli_overrides: dict[str, Any]) -> dict[str, Any]:
     """Resolve relative paths in CLI overrides to CWD.
 
     Simple rule: CLI paths resolve relative to where you ran the command.
@@ -43,7 +44,7 @@ def _resolve_cli_paths(cli_overrides: Dict[str, Any]) -> Dict[str, Any]:
     cwd = Path.cwd()
 
     for key, value in cli_overrides.items():
-        if _is_path_field(key) and value is not None and isinstance(value, (str, Path)):
+        if _is_path_field(key) and value is not None and isinstance(value, str | Path):
             path = Path(value)
             result[key] = str((cwd / path).resolve()) if not path.is_absolute() else str(value)
         else:
@@ -52,10 +53,7 @@ def _resolve_cli_paths(cli_overrides: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def load_config(
-    project_file: Optional[Path] = None,
-    **cli_overrides
-) -> SystemConfig:
+def load_config(project_file: Path | None = None, **cli_overrides) -> SystemConfig:
     """Load configuration with hierarchical priority.
 
     Priority order (highest to lowest):
@@ -83,12 +81,12 @@ def load_config(
         cli_overrides = _resolve_cli_paths(cli_overrides)
 
         # Handle BSMITH_LOG_LEVEL shorthand (if not overridden by CLI)
-        if 'logging' not in cli_overrides and 'BSMITH_LOG_LEVEL' in os.environ:
-            log_level = os.environ['BSMITH_LOG_LEVEL']
-            cli_overrides['logging'] = {'level': log_level}
+        if "logging" not in cli_overrides and "BSMITH_LOG_LEVEL" in os.environ:
+            log_level = os.environ["BSMITH_LOG_LEVEL"]
+            cli_overrides["logging"] = {"level": log_level}
 
         if project_file:
-            cli_overrides['_project_file'] = project_file
+            cli_overrides["_project_file"] = project_file
 
         return SystemConfig(**cli_overrides)
 
@@ -118,14 +116,10 @@ def reset_config() -> None:
 
 def get_default_config() -> SystemConfig:
     """Get a configuration instance with only default values (no files or env vars)."""
-    filtered_env = {
-        k: v for k, v in os.environ.items()
-        if not k.startswith('BSMITH_')
-    }
+    filtered_env = {k: v for k, v in os.environ.items() if not k.startswith("BSMITH_")}
 
     with patch.dict(os.environ, filtered_env, clear=True):
         # Prevent loading config files
         from pathlib import Path
-        return load_config(
-            project_file=Path('/dev/null')
-        )
+
+        return load_config(project_file=Path("/dev/null"))

@@ -23,7 +23,6 @@ Usage:
 """
 
 from qonnx.core.datatype import DataType
-
 from tests.frameworks.test_config import (
     DesignParameters,
     KernelTestConfig,
@@ -107,13 +106,9 @@ DESIGN_MEM_DECOUPLED = DesignParameters(dimensions={"mem_mode": "internal_decoup
 
 # Combined DSE Variants
 DESIGN_PE8_RAM_DISTRIBUTED = DesignParameters(
-    input_streams={0: 8},
-    dimensions={"ram_style": "distributed"}
+    input_streams={0: 8}, dimensions={"ram_style": "distributed"}
 )
-DESIGN_PE8_RAM_BLOCK = DesignParameters(
-    input_streams={0: 8},
-    dimensions={"ram_style": "block"}
-)
+DESIGN_PE8_RAM_BLOCK = DesignParameters(input_streams={0: 8}, dimensions={"ram_style": "block"})
 
 # ============================================================================
 # Constants: Validation Configuration
@@ -218,18 +213,42 @@ VALIDATION_CASES_BASE = [
     # ========================================================================
     # DSE Dimension Coverage: RAM Style Variants
     # ========================================================================
-    ("int8_1x64_ram_distributed", SHAPE_2D_1x64, DTYPES_INT8, DESIGN_RAM_DISTRIBUTED, PLATFORM_ZYNQ7020),
+    (
+        "int8_1x64_ram_distributed",
+        SHAPE_2D_1x64,
+        DTYPES_INT8,
+        DESIGN_RAM_DISTRIBUTED,
+        PLATFORM_ZYNQ7020,
+    ),
     ("int8_1x64_ram_block", SHAPE_2D_1x64, DTYPES_INT8, DESIGN_RAM_BLOCK, PLATFORM_ZYNQ7020),
     ("int8_1x64_ram_ultra", SHAPE_2D_1x64, DTYPES_INT8, DESIGN_RAM_ULTRA, PLATFORM_ZYNQ7020),
     # ========================================================================
     # DSE Dimension Coverage: Memory Mode Variants
     # ========================================================================
-    ("int8_1x64_mem_decoupled", SHAPE_2D_1x64, DTYPES_INT8, DESIGN_MEM_DECOUPLED, PLATFORM_ZYNQ7020),
+    (
+        "int8_1x64_mem_decoupled",
+        SHAPE_2D_1x64,
+        DTYPES_INT8,
+        DESIGN_MEM_DECOUPLED,
+        PLATFORM_ZYNQ7020,
+    ),
     # ========================================================================
     # DSE Dimension Coverage: Combined Variants (PE + RAM Style)
     # ========================================================================
-    ("int8_4x128_pe8_ram_distributed", SHAPE_2D_4x128, DTYPES_INT8, DESIGN_PE8_RAM_DISTRIBUTED, PLATFORM_ZYNQ7020),
-    ("int8_4x128_pe8_ram_block", SHAPE_2D_4x128, DTYPES_INT8, DESIGN_PE8_RAM_BLOCK, PLATFORM_ZYNQ7020),
+    (
+        "int8_4x128_pe8_ram_distributed",
+        SHAPE_2D_4x128,
+        DTYPES_INT8,
+        DESIGN_PE8_RAM_DISTRIBUTED,
+        PLATFORM_ZYNQ7020,
+    ),
+    (
+        "int8_4x128_pe8_ram_block",
+        SHAPE_2D_4x128,
+        DTYPES_INT8,
+        DESIGN_PE8_RAM_BLOCK,
+        PLATFORM_ZYNQ7020,
+    ),
     # ========================================================================
     # Broadcasting Cases (Python-Only - Backend Not Supported Yet)
     # ========================================================================

@@ -13,16 +13,16 @@ names (e.g., 'brainsmith:LayerNorm'). Short names use source priority resolution
 """
 
 import logging
-from typing import Type, Optional, Dict, List, Any
+from typing import Any
 
-from ._state import _component_index, _components_discovered
 from ._discovery import (
-    discover_components,
-    _resolve_component_name,
     _load_component,
     _measure_load,
+    _resolve_component_name,
+    discover_components,
 )
 from ._metadata import ComponentType, resolve_lazy_class
+from ._state import _component_index, _components_discovered
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +31,8 @@ logger = logging.getLogger(__name__)
 # Error Formatting Helpers
 # ============================================================================
 
-def _format_not_found_error(
-    component_type: str,
-    full_name: str,
-    available: List[str]
-) -> str:
+
+def _format_not_found_error(component_type: str, full_name: str, available: list[str]) -> str:
     """Format helpful error message with troubleshooting guide.
 
     Args:
@@ -47,10 +44,10 @@ def _format_not_found_error(
         Formatted error message with troubleshooting steps
     """
     # Extract requested name without source prefix
-    requested_name = full_name.split(':', 1)[1] if ':' in full_name else full_name
+    requested_name = full_name.split(":", 1)[1] if ":" in full_name else full_name
 
     # Check if name exists in other sources
-    similar = [a for a in available if a.endswith(f':{requested_name}')]
+    similar = [a for a in available if a.endswith(f":{requested_name}")]
 
     type_str = component_type
     msg = f"{type_str.title()} '{full_name}' not found.\n"
@@ -63,19 +60,20 @@ def _format_not_found_error(
 
         try:
             from brainsmith.settings import get_config
+
             source_priority = get_config().source_priority
             msg += f"\nCurrent source priority: {source_priority}\n"
-        except:
+        except Exception:
             pass
 
         msg += f"\n→ Try: get_{type_str}('{similar[0]}')  # Use fully-qualified name\n"
     else:
         # Name doesn't exist anywhere - show troubleshooting
         msg += f"\n✗ No {type_str} named '{requested_name}' found in any source.\n"
-        msg += f"\nTroubleshooting:\n"
+        msg += "\nTroubleshooting:\n"
         msg += f"  1. List all: list_{type_str}s()\n"
         msg += f"  2. Check decorator: @{type_str} applied?\n"
-        msg += f"  3. Check paths: Verify component_sources config\n"
+        msg += "  3. Check paths: Verify component_sources config\n"
 
     msg += f"\nAvailable {type_str}s: {', '.join(available[:10])}"
     if len(available) > 10:
@@ -87,6 +85,7 @@ def _format_not_found_error(
 # ============================================================================
 # Unified Component Access (Arete: Deduplicated Public API)
 # ============================================================================
+
 
 def _get_component(name: str, component_type: str):
     """Unified component lookup - single source of truth.
@@ -104,7 +103,7 @@ def _get_component(name: str, component_type: str):
     Raises:
         KeyError: If component not found
     """
-    with _measure_load(f'get_{component_type}', name):
+    with _measure_load(f"get_{component_type}", name):
         if not _components_discovered:
             discover_components()
 
@@ -143,7 +142,7 @@ def _has_component(name: str, component_type: str) -> bool:
     return full_name in _component_index
 
 
-def _list_components(component_type: str, source: Optional[str] = None) -> List[str]:
+def _list_components(component_type: str, source: str | None = None) -> list[str]:
     """Unified component listing.
 
     All public list_*() functions delegate to this implementation.
@@ -162,7 +161,8 @@ def _list_components(component_type: str, source: Optional[str] = None) -> List[
     component_type_enum = ComponentType.from_string(component_type)
 
     components = [
-        meta.full_name for meta in _component_index.values()
+        meta.full_name
+        for meta in _component_index.values()
         if meta.component_type == component_type_enum and (source is None or meta.source == source)
     ]
     return sorted(components)
@@ -184,6 +184,7 @@ def _list_components(component_type: str, source: Optional[str] = None) -> List[
 
 # === Steps ===
 
+
 def get_step(name: str):
     """Get step callable by name.
 
@@ -203,7 +204,7 @@ def get_step(name: str):
         >>> streamline = get_step('streamline')  # Short name, uses source priority
         >>> custom = get_step('user:custom_step')  # Qualified name, explicit source
     """
-    return _get_component(name, 'step')
+    return _get_component(name, "step")
 
 
 def has_step(name: str) -> bool:
@@ -215,10 +216,10 @@ def has_step(name: str) -> bool:
     Returns:
         True if step exists
     """
-    return _has_component(name, 'step')
+    return _has_component(name, "step")
 
 
-def list_steps(source: Optional[str] = None) -> List[str]:
+def list_steps(source: str | None = None) -> list[str]:
     """List all available steps.
 
     Args:
@@ -231,12 +232,13 @@ def list_steps(source: Optional[str] = None) -> List[str]:
         >>> steps = list_steps()  # All steps
         >>> user_steps = list_steps(source='user')  # Only user steps
     """
-    return _list_components('step', source)
+    return _list_components("step", source)
 
 
 # === Kernels ===
 
-def get_kernel(name: str) -> Type:
+
+def get_kernel(name: str) -> type:
     """Get kernel class.
 
     Accepts both short names ('LayerNorm') and qualified names ('user:LayerNorm').
@@ -256,10 +258,10 @@ def get_kernel(name: str) -> Type:
         >>> kernel = LayerNorm(onnx_node)
         >>> CustomKernel = get_kernel('user:CustomKernel')  # Qualified name, explicit source
     """
-    return _get_component(name, 'kernel')
+    return _get_component(name, "kernel")
 
 
-def get_kernel_infer(name: str) -> Type:
+def get_kernel_infer(name: str) -> type:
     """Get kernel's inference transform class.
 
     Args:
@@ -278,13 +280,13 @@ def get_kernel_infer(name: str) -> Type:
     if not _components_discovered:
         discover_components()
 
-    full_name = _resolve_component_name(name, 'kernel')
+    full_name = _resolve_component_name(name, "kernel")
 
     # Lookup in unified component index
     meta = _component_index.get(full_name)
     if not meta:
         available = list_kernels()
-        raise KeyError(_format_not_found_error('kernel', full_name, available))
+        raise KeyError(_format_not_found_error("kernel", full_name, available))
 
     # Load component to ensure metadata is populated
     _load_component(meta)
@@ -315,10 +317,10 @@ def has_kernel(name: str) -> bool:
     Returns:
         True if kernel exists
     """
-    return _has_component(name, 'kernel')
+    return _has_component(name, "kernel")
 
 
-def list_kernels(source: Optional[str] = None) -> List[str]:
+def list_kernels(source: str | None = None) -> list[str]:
     """List all available kernels.
 
     Args:
@@ -331,12 +333,13 @@ def list_kernels(source: Optional[str] = None) -> List[str]:
         >>> kernels = list_kernels()  # All kernels
         >>> user_kernels = list_kernels(source='user')  # Only user kernels
     """
-    return _list_components('kernel', source)
+    return _list_components("kernel", source)
 
 
 # === Backends ===
 
-def get_backend(name: str) -> Type:
+
+def get_backend(name: str) -> type:
     """Get backend class by name.
 
     Accepts both short names ('LayerNorm_HLS') and qualified names ('user:LayerNorm_HLS_Fast').
@@ -355,10 +358,10 @@ def get_backend(name: str) -> Type:
         >>> backend = get_backend('LayerNorm_HLS')  # Short name, uses source priority
         >>> custom = get_backend('user:LayerNorm_HLS_Fast')  # Qualified name, explicit source
     """
-    return _get_component(name, 'backend')
+    return _get_component(name, "backend")
 
 
-def get_backend_metadata(name: str) -> Dict[str, Any]:
+def get_backend_metadata(name: str) -> dict[str, Any]:
     """Get backend metadata.
 
     Args:
@@ -373,31 +376,29 @@ def get_backend_metadata(name: str) -> Dict[str, Any]:
     if not _components_discovered:
         discover_components()
 
-    full_name = _resolve_component_name(name, 'backend')
+    full_name = _resolve_component_name(name, "backend")
     logger.debug(f"Looking up backend metadata: {name} → {full_name}")
 
     # Lookup in unified component index
     meta = _component_index.get(full_name)
     if not meta:
         available = list_backends()
-        raise KeyError(_format_not_found_error('backend', full_name, available))
+        raise KeyError(_format_not_found_error("backend", full_name, available))
 
     # Load component to ensure metadata is populated
     _load_component(meta)
 
     # Build metadata dict from ComponentMetadata fields
     return {
-        'class': meta.loaded_obj,
-        'target_kernel': meta.backend_target,
-        'language': meta.backend_language
+        "class": meta.loaded_obj,
+        "target_kernel": meta.backend_target,
+        "language": meta.backend_language,
     }
 
 
 def list_backends_for_kernel(
-    kernel: str,
-    language: Optional[str] = None,
-    sources: Optional[List[str]] = None
-) -> List[str]:
+    kernel: str, language: str | None = None, sources: list[str] | None = None
+) -> list[str]:
     """List backends that target a specific kernel.
 
     Backends are stored directly on kernel metadata during discovery, so this
@@ -426,13 +427,13 @@ def list_backends_for_kernel(
         discover_components()
 
     # Resolve kernel name to full source:name format
-    kernel_full = _resolve_component_name(kernel, 'kernel')
+    kernel_full = _resolve_component_name(kernel, "kernel")
 
     # Get kernel metadata
     kernel_meta = _component_index.get(kernel_full)
     if not kernel_meta:
         available = list_kernels()
-        raise KeyError(_format_not_found_error('kernel', kernel_full, available))
+        raise KeyError(_format_not_found_error("kernel", kernel_full, available))
 
     # Get backends list from kernel metadata (populated during discovery)
     candidate_backends = kernel_meta.kernel_backends or []
@@ -457,7 +458,7 @@ def list_backends_for_kernel(
     return sorted(matching)
 
 
-def list_backends(source: Optional[str] = None) -> List[str]:
+def list_backends(source: str | None = None) -> list[str]:
     """List all available backends.
 
     Args:
@@ -470,12 +471,13 @@ def list_backends(source: Optional[str] = None) -> List[str]:
         >>> backends = list_backends()  # All backends
         >>> user_backends = list_backends(source='user')  # Only user backends
     """
-    return _list_components('backend', source)
+    return _list_components("backend", source)
 
 
 # ============================================================================
 # Public API: Component Metadata Access
 # ============================================================================
+
 
 def get_component_metadata(name: str, component_type: str):
     """Get component metadata without loading.
@@ -507,7 +509,7 @@ def get_component_metadata(name: str, component_type: str):
     return _component_index[full_name]
 
 
-def get_all_component_metadata() -> Dict[str, Any]:
+def get_all_component_metadata() -> dict[str, Any]:
     """Get all component metadata.
 
     Returns:
@@ -527,6 +529,7 @@ def get_all_component_metadata() -> Dict[str, Any]:
 # ============================================================================
 # Domain Resolution
 # ============================================================================
+
 
 def get_domain_for_backend(backend_name: str) -> str:
     """Get ONNX domain for backend by deriving from module path.
@@ -549,7 +552,7 @@ def get_domain_for_backend(backend_name: str) -> str:
     from brainsmith.registry._domain_utils import derive_domain_from_module
 
     # Get backend metadata and load the class
-    meta = get_component_metadata(backend_name, 'backend')
+    meta = get_component_metadata(backend_name, "backend")
 
     # Load the backend class to access its __module__ attribute
     backend_class = _load_component(meta)
@@ -557,5 +560,7 @@ def get_domain_for_backend(backend_name: str) -> str:
     # Derive domain directly from the backend class's module path
     domain = derive_domain_from_module(backend_class.__module__)
 
-    logger.debug(f"Derived domain '{domain}' for backend '{backend_name}' from module '{backend_class.__module__}'")
+    logger.debug(
+        f"Derived domain '{domain}' for backend '{backend_name}' from module '{backend_class.__module__}'"
+    )
     return domain

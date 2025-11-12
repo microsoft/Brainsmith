@@ -17,8 +17,9 @@ Key Concepts:
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional, Tuple, List
+
 import numpy as np
 
 
@@ -49,11 +50,12 @@ class BroadcastInfo:
         >>> info.broadcast_last_axis_rhs
         False  # RHS does not broadcast in last dimension
     """
-    lhs_shape: Tuple[int, ...]
-    rhs_shape: Tuple[int, ...]
-    output_shape: Tuple[int, ...]
-    broadcast_dims_lhs: Tuple[int, ...]
-    broadcast_dims_rhs: Tuple[int, ...]
+
+    lhs_shape: tuple[int, ...]
+    rhs_shape: tuple[int, ...]
+    output_shape: tuple[int, ...]
+    broadcast_dims_lhs: tuple[int, ...]
+    broadcast_dims_rhs: tuple[int, ...]
     broadcast_last_axis_lhs: bool
     broadcast_last_axis_rhs: bool
 
@@ -73,11 +75,7 @@ class BroadcastInfo:
         return self.broadcast_last_axis_lhs or self.broadcast_last_axis_rhs
 
     @classmethod
-    def compute(
-        cls,
-        lhs_shape: Tuple[int, ...],
-        rhs_shape: Tuple[int, ...]
-    ) -> BroadcastInfo:
+    def compute(cls, lhs_shape: tuple[int, ...], rhs_shape: tuple[int, ...]) -> BroadcastInfo:
         """Compute broadcasting metadata from input shapes.
 
         Implements ONNX multi-directional broadcasting rules:
@@ -123,22 +121,18 @@ class BroadcastInfo:
 
         # Find dimensions that broadcast (size 1 → size N)
         broadcast_dims_lhs = tuple(
-            i for i in range(max_rank)
-            if lhs_padded[i] == 1 and rhs_padded[i] > 1
+            i for i in range(max_rank) if lhs_padded[i] == 1 and rhs_padded[i] > 1
         )
         broadcast_dims_rhs = tuple(
-            i for i in range(max_rank)
-            if rhs_padded[i] == 1 and lhs_padded[i] > 1
+            i for i in range(max_rank) if rhs_padded[i] == 1 and lhs_padded[i] > 1
         )
 
         # Check if last axis broadcasts
         broadcast_last_axis_lhs = (
-            len(broadcast_dims_lhs) > 0 and
-            broadcast_dims_lhs[-1] == max_rank - 1
+            len(broadcast_dims_lhs) > 0 and broadcast_dims_lhs[-1] == max_rank - 1
         )
         broadcast_last_axis_rhs = (
-            len(broadcast_dims_rhs) > 0 and
-            broadcast_dims_rhs[-1] == max_rank - 1
+            len(broadcast_dims_rhs) > 0 and broadcast_dims_rhs[-1] == max_rank - 1
         )
 
         return cls(
@@ -151,7 +145,7 @@ class BroadcastInfo:
             broadcast_last_axis_rhs=broadcast_last_axis_rhs,
         )
 
-    def get_buffer_shape(self, input_name: str, pe: int) -> Tuple[int, ...]:
+    def get_buffer_shape(self, input_name: str, pe: int) -> tuple[int, ...]:
         """Compute buffer shape for HLS memory allocation.
 
         For inputs that broadcast, buffer shape may differ from tensor shape:
@@ -187,10 +181,7 @@ class BroadcastInfo:
         padded = (1,) * (max_rank - len(shape)) + shape
 
         # Replace broadcast dimensions with 1
-        buffer_shape = tuple(
-            1 if i in broadcast_dims else padded[i]
-            for i in range(max_rank)
-        )
+        buffer_shape = tuple(1 if i in broadcast_dims else padded[i] for i in range(max_rank))
 
         # Divide last dimension by PE
         if buffer_shape:
@@ -221,11 +212,7 @@ class BroadcastInfo:
         else:
             raise ValueError(f"input_name must be 'lhs' or 'rhs', got '{input_name}'")
 
-    def should_read_new_value(
-        self,
-        input_name: str,
-        loop_counters: Tuple[str, ...]
-    ) -> Optional[str]:
+    def should_read_new_value(self, input_name: str, loop_counters: tuple[str, ...]) -> str | None:
         """Generate condition for conditional reads in HLS loops.
 
         For static inputs with broadcasting, determine when to read new values
@@ -267,10 +254,7 @@ class BroadcastInfo:
         return " && ".join(conditions)
 
     def get_index_expression(
-        self,
-        input_name: str,
-        loop_counters: Tuple[str, ...],
-        pe_variable: str = "pe"
+        self, input_name: str, loop_counters: tuple[str, ...], pe_variable: str = "pe"
     ) -> str:
         """Generate C++ indexing expression for buffer access.
 
@@ -329,10 +313,7 @@ class BroadcastInfo:
         return "".join(f"[{idx}]" for idx in indices)
 
 
-def compute_broadcast_info(
-    lhs_shape: Tuple[int, ...],
-    rhs_shape: Tuple[int, ...]
-) -> BroadcastInfo:
+def compute_broadcast_info(lhs_shape: tuple[int, ...], rhs_shape: tuple[int, ...]) -> BroadcastInfo:
     """Convenience function for computing broadcast info.
 
     Args:
@@ -349,6 +330,6 @@ def compute_broadcast_info(
 
 
 __all__ = [
-    'BroadcastInfo',
-    'compute_broadcast_info',
+    "BroadcastInfo",
+    "compute_broadcast_info",
 ]

@@ -23,29 +23,29 @@ Key classes:
 """
 
 import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Union, Dict, Any, Callable, Set, TYPE_CHECKING, Literal
-from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any, Literal
 
-from qonnx.core.datatype import BaseDataType
 from .types import FULL_DIM, FULL_SHAPE
 
 if TYPE_CHECKING:
-    from .constraints import Constraint
     from .builder import BuildContext
+    from .constraints import Constraint
 
 logger = logging.getLogger(__name__)
 
 # Type aliases for better clarity
-TilingSpec = Union[
-    Sequence[Union[int, str, type(FULL_DIM), Callable]],  # List of DimSpecs
-    type(FULL_SHAPE),                                      # Bare sentinel (rank-agnostic)
-]
+TilingSpec = (
+    Sequence[int | str | type(FULL_DIM) | Callable]  # List of DimSpecs
+    | type(FULL_SHAPE)  # Bare sentinel (rank-agnostic)
+)
 
 
 # ============================================================================
 # DSE Dimension Type
 # ============================================================================
+
 
 @dataclass(frozen=True)
 class ParameterSpec:
@@ -110,13 +110,11 @@ class ParameterSpec:
         Tiling dimensions (PE, SIMD) are ALWAYS ordered (auto-wrapped in OrderedParameter)
         since they're computed as divisors (naturally ordered sequences).
     """
+
     name: str
-    values: Union[
-        Set[Union[int, str]],
-        Callable[['BuildContext'], Set[Union[int, str]]]
-    ]
-    type: Optional[Literal["int", "string"]] = None
-    default: Optional[Union[int, str]] = None
+    values: set[int | str] | Callable[["BuildContext"], set[int | str]]
+    type: Literal["int", "string"] | None = None
+    default: int | str | None = None
 
     def __post_init__(self):
         """Validate type specification against values."""
@@ -158,7 +156,8 @@ class ParameterSpec:
 # Helper Functions
 # ============================================================================
 
-def _infer_nodeattr_type(param_spec: ParameterSpec) -> tuple[str, bool, Union[int, str]]:
+
+def _infer_nodeattr_type(param_spec: ParameterSpec) -> tuple[str, bool, int | str]:
     """Infer FINN nodeattr type specification from ParameterSpec.
 
     Uses explicit type if provided, otherwise infers from first value.
@@ -195,7 +194,11 @@ def _infer_nodeattr_type(param_spec: ParameterSpec) -> tuple[str, bool, Union[in
     # Use explicit type if provided (required for callables)
     if param_spec.type is not None:
         type_code = "i" if param_spec.type == "int" else "s"
-        default = param_spec.default if param_spec.default is not None else (1 if param_spec.type == "int" else "")
+        default = (
+            param_spec.default
+            if param_spec.default is not None
+            else (1 if param_spec.type == "int" else "")
+        )
         return (type_code, False, default)
 
     # Infer from first value (literal values only)
@@ -213,11 +216,15 @@ def _infer_nodeattr_type(param_spec: ParameterSpec) -> tuple[str, bool, Union[in
         return ("i", False, default)
     else:
         # String parameter: use sorted first as default
-        default = param_spec.default if param_spec.default is not None else sorted(param_spec.values)[0]
+        default = (
+            param_spec.default if param_spec.default is not None else sorted(param_spec.values)[0]
+        )
         return ("s", False, default)
 
 
-def _extract_tiling_params(block_tiling: Optional[TilingSpec], stream_tiling: Optional[TilingSpec]) -> List[str]:
+def _extract_tiling_params(
+    block_tiling: TilingSpec | None, stream_tiling: TilingSpec | None
+) -> list[str]:
     """Extract unique string parameters from tiling specs."""
     params = set()
     for spec in (block_tiling, stream_tiling):
@@ -254,12 +261,12 @@ class InputSchema:
     name: str
 
     # Structure
-    block_tiling: Optional[TilingSpec] = None
-    stream_tiling: Optional[TilingSpec] = None
-    datatype: Optional[Any] = None  # DatatypeSpec union type
+    block_tiling: TilingSpec | None = None
+    stream_tiling: TilingSpec | None = None
+    datatype: Any | None = None  # DatatypeSpec union type
 
     # Transformation requirements (NEW - embedded in interface)
-    required_layout: Optional[str] = None
+    required_layout: str | None = None
 
     def __post_init__(self):
         """Validate interface requirements."""
@@ -270,7 +277,7 @@ class InputSchema:
             )
 
     @property
-    def tiling_attrs(self) -> List[str]:
+    def tiling_attrs(self) -> list[str]:
         """Extract unique template parameter names from tiling specs."""
         return _extract_tiling_params(self.block_tiling, self.stream_tiling)
 
@@ -294,12 +301,12 @@ class OutputSchema:
     name: str
 
     # Structure
-    block_tiling: Optional[TilingSpec] = None
-    stream_tiling: Optional[TilingSpec] = None
-    datatype: Optional[Any] = None  # DatatypeSpec union type
+    block_tiling: TilingSpec | None = None
+    stream_tiling: TilingSpec | None = None
+    datatype: Any | None = None  # DatatypeSpec union type
 
     # Transformation requirements (NEW)
-    required_layout: Optional[str] = None
+    required_layout: str | None = None
     preserves_input_layout: bool = True  # Most kernels preserve layout
 
     def __post_init__(self):
@@ -311,7 +318,7 @@ class OutputSchema:
             )
 
     @property
-    def tiling_attrs(self) -> List[str]:
+    def tiling_attrs(self) -> list[str]:
         """Extract unique template parameter names from tiling specs."""
         return _extract_tiling_params(self.block_tiling, self.stream_tiling)
 
@@ -339,13 +346,13 @@ class KernelSchema:
     name: str
 
     # ============= STRUCTURE =============
-    inputs: List[InputSchema] = field(default_factory=list)
-    outputs: List[OutputSchema] = field(default_factory=list)
-    internal_datatypes: Dict[str, Any] = field(default_factory=dict)  # DatatypeSpec union type
-    kernel_params: Dict[str, tuple] = field(default_factory=dict)
+    inputs: list[InputSchema] = field(default_factory=list)
+    outputs: list[OutputSchema] = field(default_factory=list)
+    internal_datatypes: dict[str, Any] = field(default_factory=dict)  # DatatypeSpec union type
+    kernel_params: dict[str, tuple] = field(default_factory=dict)
 
     # ============= DSE PARAMETERS =============
-    dse_parameters: Dict[str, ParameterSpec] = field(default_factory=dict)
+    dse_parameters: dict[str, ParameterSpec] = field(default_factory=dict)
     """Explorable resource/implementation parameters (ram_style, res_type, etc.).
 
     Tiling parameters (PE, SIMD) NOT declared here - auto-extracted from
@@ -355,10 +362,10 @@ class KernelSchema:
     """
 
     # ============= VALIDATION =============
-    constraints: List['Constraint'] = field(default_factory=list)
+    constraints: list["Constraint"] = field(default_factory=list)
 
     # ============= TRANSFORMATION =============
-    attribute_mapping: Dict[str, str] = field(default_factory=dict)
+    attribute_mapping: dict[str, str] = field(default_factory=dict)
     """Map ONNX attributes to kernel parameters.
 
     Example: {"epsilon": "epsilon", "axis": "normalized_axis"}
@@ -419,7 +426,7 @@ class KernelSchema:
                     f"DSE parameters must have unique names."
                 )
 
-    def build_nodeattr_registry(self) -> Dict[str, tuple]:
+    def build_nodeattr_registry(self) -> dict[str, tuple]:
         """Build nodeattr registry from schema definition.
 
         Schemas define STRUCTURE, not STORAGE. Generates persistence layer

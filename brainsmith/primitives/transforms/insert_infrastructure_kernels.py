@@ -23,20 +23,19 @@ Example usage:
 """
 
 import logging
-from typing import List, Type, Dict
 
-from qonnx.transformation.base import Transformation
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.transformation.base import Transformation
 
 logger = logging.getLogger(__name__)
 
 
 # Static mapping of infrastructure kernels to their insertion transforms
 # This will be imported and used to resolve transforms
-INFRASTRUCTURE_TRANSFORM_MAP: Dict[str, Type[Transformation]] = {}
+INFRASTRUCTURE_TRANSFORM_MAP: dict[str, type[Transformation]] = {}
 
 
-def _register_infrastructure_transform(kernel_name: str, transform_cls: Type[Transformation]):
+def _register_infrastructure_transform(kernel_name: str, transform_cls: type[Transformation]):
     """Register a kernel → transform mapping.
 
     Args:
@@ -74,7 +73,7 @@ class InsertInfrastructureKernels(Transformation):
         - If no matching transform found, warning logged and kernel skipped
     """
 
-    def __init__(self, kernel_classes: List[Type]):
+    def __init__(self, kernel_classes: list[type]):
         """Initialize with list of infrastructure kernel classes.
 
         Args:
@@ -108,7 +107,7 @@ class InsertInfrastructureKernels(Transformation):
 
         for kernel_cls in self.kernel_classes:
             # Get kernel name for lookup
-            kernel_name = getattr(kernel_cls, '__name__', str(kernel_cls))
+            kernel_name = getattr(kernel_cls, "__name__", str(kernel_cls))
 
             # Look up insertion transform
             transform_cls = INFRASTRUCTURE_TRANSFORM_MAP.get(kernel_name)
@@ -139,6 +138,7 @@ def _register_builtin_transforms():
     """Register Brainsmith's built-in infrastructure transforms."""
     try:
         from .insert_duplicate_streams import InsertDuplicateStreams
+
         _register_infrastructure_transform("DuplicateStreams", InsertDuplicateStreams)
         logger.debug("Registered DuplicateStreams → InsertDuplicateStreams")
     except ImportError as e:

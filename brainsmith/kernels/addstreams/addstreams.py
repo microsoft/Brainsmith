@@ -16,17 +16,16 @@ Hardware mapping:
     AddStreams with PE parallelism for channel-wise processing
 """
 
-import numpy as np
-from onnx import NodeProto, helper
-from typing import Optional
 
-from brainsmith.dataflow import KernelOp, FULL_SHAPE
+from onnx import NodeProto, helper
+from qonnx.core.modelwrapper import ModelWrapper
+
 import brainsmith.dataflow as df
+from brainsmith.dataflow import FULL_SHAPE, KernelOp
+from brainsmith.dataflow.constraints import DatatypeInteger, IsDynamic, ShapesEqual
 from brainsmith.dataflow.spec_helpers import add_datatype, derive_dim
 from brainsmith.dataflow.types import ShapeHierarchy
 from brainsmith.registry import kernel
-from qonnx.core.modelwrapper import ModelWrapper
-
 
 ADDSTREAMS_SCHEMA = df.KernelSchema(
     name="AddStreams",
@@ -48,23 +47,22 @@ ADDSTREAMS_SCHEMA = df.KernelSchema(
         df.OutputSchema(
             name="output",
             block_tiling=FULL_SHAPE,  # Rank-agnostic: works with any tensor rank
-            stream_tiling=[derive_dim("input0", ShapeHierarchy.STREAM, -1)],  # Auto-pads to match rank
+            stream_tiling=[
+                derive_dim("input0", ShapeHierarchy.STREAM, -1)
+            ],  # Auto-pads to match rank
             datatype=add_datatype("input0", "input1"),  # INT8 + INT8 → INT9 (prevents overflow)
             required_layout="NHWC",  # Embedded layout requirement
         )
     ],
     constraints=[
-        df.IsDynamic(("input0", "input1")),
-        df.DatatypeInteger(("input0", "input1")),
-        df.ShapesEqual(("input0", "input1")),
-    ]
+        IsDynamic(("input0", "input1")),
+        DatatypeInteger(("input0", "input1")),
+        ShapesEqual(("input0", "input1")),
+    ],
 )
 
 
-@kernel(
-    description="Element-wise addition of two integer streams",
-    author="FINN Team"
-)
+@kernel(description="Element-wise addition of two integer streams", author="FINN Team")
 class AddStreams(KernelOp):
     """Hardware kernel for element-wise addition of two streams."""
 
@@ -72,7 +70,7 @@ class AddStreams(KernelOp):
         super().__init__(onnx_node, **kwargs)
 
     @classmethod
-    def build_schema(cls, node: NodeProto, model: Optional[ModelWrapper]) -> df.KernelSchema:
+    def build_schema(cls, node: NodeProto, model: ModelWrapper | None) -> df.KernelSchema:
         """Build AddStreams schema (constant for all instances)."""
         return ADDSTREAMS_SCHEMA
 
@@ -90,10 +88,7 @@ class AddStreams(KernelOp):
 
     @classmethod
     def infer_from(
-        cls,
-        node: NodeProto,
-        model: ModelWrapper,
-        insert_index: int
+        cls, node: NodeProto, model: ModelWrapper, insert_index: int
     ) -> df.TransformationResult:
         """Create AddStreams HW node from ONNX Add node.
 
@@ -114,7 +109,7 @@ class AddStreams(KernelOp):
             outputs=list(node.output),
             domain="brainsmith.kernels",
             backend="fpgadataflow",
-            name=f"AddStreams_{node.name}"
+            name=f"AddStreams_{node.name}",
         )
 
         return df.TransformationResult(

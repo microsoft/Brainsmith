@@ -5,15 +5,14 @@
 
 """Tests for build_dataflow_graph step."""
 
-import pytest
 import tempfile
-import os
 from types import SimpleNamespace
-from onnx import helper, TensorProto
 
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
+import pytest
 import qonnx.core.data_layout as DataLayout
+from onnx import TensorProto, helper
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.steps.build_dataflow_graph import build_dataflow_graph
 
@@ -46,10 +45,7 @@ def test_build_dataflow_graph_basic():
 
     # Create mock config
     with tempfile.TemporaryDirectory() as tmpdir:
-        cfg = SimpleNamespace(
-            kernel_selections=[("AddStreams", "hls")],
-            output_dir=tmpdir
-        )
+        cfg = SimpleNamespace(kernel_selections=[("AddStreams", "hls")], output_dir=tmpdir)
 
         # Run step
         result_model = build_dataflow_graph(model, cfg)
@@ -70,7 +66,7 @@ def test_build_dataflow_graph_multiple_kernels():
                 ("AddStreams", "hls"),
                 ("Thresholding", "rtl"),  # Won't match anything in this model
             ],
-            output_dir=tmpdir
+            output_dir=tmpdir,
         )
 
         result_model = build_dataflow_graph(model, cfg)
@@ -85,10 +81,7 @@ def test_build_dataflow_graph_no_selections():
     model = create_add_model()
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        cfg = SimpleNamespace(
-            kernel_selections=None,
-            output_dir=tmpdir
-        )
+        cfg = SimpleNamespace(kernel_selections=None, output_dir=tmpdir)
 
         # Should return model unchanged
         result_model = build_dataflow_graph(model, cfg)
@@ -126,7 +119,7 @@ def test_build_dataflow_graph_invalid_kernel_name():
                 ("NonExistentKernel", "hls"),
                 ("AddStreams", "hls"),  # This one should still work
             ],
-            output_dir=tmpdir
+            output_dir=tmpdir,
         )
 
         # Should continue without crashing
@@ -142,10 +135,7 @@ def test_build_dataflow_graph_empty_selections():
     model = create_add_model()
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        cfg = SimpleNamespace(
-            kernel_selections=[],
-            output_dir=tmpdir
-        )
+        cfg = SimpleNamespace(kernel_selections=[], output_dir=tmpdir)
 
         # Should return model unchanged
         result_model = build_dataflow_graph(model, cfg)
@@ -155,16 +145,12 @@ def test_build_dataflow_graph_empty_selections():
         assert "Add" in node_types
 
 
-
 def test_build_dataflow_graph_uses_infer_kernels():
     """Test that step uses InferKernels transform internally."""
     model = create_add_model()
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        cfg = SimpleNamespace(
-            kernel_selections=[("AddStreams", "hls")],
-            output_dir=tmpdir
-        )
+        cfg = SimpleNamespace(kernel_selections=[("AddStreams", "hls")], output_dir=tmpdir)
 
         # This should use InferKernels internally
         result_model = build_dataflow_graph(model, cfg)

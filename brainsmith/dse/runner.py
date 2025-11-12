@@ -7,25 +7,29 @@ import logging
 import shutil
 import time
 from pathlib import Path
-from typing import Dict, Any, Set, List
+from typing import Any
 
 import onnx
 from onnx.onnx_cpp2py_export.checker import ValidationError as OnnxValidationError
 from onnx.onnx_cpp2py_export.shape_inference import InferenceError as OnnxInferenceError
 
+from brainsmith._internal.finn.adapter import FINNAdapter
 from brainsmith.dse.segment import DSESegment
 from brainsmith.dse.tree import DSETree
+from brainsmith.dse.types import (
+    ExecutionError,
+    OutputType,
+    SegmentResult,
+    SegmentStatus,
+    TreeExecutionResult,
+)
 from brainsmith.registry import get_step
-from brainsmith.dse.types import SegmentResult, SegmentStatus, TreeExecutionResult, ExecutionError, OutputType
-from brainsmith._internal.finn.adapter import FINNAdapter
 
 logger = logging.getLogger(__name__)
 
 
 def _share_artifacts_at_branch(
-    parent_result: SegmentResult,
-    child_segments: List[DSESegment],
-    base_output_dir: Path
+    parent_result: SegmentResult, child_segments: list[DSESegment], base_output_dir: Path
 ) -> None:
     """Copy build artifacts to child segments at branch points.
 
@@ -57,11 +61,7 @@ class SegmentRunner:
     using FINNAdapter for all FINN interactions.
     """
 
-    def __init__(
-        self,
-        finn_adapter: FINNAdapter,
-        base_config: Dict[str, Any]
-    ) -> None:
+    def __init__(self, finn_adapter: FINNAdapter, base_config: dict[str, Any]) -> None:
         """Initialize runner.
 
         Args:
@@ -100,12 +100,7 @@ class SegmentRunner:
         wrapped.__cause__ = error
         return wrapped
 
-    def run_tree(
-        self,
-        tree: DSETree,
-        initial_model: Path,
-        output_dir: Path
-    ) -> TreeExecutionResult:
+    def run_tree(self, tree: DSETree, initial_model: Path, output_dir: Path) -> TreeExecutionResult:
         """Run all segments in the DSE tree.
 
         Args:
@@ -139,7 +134,7 @@ class SegmentRunner:
                 results[segment.segment_id] = SegmentResult(
                     segment_id=segment.segment_id,
                     status=SegmentStatus.SKIPPED,
-                    error="Parent segment failed"
+                    error="Parent segment failed",
                 )
                 continue
 
@@ -155,7 +150,7 @@ class SegmentRunner:
                     status=SegmentStatus.COMPLETED,
                     output_model=input_model,  # Pass input as output
                     output_dir=output_dir / segment.segment_id,
-                    execution_time=0
+                    execution_time=0,
                 )
                 # Add children to stack
                 for child in reversed(list(segment.children.values())):
@@ -182,7 +177,7 @@ class SegmentRunner:
                     segment_id=segment.segment_id,
                     status=SegmentStatus.FAILED,
                     error=str(wrapped_error),
-                    execution_time=0
+                    execution_time=0,
                 )
 
                 # Mark descendants for skipping
@@ -207,10 +202,7 @@ class SegmentRunner:
         return result
 
     def run_segment(
-        self,
-        segment: DSESegment,
-        input_model: Path,
-        base_output_dir: Path
+        self, segment: DSESegment, input_model: Path, base_output_dir: Path
     ) -> SegmentResult:
         """Run a single DSE segment.
 
@@ -236,7 +228,7 @@ class SegmentRunner:
                     status=SegmentStatus.COMPLETED,
                     output_model=output_model,
                     output_dir=segment_dir,
-                    cached=True
+                    cached=True,
                 )
             except (OnnxValidationError, OnnxInferenceError) as e:
                 # Invalid ONNX model - rebuild
@@ -268,13 +260,15 @@ class SegmentRunner:
             if final_model:
                 # Copy to expected location
                 self.finn_adapter.prepare_model(final_model, output_model)
-                logger.debug(f"Completed segment: {segment.segment_id} ({time.time() - start_time:.1f}s)")
+                logger.debug(
+                    f"Completed segment: {segment.segment_id} ({time.time() - start_time:.1f}s)"
+                )
                 return SegmentResult(
                     segment_id=segment.segment_id,
                     status=SegmentStatus.COMPLETED,
                     output_model=output_model,
                     output_dir=segment_dir,
-                    execution_time=time.time() - start_time
+                    execution_time=time.time() - start_time,
                 )
             else:
                 raise RuntimeError("Build succeeded but no output model generated")
@@ -307,7 +301,7 @@ class SegmentRunner:
             # Not in registry, return as-is (may be FINN internal step)
             return step_name
 
-    def _resolve_steps(self, segment: DSESegment) -> List:
+    def _resolve_steps(self, segment: DSESegment) -> list:
         """Resolve step names to callable functions.
 
         Attempts to resolve step names from the component registry.
@@ -345,7 +339,7 @@ class SegmentRunner:
                 steps.append(step_name)
         return steps
 
-    def _make_finn_config(self, segment: DSESegment, output_dir: Path) -> Dict[str, Any]:
+    def _make_finn_config(self, segment: DSESegment, output_dir: Path) -> dict[str, Any]:
         """Create FINN configuration for segment.
 
         Args:
@@ -370,7 +364,7 @@ class SegmentRunner:
 
         return config
 
-    def _mark_descendants_skipped(self, segment: DSESegment, skipped: Set[str]) -> None:
+    def _mark_descendants_skipped(self, segment: DSESegment, skipped: set[str]) -> None:
         """Mark all descendants as skipped."""
         for child in segment.children.values():
             skipped.add(child.segment_id)

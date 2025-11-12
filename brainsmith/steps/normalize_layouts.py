@@ -13,8 +13,8 @@ throughout the dataflow region.
 import logging
 from typing import Any
 
-from brainsmith.registry import step
 from brainsmith.primitives.transforms.normalize_dataflow_layouts import NormalizeDataflowLayouts
+from brainsmith.registry import step
 
 logger = logging.getLogger(__name__)
 

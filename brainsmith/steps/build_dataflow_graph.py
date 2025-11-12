@@ -15,14 +15,15 @@ step remains available for simpler blueprints.
 import logging
 from typing import Any
 
-from brainsmith.registry import get_kernel, get_component_metadata, step
-from brainsmith.primitives.transforms import InferKernels, InsertInfrastructureKernels
 from qonnx.transformation.general import GiveUniqueNodeNames
+
+from brainsmith.primitives.transforms import InferKernels, InsertInfrastructureKernels
+from brainsmith.registry import get_component_metadata, get_kernel, step
 
 logger = logging.getLogger(__name__)
 
 
-@step(name='build_dataflow_graph')
+@step(name="build_dataflow_graph")
 def build_dataflow_graph(model: Any, cfg: Any) -> Any:
     """Build complete dataflow graph from kernel selections (two-phase workflow).
 
@@ -40,7 +41,7 @@ def build_dataflow_graph(model: Any, cfg: Any) -> Any:
     Returns:
         Transformed model with complete dataflow graph (infrastructure + computational kernels)
     """
-    kernel_selections = getattr(cfg, 'kernel_selections', None)
+    kernel_selections = getattr(cfg, "kernel_selections", None)
     if not kernel_selections:
         logger.debug("No kernel selections configured, skipping inference")
         return model
@@ -54,7 +55,7 @@ def build_dataflow_graph(model: Any, cfg: Any) -> Any:
     for kernel_name, _ in kernel_selections:
         try:
             kernel_class = get_kernel(kernel_name)
-            metadata = get_component_metadata(kernel_name, 'kernel')
+            metadata = get_component_metadata(kernel_name, "kernel")
 
             if metadata.is_infrastructure:
                 infrastructure_kernels.append(kernel_class)

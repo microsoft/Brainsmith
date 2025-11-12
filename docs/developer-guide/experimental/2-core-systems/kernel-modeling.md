@@ -13,7 +13,6 @@ Traditional FPGA kernel development hardcodes shapes, datatypes, and paralleliza
 
 Think of it as a type system for hardware kernels—catching configuration errors at design time instead of discovering them hours later during synthesis.
 
----
 
 ## Core Principles
 
@@ -106,7 +105,6 @@ assert point2.config["PE"] == 32  # New point has new value
 
 **Why?** Immutability prevents bugs during parallel exploration and enables safe caching.
 
----
 
 ## Schema Building Blocks
 
@@ -224,7 +222,6 @@ KernelSchema(
 )
 ```
 
----
 
 ## Two-Phase Construction in Detail
 
@@ -328,7 +325,6 @@ point = design_space.configure({"PE": 16, "SIMD": 64})
 
 **Result:** Immutable `KernelDesignPoint` ready for hardware generation or performance estimation.
 
----
 
 ## Design Space Exploration
 
@@ -410,7 +406,6 @@ for point in base_point.sweep_input_stream(0):  # All valid PE values
     throughput = estimate_throughput(point)
 ```
 
----
 
 ## Constraint System
 
@@ -469,7 +464,6 @@ Constraints automatically determine their evaluation phase:
 
 You can override this by setting `evaluation_phase` explicitly.
 
----
 
 ## Complete Example: AddStreams Kernel
 
@@ -597,7 +591,6 @@ for point in base.sweep_dimension("PE"):
 point_pe16 = base.with_input_stream(0, 16)  # PE=16
 ```
 
----
 
 ## Summary
 

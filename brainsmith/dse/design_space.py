@@ -9,8 +9,6 @@ from the blueprint, ready for tree construction.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Type, Union
-from brainsmith.dse._constants import SKIP_INDICATOR
 
 
 @dataclass
@@ -25,17 +23,18 @@ class GlobalDesignSpace:
 
     Validates size on initialization and provides kernel summary formatting.
     """
+
     model_path: str
-    steps: List[Union[str, List[Optional[str]]]]  # Direct steps with variations
+    steps: list[str | list[str | None]]  # Direct steps with variations
 
     # Kernel backends: [(kernel_name, [Backend classes])]
     # Currently all registered backends are included automatically.
     # TODO: Future - support backend filtering in blueprint YAML
     #   Example: {'LayerNorm': ['hls']} → only HLS backends
-    kernel_backends: List[Tuple[str, List[Type]]]
+    kernel_backends: list[tuple[str, list[type]]]
 
     max_combinations: int = 100000  # Maximum allowed design space combinations
-    
+
     def __post_init__(self):
         """Validate design space after initialization."""
         self._validate_size()
@@ -53,7 +52,7 @@ class GlobalDesignSpace:
                 f"Design space too large: {combination_count:,} combinations exceeds "
                 f"limit of {self.max_combinations:,}"
             )
-    
+
     def get_kernel_summary(self) -> str:
         """Get human-readable summary of kernels and backends."""
         lines = []
@@ -61,7 +60,7 @@ class GlobalDesignSpace:
             backend_names = [cls.__name__ for cls in backend_classes]
             lines.append(f"  {kernel_name}: {', '.join(backend_names)}")
         return "\n".join(lines)
-    
+
     def __str__(self) -> str:
         """Human-readable representation."""
         return (

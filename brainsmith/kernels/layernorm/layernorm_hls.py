@@ -19,13 +19,13 @@ Key differences from legacy implementation:
 - Intelligent two-level caching (design space + kernel instance)
 """
 
-import numpy as np
 import os
 
+import numpy as np
 from finn.custom_op.fpgadataflow import templates
 from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
-from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 from finn.util.basic import CppBuilder
+from finn.util.data_packing import npy_to_rtlsim_input, rtlsim_output_to_npy
 
 from brainsmith.kernels.layernorm.layernorm import LayerNorm
 from brainsmith.registry import backend
@@ -78,7 +78,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         self.code_gen_dict["$GLOBALS$"] = [
             "#include <hls_vector.h>",
             '#include "layernorm.hpp"',
-            '#include "bs_utils.hpp"'
+            '#include "bs_utils.hpp"',
         ]
 
     def defines(self, var):
@@ -110,7 +110,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
 
         simd = input0.stream_shape[-1]
         width = input0.tensor_shape[-1]
-        epsilon = self.get_nodeattr('epsilon')
+        epsilon = self.get_nodeattr("epsilon")
 
         idtype = input0.datatype
         odtype = output0.datatype
@@ -120,7 +120,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
             f"constexpr unsigned W = {width};",
             f"constexpr float epsilon = {epsilon};",
             f"using TI = {idtype.get_hls_datatype_str()};",
-            f"using TO = {odtype.get_hls_datatype_str()};"
+            f"using TO = {odtype.get_hls_datatype_str()};",
         ]
 
     def docompute(self):
@@ -212,21 +212,14 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
             # Convert input to RTL simulation format
             export_idt = self.get_input_datatype()
             nbits = self.get_instream_width()
-            rtlsim_inp = npy_to_rtlsim_input(
-                f"{code_gen_dir}/input_0.npy",
-                export_idt,
-                nbits
-            )
+            rtlsim_inp = npy_to_rtlsim_input(f"{code_gen_dir}/input_0.npy", export_idt, nbits)
 
             # Setup and run RTL simulation
             sim = self.get_rtlsim()
             super().reset_rtlsim(sim)
             super().toggle_clk(sim)
 
-            io_dict = {
-                "inputs": {"in0": rtlsim_inp},
-                "outputs": {"out0": []}
-            }
+            io_dict = {"inputs": {"in0": rtlsim_inp}, "outputs": {"out0": []}}
             self.rtlsim_multi_io(sim, io_dict)
 
             # Convert RTL output back to numpy format
@@ -237,12 +230,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
             out_shape = self.get_folded_output_shape()
 
             rtlsim_output_to_npy(
-                io_dict["outputs"]["out0"],
-                out_npy_path,
-                odt,
-                out_shape,
-                packed_bits,
-                target_bits
+                io_dict["outputs"]["out0"], out_npy_path, odt, out_shape, packed_bits, target_bits
             )
 
             # Load and reshape output
@@ -335,7 +323,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
 
         # Kernel-specific includes
         kernel_dir = os.path.dirname(os.path.abspath(__file__))
-        utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
+        utils_dir = os.path.join(os.path.dirname(kernel_dir), "utils")
         builder.append_includes(f"-I{kernel_dir}")
         builder.append_includes(f"-I{utils_dir}")
 
@@ -354,7 +342,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
         builder.append_includes("-lz")
         builder.append_includes(
             '-fno-builtin -fno-inline -Wl,-rpath,"$VITIS_PATH/lnx64/lib/csim" '
-            '-L$VITIS_PATH/lnx64/lib/csim -lhlsmc++-GCC46'
+            "-L$VITIS_PATH/lnx64/lib/csim -lhlsmc++-GCC46"
         )
         builder.append_includes(
             "-L$VITIS_PATH/lnx64/tools/fpo_v7_1 -lgmp -lmpfr "
@@ -424,7 +412,7 @@ class LayerNorm_hls(LayerNorm, HLSBackend):
             str: Include flags for kernel headers and utilities
         """
         kernel_dir = os.path.dirname(os.path.abspath(__file__))
-        utils_dir = os.path.join(os.path.dirname(kernel_dir), 'utils')
+        utils_dir = os.path.join(os.path.dirname(kernel_dir), "utils")
         return f"-I{kernel_dir} -I{utils_dir}"
 
     def generate_params(self, model, path):

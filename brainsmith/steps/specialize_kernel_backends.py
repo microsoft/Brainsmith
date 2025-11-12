@@ -11,21 +11,20 @@ The step provides both the new name (specialize_kernel_backends) and legacy name
 (build_hw_graph) for backward compatibility.
 """
 
-import os
 import logging
+import os
 from typing import Any
-
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.transformation.general import (
-    GiveUniqueNodeNames,
-    ApplyConfig,
-)
-from qonnx.transformation.infer_shapes import InferShapes
-from qonnx.transformation.infer_datatypes import InferDataTypes
-from qonnx.util.config import extract_model_config_to_json
 
 from finn.transformation.fpgadataflow.create_dataflow_partition import CreateDataflowPartition
 from finn.util.basic import getHWCustomOp
+from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.transformation.general import (
+    ApplyConfig,
+    GiveUniqueNodeNames,
+)
+from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.infer_shapes import InferShapes
+from qonnx.util.config import extract_model_config_to_json
 
 from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
 from brainsmith.registry import step
@@ -81,11 +80,7 @@ def specialize_kernel_backends(model: Any, cfg: Any) -> Any:
 
     logger.debug("Phase 1: Creating dataflow partition...")
 
-    partition_dir = os.path.join(
-        cfg.output_dir,
-        "intermediate_models",
-        "supported_op_partitions"
-    )
+    partition_dir = os.path.join(cfg.output_dir, "intermediate_models", "supported_op_partitions")
 
     # Use FINN's CreateDataflowPartition to separate HW nodes
     parent_model = model.transform(CreateDataflowPartition(partition_model_dir=partition_dir))
@@ -100,7 +95,9 @@ def specialize_kernel_backends(model: Any, cfg: Any) -> Any:
         logger.error("  1. Kernel inference failed - ONNX nodes were not matched to any kernel")
         logger.error("     → Check that kernels are listed in blueprint design_space.kernels")
         logger.error("     → Verify nodes are supported by the selected kernels")
-        logger.error("  2. Backend specialization failed - kernels lack viable backend implementations")
+        logger.error(
+            "  2. Backend specialization failed - kernels lack viable backend implementations"
+        )
         logger.error("     → Check that backends are configured in kernel_selections")
         logger.error("     → Verify RTL backend constraints are satisfied (see SpecializeKernels)")
         logger.error("")
@@ -130,9 +127,7 @@ def specialize_kernel_backends(model: Any, cfg: Any) -> Any:
     # Save parent model if requested
     if cfg.save_intermediate_models:
         parent_model_path = os.path.join(
-            cfg.output_dir,
-            "intermediate_models",
-            "dataflow_parent.onnx"
+            cfg.output_dir, "intermediate_models", "dataflow_parent.onnx"
         )
         parent_model.save(parent_model_path)
         logger.debug(f"Saved parent model: {parent_model_path}")
@@ -141,15 +136,8 @@ def specialize_kernel_backends(model: Any, cfg: Any) -> Any:
     model = ModelWrapper(dataflow_model_filename)
 
     # Create template config for user reference
-    template_config_path = os.path.join(
-        cfg.output_dir,
-        "template_specialize_layers_config.json"
-    )
-    extract_model_config_to_json(
-        model,
-        template_config_path,
-        ["preferred_impl_style"]
-    )
+    template_config_path = os.path.join(cfg.output_dir, "template_specialize_layers_config.json")
+    extract_model_config_to_json(model, template_config_path, ["preferred_impl_style"])
     logger.debug(f"Created template config: {template_config_path}")
 
     # ========================================================================

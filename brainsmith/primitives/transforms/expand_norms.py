@@ -16,7 +16,7 @@ from qonnx.util.basic import get_by_name
 
 
 class ExpandNorms(Transformation):
-    """Expand any standard LayerNorms/RMSNorms into the functional 
+    """Expand any standard LayerNorms/RMSNorms into the functional
     norm and Mul/Add nodes for affine scale and bias."""
 
     def __init__(self):
@@ -64,9 +64,7 @@ class ExpandNorms(Transformation):
                 scale_data = model.get_initializer(scale)
                 if scale_data is not None and not np.allclose(scale_data, 1.0):
                     scale_intermediate = oh.make_tensor_value_info(
-                        model.make_new_valueinfo_name(),
-                        TensorProto.FLOAT,
-                        act_shape
+                        model.make_new_valueinfo_name(), TensorProto.FLOAT, act_shape
                     )
                     graph.value_info.append(scale_intermediate)
                     func_ln_node.output[0] = scale_intermediate.name
@@ -102,9 +100,7 @@ class ExpandNorms(Transformation):
             # Add opset import only when LayerNorm nodes were found
             existing_domains = {op.domain for op in model.model.opset_import}
             if "brainsmith.operators.general" not in existing_domains:
-                model.model.opset_import.append(
-                    oh.make_opsetid("brainsmith.operators.general", 1)
-                )
+                model.model.opset_import.append(oh.make_opsetid("brainsmith.operators.general", 1))
 
             # Apply replacements in reverse order to maintain indices
             for node_idx, old_node, new_nodes in reversed(replacements):

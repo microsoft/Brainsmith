@@ -32,20 +32,21 @@ Output:
 
 import sys
 import time
-from typing import Dict, List, Tuple
-from onnx import helper, TensorProto
+
+from onnx import TensorProto, helper
 from qonnx.core.modelwrapper import ModelWrapper
 from qonnx.custom_op.registry import getCustomOp
 
 from brainsmith.dataflow.utils import iter_valid_configurations
 
-
 # ============================================================================
 # ANSI Color Codes
 # ============================================================================
 
+
 class Colors:
     """ANSI color codes for terminal output."""
+
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"
@@ -85,6 +86,7 @@ class Colors:
 # Model Creation
 # ============================================================================
 
+
 def create_layernorm_model(hidden_size: int = 64) -> ModelWrapper:
     """Create a simple ONNX model with LayerNorm for demonstration.
 
@@ -95,12 +97,8 @@ def create_layernorm_model(hidden_size: int = 64) -> ModelWrapper:
     Returns:
         ModelWrapper containing the LayerNorm model
     """
-    input_tensor = helper.make_tensor_value_info(
-        "input", TensorProto.FLOAT, [1, 1, hidden_size]
-    )
-    output_tensor = helper.make_tensor_value_info(
-        "output", TensorProto.FLOAT, [1, 1, hidden_size]
-    )
+    input_tensor = helper.make_tensor_value_info("input", TensorProto.FLOAT, [1, 1, hidden_size])
+    output_tensor = helper.make_tensor_value_info("output", TensorProto.FLOAT, [1, 1, hidden_size])
 
     node = helper.make_node(
         "LayerNorm",
@@ -111,15 +109,10 @@ def create_layernorm_model(hidden_size: int = 64) -> ModelWrapper:
         SIMD=1,  # Will be explored
         epsilon=1e-5,
         input0Datatype="FLOAT32",
-        output0Datatype="FLOAT32"
+        output0Datatype="FLOAT32",
     )
 
-    graph = helper.make_graph(
-        [node],
-        "layernorm_demo_graph",
-        [input_tensor],
-        [output_tensor]
-    )
+    graph = helper.make_graph([node], "layernorm_demo_graph", [input_tensor], [output_tensor])
 
     model = helper.make_model(graph)
     return ModelWrapper(model)
@@ -128,6 +121,7 @@ def create_layernorm_model(hidden_size: int = 64) -> ModelWrapper:
 # ============================================================================
 # ASCII Visualization Functions
 # ============================================================================
+
 
 def print_header(title: str, width: int = 80):
     """Print a fancy header banner."""
@@ -146,9 +140,7 @@ def print_section(title: str):
 
 
 def print_distribution_histogram(
-    param_name: str,
-    value_counts: Dict[int, int],
-    max_width: int = 50
+    param_name: str, value_counts: dict[int, int], max_width: int = 50
 ):
     """Print ASCII histogram of parameter value distribution.
 
@@ -183,11 +175,7 @@ def print_distribution_histogram(
         print(f"  {value:4d} {color}{bar}{c.RESET} {count:,}")
 
 
-def print_parameter_grid(
-    configs: List[Dict[str, int]],
-    param1: str,
-    param2: str = None
-):
+def print_parameter_grid(configs: list[dict[str, int]], param1: str, param2: str = None):
     """Print 2D grid visualization of parameter space.
 
     Args:
@@ -219,10 +207,7 @@ def print_parameter_grid(
             print(f"{c.DIM}  {v1:6d} │{c.RESET}", end="")
             for v2 in values2:
                 # Check if this combination exists
-                exists = any(
-                    cfg.get(param1) == v1 and cfg.get(param2) == v2
-                    for cfg in configs
-                )
+                exists = any(cfg.get(param1) == v1 and cfg.get(param2) == v2 for cfg in configs)
                 if exists:
                     print(f"{c.GREEN} ●  {c.RESET}", end="")
                 else:
@@ -239,9 +224,7 @@ def print_parameter_grid(
 
 
 def print_performance_heatmap(
-    configs: List[Dict[str, int]],
-    scores: List[float],
-    param_name: str = "SIMD"
+    configs: list[dict[str, int]], scores: list[float], param_name: str = "SIMD"
 ):
     """Print performance heatmap (simulated performance scores).
 
@@ -256,7 +239,7 @@ def print_performance_heatmap(
         return
 
     # Group configs by parameter value
-    value_scores: Dict[int, List[float]] = {}
+    value_scores: dict[int, list[float]] = {}
     for cfg, score in zip(configs, scores):
         value = cfg.get(param_name)
         if value is not None:
@@ -293,15 +276,10 @@ def print_performance_heatmap(
             color = c.BG_RED + c.BLACK
             indicator = "██    "
 
-        print(f"  {param_name}={value:4d}  {color}{indicator}{c.RESET}  "
-              f"Score: {avg_score:.2f}")
+        print(f"  {param_name}={value:4d}  {color}{indicator}{c.RESET}  " f"Score: {avg_score:.2f}")
 
 
-def print_table(
-    headers: List[str],
-    rows: List[List],
-    title: str = None
-):
+def print_table(headers: list[str], rows: list[list], title: str = None):
     """Print ASCII table.
 
     Args:
@@ -353,7 +331,7 @@ def print_table(
         for cell, width in zip(row, col_widths):
             # Right-align numbers, left-align strings
             cell_str = str(cell)
-            if isinstance(cell, (int, float)):
+            if isinstance(cell, int | float):
                 formatted = cell_str.rjust(width)
             else:
                 formatted = cell_str.ljust(width)
@@ -391,7 +369,8 @@ def print_progress_bar(current: int, total: int, width: int = 50):
 # Main Demo
 # ============================================================================
 
-def simulate_performance_score(config: Dict[str, int]) -> float:
+
+def simulate_performance_score(config: dict[str, int]) -> float:
     """Simulate a performance score for demonstration.
 
     Higher SIMD generally gives better performance (lower latency),
@@ -405,7 +384,7 @@ def simulate_performance_score(config: Dict[str, int]) -> float:
     """
     simd = config.get("SIMD", 1)
     # Simulate: higher parallelism = better performance, with diminishing returns
-    return 100.0 * (1.0 - (1.0 / (simd ** 0.5)))
+    return 100.0 * (1.0 - (1.0 / (simd**0.5)))
 
 
 def main():
@@ -445,8 +424,10 @@ def main():
     print(f"  Parameters found: {c.BOLD}{', '.join(valid_ranges.keys())}{c.RESET}")
 
     for param_name, param_values in valid_ranges.items():
-        print(f"    {param_name}: {len(param_values)} values "
-              f"(range: {min(param_values)} - {max(param_values)})")
+        print(
+            f"    {param_name}: {len(param_values)} values "
+            f"(range: {min(param_values)} - {max(param_values)})"
+        )
 
     # Calculate total configs
     total_configs = 1
@@ -478,8 +459,10 @@ def main():
 
     elapsed = time.time() - start_time
 
-    print(f"\n\n  {c.GREEN}✓{c.RESET} Explored {len(configs):,} configurations in "
-          f"{c.BOLD}{elapsed:.3f}s{c.RESET}")
+    print(
+        f"\n\n  {c.GREEN}✓{c.RESET} Explored {len(configs):,} configurations in "
+        f"{c.BOLD}{elapsed:.3f}s{c.RESET}"
+    )
     print(f"  Average time per config: {c.BOLD}{elapsed*1000/len(configs):.2f}ms{c.RESET}")
 
     # Step 4: Visualizations
@@ -509,11 +492,7 @@ def main():
     print_section("Step 5: Top Configurations")
 
     # Sort by score (descending)
-    sorted_configs = sorted(
-        zip(configs, scores),
-        key=lambda x: x[1],
-        reverse=True
-    )
+    sorted_configs = sorted(zip(configs, scores), key=lambda x: x[1], reverse=True)
 
     # Build table data
     top_n = min(10, len(sorted_configs))
@@ -538,7 +517,7 @@ def main():
         max_score = max(scores)
         min_score = min(scores)
 
-        print(f"  Performance scores:")
+        print("  Performance scores:")
         print(f"    Best:    {c.BRIGHT_GREEN}{max_score:.2f}{c.RESET}")
         print(f"    Average: {c.BRIGHT_YELLOW}{avg_score:.2f}{c.RESET}")
         print(f"    Worst:   {c.BRIGHT_RED}{min_score:.2f}{c.RESET}")
@@ -546,11 +525,11 @@ def main():
     print(f"\n{c.BOLD}{c.GREEN}Demo completed successfully!{c.RESET}\n")
 
     print(f"{c.DIM}This demo used the two-phase kernel construction system to:")
-    print(f"  • Systematically explore all valid configurations")
-    print(f"  • Avoid invalid configuration attempts")
-    print(f"  • Provide rich visualizations of the design space")
-    print(f"\nFor more information, see:")
-    print(f"  • docs/two_phase_architecture.md - System architecture")
+    print("  • Systematically explore all valid configurations")
+    print("  • Avoid invalid configuration attempts")
+    print("  • Provide rich visualizations of the design space")
+    print("\nFor more information, see:")
+    print("  • docs/two_phase_architecture.md - System architecture")
     print(f"  • docs/two_phase_user_guide.md - Usage guide{c.RESET}\n")
 
 

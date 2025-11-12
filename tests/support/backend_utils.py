@@ -7,12 +7,12 @@ and hardware simulation.
 Pattern validated by: tests/spike_backend_specialization.py
 """
 
-from typing import Tuple, List, Type
+
+from finn.util.basic import getHWCustomOp
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.primitives.transforms.specialize_kernels import SpecializeKernels
 from brainsmith.registry import get_component_metadata
-from finn.util.basic import getHWCustomOp
-from qonnx.core.modelwrapper import ModelWrapper
 
 
 class MinimalBackendConfig:
@@ -22,7 +22,8 @@ class MinimalBackendConfig:
     - cfg.kernel_selections: List[Tuple[str, List[str]]]
     - cfg._resolve_fpga_part(): Returns fpgapart string
     """
-    def __init__(self, fpgapart: str, kernel_selections: List[Tuple[str, List[str]]]):
+
+    def __init__(self, fpgapart: str, kernel_selections: list[tuple[str, list[str]]]):
         self.fpgapart = fpgapart
         self.kernel_selections = kernel_selections
 
@@ -35,8 +36,8 @@ def specialize_to_backend(
     op,  # HWCustomOp (avoid import to prevent circular deps)
     model: ModelWrapper,
     fpgapart: str,
-    backend_variants: List[Type]
-) -> Tuple:
+    backend_variants: list[type],
+) -> tuple:
     """Specialize base kernel to backend variant with code generation capability.
 
     This function transforms a base HWCustomOp kernel (e.g., ElementwiseBinaryOp) into
@@ -119,7 +120,10 @@ def specialize_to_backend(
         # Special handling for FINN ElementwiseBinary backends
         # FINN backends are not registered in Brainsmith registry
         # They use FINN's own registration system
-        if hasattr(backend_cls, '__module__') and 'finn.custom_op.fpgadataflow.hls.elementwise_binary' in backend_cls.__module__:
+        if (
+            hasattr(backend_cls, "__module__")
+            and "finn.custom_op.fpgadataflow.hls.elementwise_binary" in backend_cls.__module__
+        ):
             # FINN backend - use direct class name without registry lookup
             # This will be handled by FINN's ConvertToHWLayers transform
             backend_names.append(backend_class_name)
@@ -128,10 +132,10 @@ def specialize_to_backend(
         # Try to find backend in registry
         # Try common sources (brainsmith, finn, project)
         found = False
-        for source in ['brainsmith', 'finn', 'project']:
+        for source in ["brainsmith", "finn", "project"]:
             candidate_name = f"{source}:{backend_class_name}"
             try:
-                get_component_metadata(candidate_name, 'backend')
+                get_component_metadata(candidate_name, "backend")
                 backend_names.append(candidate_name)
                 found = True
                 break
@@ -148,10 +152,10 @@ def specialize_to_backend(
     # Determine kernel name (try to find in registry)
     # Base op_type might be short name without source prefix
     kernel_name = None
-    for source in ['brainsmith', 'finn', 'project']:
+    for source in ["brainsmith", "finn", "project"]:
         candidate_name = f"{source}:{base_op_type}"
         try:
-            get_component_metadata(candidate_name, 'kernel')
+            get_component_metadata(candidate_name, "kernel")
             kernel_name = candidate_name
             break
         except KeyError:
@@ -163,7 +167,7 @@ def specialize_to_backend(
 
     # Check if all backends are FINN backends (special handling needed)
     all_finn_backends = all(
-        hasattr(bcls, '__module__') and 'finn.custom_op.fpgadataflow' in bcls.__module__
+        hasattr(bcls, "__module__") and "finn.custom_op.fpgadataflow" in bcls.__module__
         for bcls in backend_variants
     )
 
@@ -256,9 +260,11 @@ def verify_backend_inheritance(op, backend: str = "hls") -> bool:
     """
     if backend == "hls":
         from finn.custom_op.fpgadataflow.hlsbackend import HLSBackend
+
         return isinstance(op, HLSBackend)
     elif backend == "rtl":
         from finn.custom_op.fpgadataflow.rtlbackend import RTLBackend
+
         return isinstance(op, RTLBackend)
     else:
         raise ValueError(f"Unknown backend type: {backend}")

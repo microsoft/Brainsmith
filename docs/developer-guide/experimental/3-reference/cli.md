@@ -40,7 +40,6 @@ Brainsmith follows a clear precedence order for configuration:
 
 See: [Configuration Guide](../../getting-started.md#configuration)
 
----
 
 ## Command Reference
 
@@ -57,7 +56,6 @@ brainsmith [OPTIONS] COMMAND [ARGS]...
 - `--version` - Show Brainsmith version
 - `--help` - Show help message
 
----
 
 ## Configuration Management
 
@@ -132,7 +130,6 @@ eval $(brainsmith config export)
 eval (brainsmith config export --shell fish)
 ```
 
----
 
 ## Project Management
 
@@ -179,7 +176,6 @@ brainsmith project allow-direnv
 
 This configures direnv to automatically load `.brainsmith/env.sh` when you cd into the directory.
 
----
 
 ## Setup and Dependencies
 
@@ -251,7 +247,6 @@ Setup Status:
 ✓ Board files (47 boards)
 ```
 
----
 
 ## Operational Commands
 
@@ -265,7 +260,6 @@ smith [COMMAND] [OPTIONS]
 - `--version` - Show version
 - `--help` - Show help message
 
----
 
 ## Dataflow Core Creation
 
@@ -304,7 +298,6 @@ brainsmith --debug smith dfc model.onnx blueprint.yaml
 smith dfc model.onnx blueprint.yaml --start-step streamline --stop-step specialize_layers
 ```
 
----
 
 ## Hardware Kernel Generation
 
@@ -344,7 +337,6 @@ smith kernel my_accelerator.sv --artifacts kernelop --artifacts wrapper
 smith kernel top.sv --include-rtl helper.sv --include-rtl memory.sv
 ```
 
----
 
 ## Configuration Settings
 
@@ -388,7 +380,6 @@ export BSMITH_FINN__NUM_DEFAULT_WORKERS=8
 !!! note "Nested Settings"
     Nested settings use double underscore (`__`) as delimiter.
 
----
 
 ## Usage Patterns
 
@@ -443,7 +434,6 @@ vitis_hls -version
 smith model.onnx blueprint.yaml --output-dir $CI_ARTIFACTS_DIR
 ```
 
----
 
 ## Troubleshooting
 
@@ -476,7 +466,6 @@ rm brainsmith.yaml
 brainsmith config init --user
 ```
 
----
 
 ## Next Steps
 

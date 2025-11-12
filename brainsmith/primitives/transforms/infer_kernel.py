@@ -20,12 +20,11 @@ Example usage:
 """
 
 import logging
-from typing import Type
 
-from qonnx.transformation.base import Transformation
-from qonnx.transformation.infer_shapes import InferShapes
-from qonnx.transformation.infer_datatypes import InferDataTypes
 from qonnx.core.modelwrapper import ModelWrapper
+from qonnx.transformation.base import Transformation
+from qonnx.transformation.infer_datatypes import InferDataTypes
+from qonnx.transformation.infer_shapes import InferShapes
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,7 @@ class InferKernel(Transformation):
         - Uses InferenceResult to structure graph modifications
     """
 
-    def __init__(self, kernel_cls: Type):
+    def __init__(self, kernel_cls: type):
         """Initialize with kernel class.
 
         Args:
@@ -119,9 +118,7 @@ class InferKernel(Transformation):
                     continue
 
                 nodes_processed += 1
-                logger.debug(
-                    f"Inferring {self.kernel_name} from {node.op_type} node {node.name}"
-                )
+                logger.debug(f"Inferring {self.kernel_name} from {node.op_type} node {node.name}")
 
                 # Delegate to kernel-specific inference (naive node creation)
                 result = self.kernel_cls.infer_from(node, model, node_ind + 1)
@@ -134,6 +131,7 @@ class InferKernel(Transformation):
                         try:
                             # Attempt to create KernelOp and validate constraints
                             from qonnx.custom_op.registry import getCustomOp
+
                             kernel_op = getCustomOp(new_node)
                             kernel_op.infer_node_datatype(model)  # Initializes and validates
                         except Exception as e:
@@ -164,7 +162,7 @@ class InferKernel(Transformation):
                 nodes_failed += 1
                 logger.warning(
                     f"Failed to infer {self.kernel_name} from {node.op_type} node {node.name}: {e}",
-                    exc_info=True
+                    exc_info=True,
                 )
                 # Continue to next node (don't fail entire transform)
 

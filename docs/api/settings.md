@@ -95,7 +95,6 @@ print(env_dict['FINN_ROOT'])
 print(env_dict['VIVADO_PATH'])
 ```
 
----
 
 ## See Also
 

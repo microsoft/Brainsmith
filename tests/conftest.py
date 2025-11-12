@@ -3,12 +3,12 @@
 This conftest.py is the root configuration for the DSE integration test suite.
 """
 
+
 import pytest
-import shutil
-from pathlib import Path
+
+from brainsmith.registry import reset_registry
 from brainsmith.settings import reset_config
 from brainsmith.settings.validation import ensure_environment_sourced
-from brainsmith.registry import reset_registry
 
 # Validate environment is sourced before any tests run
 # This ensures FINN_ROOT, VIVADO_PATH, etc. are available for tests
@@ -16,29 +16,17 @@ ensure_environment_sourced()
 
 # Import test components - these register @step, @kernel, @backend decorators
 # Available for tests that need globally-registered test components
-import tests.fixtures.components.kernels
-import tests.fixtures.components.backends
-import tests.fixtures.components.steps
-
-# Phase 4: Fixture imports for global availability
-from tests.fixtures.models import *
-from tests.fixtures.dse.design_spaces import *
-from tests.fixtures.dse.blueprints import *
+import tests.fixtures.components.backends  # noqa: F401 - Registers test backends via @backend decorator
+import tests.fixtures.components.kernels  # noqa: F401 - Registers test kernels via @kernel decorator
+import tests.fixtures.components.steps  # noqa: F401 - Registers test steps via @step decorator
+from tests.fixtures.dse.blueprints import *  # noqa: F403
+from tests.fixtures.dse.design_spaces import *  # noqa: F403
 
 # Import kernel test helpers for easy access in all kernel tests
 # Use these for unit testing kernels (schema, inference, transformation)
 # For parity testing (comparing implementations), use tests/parity/ParityTestBase
-from tests.fixtures.model_builders import (
-    OnnxModelBuilder,
-    make_binary_op_model,
-    make_parametric_op_model,
-    make_unary_op_model,
-    make_multithreshold_model,
-    make_funclayernorm_model,
-    make_vvau_model,
-    make_broadcast_model,
-    make_duplicate_streams_model,
-)
+# Phase 4: Fixture imports for global availability
+from tests.fixtures.models import *  # noqa: F403
 
 
 def pytest_addoption(parser):
@@ -62,7 +50,7 @@ def pytest_addoption(parser):
         action="store",
         default=42,
         type=int,
-        help="Random seed for deterministic test data generation (default: 42)"
+        help="Random seed for deterministic test data generation (default: 42)",
     )
 
 
@@ -85,9 +73,7 @@ def pytest_configure(config):
         "markers",
         "certification: Comprehensive test sweep across all supported configurations (v5.0)",
     )
-    config.addinivalue_line(
-        "markers", "validation_v5: Tactical corner case tests for CI/CD (v5.0)"
-    )
+    config.addinivalue_line("markers", "validation_v5: Tactical corner case tests for CI/CD (v5.0)")
 
 
 # ============================================================================
@@ -224,13 +210,15 @@ def isolated_env(tmp_path, monkeypatch):
 
     # Write real config file
     config_file = project_dir / "brainsmith.yaml"
-    config_file.write_text("""
+    config_file.write_text(
+        """
 cache_components: true
 component_sources: {}
-""")
+"""
+    )
 
     # Set environment (monkeypatch auto-cleans on teardown)
-    monkeypatch.setenv('BSMITH_PROJECT_DIR', str(project_dir))
+    monkeypatch.setenv("BSMITH_PROJECT_DIR", str(project_dir))
 
     # Clear registry and config state using public API
     reset_registry()
@@ -264,13 +252,15 @@ def empty_env(tmp_path, monkeypatch):
 
     # Empty config - no component sources
     config_file = project_dir / "brainsmith.yaml"
-    config_file.write_text("""
+    config_file.write_text(
+        """
 cache_components: false
 component_sources: {}
-""")
+"""
+    )
 
     # Set environment
-    monkeypatch.setenv('BSMITH_PROJECT_DIR', str(project_dir))
+    monkeypatch.setenv("BSMITH_PROJECT_DIR", str(project_dir))
 
     # Clear state using public API
     reset_registry()

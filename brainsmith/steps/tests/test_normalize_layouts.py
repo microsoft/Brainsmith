@@ -6,11 +6,10 @@
 """Integration tests for normalize_layouts build step."""
 
 import pytest
-from onnx import helper, TensorProto
-
-from qonnx.core.modelwrapper import ModelWrapper
-from qonnx.core.datatype import DataType
 import qonnx.core.data_layout as DataLayout
+from onnx import TensorProto, helper
+from qonnx.core.datatype import DataType
+from qonnx.core.modelwrapper import ModelWrapper
 
 from brainsmith.steps.normalize_layouts import normalize_dataflow_layouts_step
 
@@ -55,8 +54,9 @@ def test_normalize_layouts_step_execution():
 
     # Verify transformation occurred
     assert transformed_model is not None
-    assert len(transformed_model.graph.node) > initial_node_count, \
-        "Should have added Transpose nodes"
+    assert (
+        len(transformed_model.graph.node) > initial_node_count
+    ), "Should have added Transpose nodes"
 
     # Find Transpose nodes
     transpose_nodes = [n for n in transformed_model.graph.node if n.op_type == "Transpose"]

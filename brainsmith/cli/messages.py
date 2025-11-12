@@ -37,12 +37,12 @@ KERNEL_VALIDATION_HINTS = [
     "Verify the RTL file contains valid SystemVerilog with @brainsmith pragmas",
     "Check that all pragma syntax is correct",
     "Ensure any referenced RTL files in pragmas exist",
-    "Confirm you have write permissions to the output directory"
+    "Confirm you have write permissions to the output directory",
 ]
 
 KERNEL_TOOL_NOT_FOUND_HINTS = [
     "Ensure brainsmith is fully installed: pip install -e .",
-    "Verify the kernel_integrator module exists in brainsmith/tools/"
+    "Verify the kernel_integrator module exists in brainsmith/tools/",
 ]
 
 # DFC command

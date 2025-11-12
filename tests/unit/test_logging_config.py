@@ -10,18 +10,19 @@ Arete Approach: No mocking. Real config loading, real environment variables.
 """
 
 import os
-import pytest
 import tempfile
 from pathlib import Path
 from unittest import mock
 
-from brainsmith.settings.schema import LoggingConfig
-from brainsmith.settings.loader import load_config
+import pytest
 
+from brainsmith.settings.loader import load_config
+from brainsmith.settings.schema import LoggingConfig
 
 # ============================================================================
 # Test Helpers
 # ============================================================================
+
 
 def minimal_config(logging_level: str = "normal") -> str:
     """Minimal valid brainsmith.yaml with logging config."""
@@ -35,6 +36,7 @@ logging:
 # ============================================================================
 # CI/CD Test Suite: Configuration (5 tests)
 # ============================================================================
+
 
 class TestLoggingConfigEssentials:
     """Essential logging config tests for CI/CD."""
@@ -63,7 +65,7 @@ class TestLoggingConfigEssentials:
 
             config = load_config(project_file=config_file)
 
-            assert hasattr(config, 'logging')
+            assert hasattr(config, "logging")
             assert isinstance(config.logging, LoggingConfig)
             assert config.logging.level == "normal"
 
@@ -83,6 +85,6 @@ class TestLoggingConfigEssentials:
             config_file = Path(tmpdir) / "brainsmith.yaml"
             config_file.write_text(minimal_config("normal"))
 
-            with mock.patch.dict(os.environ, {'BSMITH_LOG_LEVEL': 'debug'}):
+            with mock.patch.dict(os.environ, {"BSMITH_LOG_LEVEL": "debug"}):
                 config = load_config(project_file=config_file)
                 assert config.logging.level == "debug"

@@ -9,8 +9,7 @@ from blueprint YAML files.
 """
 
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from brainsmith.dse.types import OutputType
 
@@ -27,6 +26,7 @@ class DSEConfig:
         stop_step: Optional pipeline ending step
         finn_overrides: Direct FINN configuration overrides
     """
+
     # Always required
     clock_ns: float  # Required field, mapped to synth_clk_period_ns in FINN config
 
@@ -34,14 +34,14 @@ class DSEConfig:
     output: OutputType = OutputType.ESTIMATES
 
     # Target (required for rtl/bitfile)
-    board: Optional[str] = None
+    board: str | None = None
 
     # Step range control (optional overrides)
-    start_step: Optional[str] = None
-    stop_step: Optional[str] = None
+    start_step: str | None = None
+    stop_step: str | None = None
 
     # Direct FINN parameter overrides
-    finn_overrides: Dict[str, Any] = field(default_factory=dict)
+    finn_overrides: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate configuration invariants."""
@@ -59,11 +59,11 @@ def _parse_output_type(output_str: str) -> OutputType:
     try:
         return OutputType(output_str)
     except ValueError:
-        valid = ', '.join(t.value for t in OutputType)
+        valid = ", ".join(t.value for t in OutputType)
         raise ValueError(f"Invalid output '{output_str}'. Must be one of: {valid}")
 
 
-def extract_config(data: Dict[str, Any]) -> DSEConfig:
+def extract_config(data: dict[str, Any]) -> DSEConfig:
     """Extract DSEConfig from blueprint data.
 
     Config fields are expected at the blueprint top level (flat structure).
@@ -80,12 +80,10 @@ def extract_config(data: Dict[str, Any]) -> DSEConfig:
         ValueError: If validation fails (from DSEConfig.__post_init__)
     """
     return DSEConfig(
-        clock_ns=float(data['clock_ns']),
-        output=_parse_output_type(data.get('output', 'estimates')),
-        board=data.get('board'),
-        start_step=data.get('start_step'),
-        stop_step=data.get('stop_step'),
-        finn_overrides=data.get('finn_config', {})
+        clock_ns=float(data["clock_ns"]),
+        output=_parse_output_type(data.get("output", "estimates")),
+        board=data.get("board"),
+        start_step=data.get("start_step"),
+        stop_step=data.get("stop_step"),
+        finn_overrides=data.get("finn_config", {}),
     )
-
-

@@ -10,12 +10,12 @@ Timeout: 600-900 seconds per test
 IMPORTANT: Real FINN execution - validates complete pipelines!
 """
 
-import pytest
 import json
-from pathlib import Path
 
-from brainsmith.dse import explore_design_space, parse_blueprint, build_tree, execute_tree
-from brainsmith.dse.types import SegmentStatus, OutputType
+import pytest
+
+from brainsmith.dse import build_tree, execute_tree, explore_design_space, parse_blueprint
+from brainsmith.dse.types import SegmentStatus
 
 
 class TestPipelineIntegration:
@@ -39,7 +39,7 @@ class TestPipelineIntegration:
             tmp_path,
             name="full_pipeline",
             clock_ns=10.0,
-            target_fps=100  # Low target FPS for fast test execution
+            target_fps=100,  # Low target FPS for fast test execution
         )
 
         # Execute full pipeline
@@ -47,7 +47,7 @@ class TestPipelineIntegration:
         result = explore_design_space(
             blueprint_path=str(blueprint_path),
             model_path=str(brevitas_fc_model),
-            output_dir=str(output_dir)
+            output_dir=str(output_dir),
         )
 
         # Verify execution completed
@@ -55,8 +55,7 @@ class TestPipelineIntegration:
 
         # Verify at least one successful path
         completed = [
-            seg for seg in result.segment_results.values()
-            if seg.status == SegmentStatus.COMPLETED
+            seg for seg in result.segment_results.values() if seg.status == SegmentStatus.COMPLETED
         ]
         assert len(completed) > 0, "At least one segment should complete successfully"
 
@@ -66,7 +65,7 @@ class TestPipelineIntegration:
                 # Check for estimate-related artifacts
                 seg_dir = seg_result.output_dir
                 # FINN may produce estimate_report.json or similar
-                json_files = list(seg_dir.glob("**/estimate*.json")) + list(seg_dir.glob("**/*report*.json"))
+                list(seg_dir.glob("**/estimate*.json")) + list(seg_dir.glob("**/*report*.json"))
                 # Note: This is lenient - FINN output format may vary
                 # Main goal is to verify execution completed and produced outputs
                 assert seg_dir.exists(), f"Segment {seg_id} output directory should exist"
@@ -88,26 +87,17 @@ class TestPipelineIntegration:
 
         # Create blueprint for testing intermediate model saving
         blueprint_path = create_finn_blueprint(
-            tmp_path,
-            name="intermediate",
-            steps=['finn:streamline', 'finn:tidy_up'],
-            clock_ns=10.0
+            tmp_path, name="intermediate", steps=["finn:streamline", "finn:tidy_up"], clock_ns=10.0
         )
 
         # Parse blueprint
-        design_space, config = parse_blueprint(
-            str(blueprint_path),
-            str(brevitas_fc_model)
-        )
+        design_space, config = parse_blueprint(str(blueprint_path), str(brevitas_fc_model))
 
         # Execute pipeline
         tree = build_tree(design_space, config)
         output_dir = test_workspace / "intermediate"
         result = execute_tree(
-            tree=tree,
-            model_path=str(brevitas_fc_model),
-            config=config,
-            output_dir=str(output_dir)
+            tree=tree, model_path=str(brevitas_fc_model), config=config, output_dir=str(output_dir)
         )
 
         # Verify intermediate models exist
@@ -123,16 +113,19 @@ class TestPipelineIntegration:
 
                 # Verify at least one ONNX file is valid (can be loaded)
                 import onnx
+
                 valid_models = []
                 for onnx_file in onnx_files:
                     try:
-                        model = onnx.load(str(onnx_file))
+                        onnx.load(str(onnx_file))
                         valid_models.append(onnx_file)
                     except Exception:
                         # Some files might be partial/intermediate
                         pass
 
-                assert len(valid_models) > 0, f"Segment {seg_id} should have at least one valid ONNX model"
+                assert (
+                    len(valid_models) > 0
+                ), f"Segment {seg_id} should have at least one valid ONNX model"
 
     @pytest.mark.finn_build
     @pytest.mark.timeout(600)
@@ -145,7 +138,7 @@ class TestPipelineIntegration:
         - Verify only specified steps executed
         """
         # Create blueprint with multiple steps, stopping at tidy_up
-        blueprint_yaml = f"""
+        blueprint_yaml = """
 name: step_range
 clock_ns: 10.0
 output: estimates
@@ -161,10 +154,7 @@ design_space:
         blueprint_path.write_text(blueprint_yaml)
 
         # Parse blueprint (steps preserved, range controls passed to config)
-        design_space, config = parse_blueprint(
-            str(blueprint_path),
-            str(brevitas_fc_model)
-        )
+        design_space, config = parse_blueprint(str(blueprint_path), str(brevitas_fc_model))
 
         # Verify all steps are preserved (no slicing)
         assert len(design_space.steps) == 3, "Should preserve all steps"
@@ -180,10 +170,7 @@ design_space:
         tree = build_tree(design_space, config)
         output_dir = test_workspace / "step_range"
         result = execute_tree(
-            tree=tree,
-            model_path=str(brevitas_fc_model),
-            config=config,
-            output_dir=str(output_dir)
+            tree=tree, model_path=str(brevitas_fc_model), config=config, output_dir=str(output_dir)
         )
 
         # Verify execution occurred
@@ -195,11 +182,12 @@ design_space:
         intermediate_dir = segment_dir / "intermediate_models"
 
         # Should have models from streamline and tidy_up
-        assert (intermediate_dir / "step_streamline.onnx").exists()
-        assert (intermediate_dir / "step_tidy_up.onnx").exists()
+        # Note: FINN saves with format "<step_num>_<step_name>.onnx" (1-indexed)
+        assert (intermediate_dir / "1_step_streamline.onnx").exists()
+        assert (intermediate_dir / "2_step_tidy_up.onnx").exists()
 
         # Should NOT have model from convert_to_hw (it was after stop_step)
-        assert not (intermediate_dir / "step_convert_to_hw.onnx").exists()
+        assert not (intermediate_dir / "3_step_convert_to_hw.onnx").exists()
 
     @pytest.mark.finn_build
     @pytest.mark.timeout(600)
@@ -218,7 +206,7 @@ design_space:
             tmp_path,
             name="estimates",
             clock_ns=10.0,
-            target_fps=100  # Low target FPS for fast test execution
+            target_fps=100,  # Low target FPS for fast test execution
         )
 
         # Execute pipeline
@@ -226,7 +214,7 @@ design_space:
         result = explore_design_space(
             blueprint_path=str(blueprint_path),
             model_path=str(brevitas_fc_model),
-            output_dir=str(output_dir)
+            output_dir=str(output_dir),
         )
 
         # Find estimate reports
@@ -251,7 +239,7 @@ design_space:
                 for report_path in potential_reports:
                     if report_path.exists():
                         try:
-                            with open(report_path, 'r') as f:
+                            with open(report_path) as f:
                                 report_data = json.load(f)
 
                             # Validate report structure (flexible - FINN format may vary)
@@ -261,7 +249,7 @@ design_space:
                             # Check for common resource fields
                             has_resources = any(
                                 resource in report_str
-                                for resource in ['lut', 'ff', 'bram', 'dsp', 'resource']
+                                for resource in ["lut", "ff", "bram", "dsp", "resource"]
                             )
 
                             if has_resources:
@@ -269,7 +257,7 @@ design_space:
                                 # Successfully found and validated a report
                                 break
 
-                        except (json.JSONDecodeError, IOError):
+                        except (OSError, json.JSONDecodeError):
                             # Not a valid JSON report, continue searching
                             continue
 
