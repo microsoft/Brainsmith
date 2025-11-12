@@ -1,14 +1,6 @@
-<<<<<<< HEAD
+
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-||||||| merged common ancestors
-<<<<<<<<< Temporary merge branch 1
-############################################################################
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
-#
-# @author       Thomas Keller <thomaskeller@microsoft.com>
-############################################################################
 
 import torch
 import numpy as np
