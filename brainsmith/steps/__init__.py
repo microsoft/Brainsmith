@@ -22,7 +22,7 @@ from brainsmith.steps.core_steps import (
 )
 
 # BERT-specific steps
-from brainsmith.steps.bert_custom_steps import (
+from brainsmith.steps.bert_steps import (
     shell_metadata_handover_step,
     bert_cleanup_step,
     bert_streamlining_step,

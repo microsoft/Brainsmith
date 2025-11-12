@@ -17,7 +17,7 @@ design_space:
     - Crop
     - Lookup
     - Softmax
-    - finn:Thresholding
+    - Thresholding
     - finn:MVAU
     # Infrastructure Kernels
     - DuplicateStreams
@@ -32,8 +32,8 @@ design_space:
     - "loop_rolling"
     - "brainsmith:target_fps_parallelization"
     - "apply_parallelization_config"
+    - "minimize_bit_width"                 # CRITICAL: Must run BEFORE loop_rolling so RoundAndClipThresholds can access initializers
     - "transpose_decomposition"
-    - "minimize_bit_width"
     - "generate_estimate_reports"
     - "hw_codegen"
     - "hw_ipgen"
