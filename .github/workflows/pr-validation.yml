@@ -45,6 +45,13 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      # SECURITY NOTE: Composite actions below run from PR checkout after manual review.
+      # This is safe because:
+      # 1. Maintainer manually reviews ALL changes (including .github/actions/) before adding safe-to-test label
+      # 2. Label-based gate prevents automatic execution of untrusted code
+      # 3. This is the standard pattern for manual-approval CI workflows
+      # CodeQL alert acknowledged: Risk accepted with human review gate.
+
       # SECURITY: Detect new dependencies for manual review
       - name: Check for dependency changes
         if: github.event_name == 'pull_request_target'
@@ -127,6 +134,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
           fetch-depth: 0
+
+      # SECURITY NOTE: Composite actions run from PR checkout after manual review (see pytest-validation job comment above)
 
       - name: Setup workflow
         uses: ./.github/actions/workflow-setup
