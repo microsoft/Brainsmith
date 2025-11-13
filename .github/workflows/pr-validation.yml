@@ -1,10 +1,12 @@
 name: PR Validation
 
 on:
-  pull_request:
-    branches: [ develop ]
+  pull_request_target:  # Changed from pull_request for fork security
+    branches: [ develop, main ]
+    types: [labeled, synchronize]  # Only on label or new commits
   push:
-    branches: [ develop ]
+    branches: [ develop, main ]
+  workflow_dispatch:
 
 env:
   DOCKER_BUILDKIT: 1
@@ -20,18 +22,67 @@ env:
 
 permissions:
   contents: read
+  pull-requests: write  # Needed to remove labels after workflow completion
 
 jobs:
   pytest-validation:
     name: Pytest Test Suite
+    # SECURITY: Only run on trusted contexts
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request_target' &&
+       contains(github.event.pull_request.labels.*.name, 'safe-to-test') &&
+       github.event.action == 'labeled')
     runs-on: pre-release
     timeout-minutes: 15  # Fast test suite with Docker overhead
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # SECURITY: Check out PR head, not base
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
           fetch-depth: 0
+
+      # SECURITY NOTE: Composite actions below run from PR checkout after manual review.
+      # This is safe because:
+      # 1. Maintainer manually reviews ALL changes (including .github/actions/) before adding safe-to-test label
+      # 2. Label-based gate prevents automatic execution of untrusted code
+      # 3. This is the standard pattern for manual-approval CI workflows
+      # CodeQL alert acknowledged: Risk accepted with human review gate.
+
+      # SECURITY: Detect new dependencies for manual review
+      - name: Check for dependency changes
+        if: github.event_name == 'pull_request_target'
+        run: |
+          git fetch origin develop
+          # Check for changes in dependency files
+          DEP_CHANGES=$(git diff origin/develop...HEAD -- pyproject.toml poetry.lock)
+          if [ -n "$DEP_CHANGES" ]; then
+            echo "⚠️  SECURITY WARNING: Dependency changes detected"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            # Show added dependencies
+            NEW_DEPS=$(echo "$DEP_CHANGES" | grep -E '^\+[^+].*=' | grep -v '^\+\+\+' || true)
+            if [ -n "$NEW_DEPS" ]; then
+              echo "📦 New/Modified dependencies:"
+              echo "$NEW_DEPS"
+              echo ""
+              echo "⚠️  MAINTAINERS: Before approving, verify each package:"
+              echo "    1. Check package on PyPI (age, downloads, maintainer)"
+              echo "    2. Verify no typosquatting (e.g., 'requets' vs 'requests')"
+              echo "    3. Review transitive dependencies: poetry show <package>"
+              echo "    4. Understand why this dependency is needed"
+              echo ""
+              echo "❌ Blocking workflow until dependencies are explicitly reviewed"
+              exit 1
+            fi
+
+            # Version changes are less risky, just warn
+            echo "ℹ️  Dependency versions updated (review recommended)"
+          fi
+          echo "✅ No new dependencies detected"
 
       - name: Setup workflow
         uses: ./.github/actions/workflow-setup
@@ -66,14 +117,25 @@ jobs:
   bert-quicktest:
     name: BERT Quicktest
     needs: pytest-validation  # Only run if pytest passes
+    # SECURITY: Inherit same conditions as pytest-validation
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request_target' &&
+       contains(github.event.pull_request.labels.*.name, 'safe-to-test') &&
+       github.event.action == 'labeled')
     runs-on: pre-release
     timeout-minutes: 300  # 5 hours total (4 for test + 1 for setup/cleanup)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # SECURITY: Check out PR head, not base
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
           fetch-depth: 0
+
+      # SECURITY NOTE: Composite actions run from PR checkout after manual review (see pytest-validation job comment above)
 
       - name: Setup workflow
         uses: ./.github/actions/workflow-setup
@@ -88,3 +150,25 @@ jobs:
           artifact-name: "pr-failure-artifacts"
           collect-on: "failure"
           retention-days: 7
+
+      # SECURITY: Remove label after workflow completion to force re-review on updates
+      - name: Remove safe-to-test label
+        if: always() && github.event_name == 'pull_request_target'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'safe-to-test'
+              });
+              console.log('✓ Removed safe-to-test label');
+            } catch (error) {
+              if (error.status === 404) {
+                console.log('Label already removed');
+              } else {
+                throw error;
+              }
+            }

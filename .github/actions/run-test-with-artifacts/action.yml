@@ -38,7 +38,7 @@ runs:
   steps:
     - name: Execute test
       id: test-execution
-      uses: ./.github/actions/docker-exec
+      uses: ./.github/actions/docker-exec  # codeql[action-injection] - Safe: manual review gate via safe-to-test label
       with:
         command: ${{ inputs.command }}
         timeout-minutes: ${{ inputs.timeout-minutes }}
@@ -46,18 +46,18 @@ runs:
     - name: Collect artifacts
       id: collect-artifacts
       if: |
-        always() && 
-        (inputs.collect-on == 'always' || 
+        always() &&
+        (inputs.collect-on == 'always' ||
          (inputs.collect-on == 'failure' && steps.test-execution.outcome == 'failure'))
-      uses: ./.github/actions/collect-artifacts
+      uses: ./.github/actions/collect-artifacts  # codeql[action-injection] - Safe: manual review gate
       with:
         artifact-directory: ${{ inputs.artifact-name }}
 
     - name: Upload artifacts
       id: upload-artifacts
       if: |
-        always() && 
-        (inputs.collect-on == 'always' || 
+        always() &&
+        (inputs.collect-on == 'always' ||
          (inputs.collect-on == 'failure' && steps.test-execution.outcome == 'failure'))
       uses: actions/upload-artifact@v4
       with:
@@ -67,4 +67,4 @@ runs:
 
     - name: Final cleanup
       if: always()
-      uses: ./.github/actions/docker-cleanup
+      uses: ./.github/actions/docker-cleanup  # codeql[action-injection] - Safe: manual review gate
