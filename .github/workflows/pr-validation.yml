@@ -2,10 +2,10 @@ name: PR Validation
 
 on:
   pull_request_target:  # Changed from pull_request for fork security
-    branches: [ develop ]
+    branches: [ develop, main ]
     types: [labeled, synchronize]  # Only on label or new commits
   push:
-    branches: [ develop ]
+    branches: [ develop, main ]
   workflow_dispatch:
 
 env:
