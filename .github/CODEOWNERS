@@ -1,0 +1,25 @@
+# CODEOWNERS - Define mandatory reviewers for security-sensitive code
+#
+# Security-critical paths require review from the @microsoft/brainsmith team
+# to prevent unauthorized access to self-hosted infrastructure and secrets.
+#
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# GitHub Actions workflows - can access secrets and self-hosted runners
+/.github/workflows/ @microsoft/brainsmith
+/.github/actions/ @microsoft/brainsmith
+
+# Docker and container configuration - runs on self-hosted infrastructure
+/Dockerfile @microsoft/brainsmith
+/docker/ @microsoft/brainsmith
+/ctl-docker.sh @microsoft/brainsmith
+
+# Shell scripts - can execute arbitrary commands on runners
+*.sh @microsoft/brainsmith
+
+# Dependency definitions - control what code is downloaded during setup
+/brainsmith/_internal/io/dependencies.py @microsoft/brainsmith
+
+# Security and repository configuration
+/.github/CODEOWNERS @microsoft/brainsmith
+/SECURITY.md @microsoft/brainsmith
