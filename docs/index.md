@@ -121,6 +121,7 @@ smith bert.onnx blueprint.yaml --output-dir ./results
 ```
 
 Results include:
+
 - Synthesizable RTL in `results/stitched_ip/`
 - Performance estimates in `results/report/estimate_reports.json`
 - Detailed build logs for debugging

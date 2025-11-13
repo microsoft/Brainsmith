@@ -528,7 +528,7 @@ Located in `tests/pipeline/base_integration_test.py`
 ## Requirements
 
 ### For Fast Tests (Phase 1 without cppsim)
-- Python 3.9+
+- Python 3.11+
 - QONNX, FINN dependencies
 - NumPy, PyTorch (for golden references)
 

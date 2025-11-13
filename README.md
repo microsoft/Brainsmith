@@ -113,6 +113,14 @@ brainsmith project info                 # Show configuration
 
 [Complete CLI reference →](https://microsoft.github.io/brainsmith/api/cli/)
 
+## Contributing
+
+We welcome contributions from the community! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our development process and how to submit pull requests.
+
+**Note on CI/CD**: Our continuous integration uses self-hosted runners with Xilinx Vivado tooling and license servers. For security, **external pull requests require manual approval** from a maintainer before CI tests run. A maintainer will review your PR and add the `safe-to-test` label to trigger the test suite.
+
+This ensures our infrastructure remains secure while still providing thorough automated testing for all contributions.
+
 ## Acknowledgments
 
 Brainsmith is developed through collaboration between **Microsoft** and **AMD**.

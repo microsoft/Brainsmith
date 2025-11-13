@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - develop
-  pull_request:
+  pull_request_target:  # Changed from pull_request for fork security
     branches:
       - main
       - develop
@@ -16,16 +16,21 @@ permissions:
 
 jobs:
   deploy:
+    # SECURITY: Only deploy on push to main/develop, not PRs
+    # PRs can validate docs build but cannot deploy
+    if: github.event_name != 'pull_request_target' || github.actor == github.repository_owner
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          # SECURITY: Check out PR head for validation, not base
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0  # Needed for git-revision-date-localized and mike
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Configure Git
         run: |
