@@ -85,12 +85,12 @@ jobs:
           echo "✅ No new dependencies detected"
 
       - name: Setup workflow
-        uses: ./.github/actions/workflow-setup
+        uses: ./.github/actions/workflow-setup  # codeql[action-injection] - Safe: manual review gate
         with:
           disk-threshold-gb: 20
 
       - name: Run pytest test suite
-        uses: ./.github/actions/run-test-with-artifacts
+        uses: ./.github/actions/run-test-with-artifacts  # codeql[action-injection] - Safe: manual review gate
         with:
           command: "poetry run pytest -m 'unit or integration' -v --cov=brainsmith --cov-report=xml --cov-report=term-missing --junitxml=test-results.xml --tb=short"
           timeout-minutes: 10
@@ -138,12 +138,12 @@ jobs:
       # SECURITY NOTE: Composite actions run from PR checkout after manual review (see pytest-validation job comment above)
 
       - name: Setup workflow
-        uses: ./.github/actions/workflow-setup
+        uses: ./.github/actions/workflow-setup  # codeql[action-injection] - Safe: manual review gate
         with:
           disk-threshold-gb: 20
 
       - name: Run E2E test
-        uses: ./.github/actions/run-test-with-artifacts
+        uses: ./.github/actions/run-test-with-artifacts  # codeql[action-injection] - Safe: manual review gate
         with:
           command: "./examples/bert/quicktest.sh"
           timeout-minutes: 240
@@ -154,7 +154,7 @@ jobs:
       # SECURITY: Remove label after workflow completion to force re-review on updates
       - name: Remove safe-to-test label
         if: always() && github.event_name == 'pull_request_target'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v7  # codeql[action-injection] - Safe: trusted action, removes label only
         with:
           script: |
             try {
