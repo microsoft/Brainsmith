@@ -12,7 +12,7 @@ Brainsmith transforms ONNX neural networks into optimized dataflow accelerators 
 - **Schema-Driven Kernels** - Declarative hardware semantics with automatic validation
 - **Component Registry** - Plugin architecture for custom kernels and pipeline steps
 
-**[Documentation](https://microsoft.github.io/Brainsmith/latest)** • **[Discussions](https://github.com/microsoft/brainsmith/discussions)** • **[Roadmap](https://github.com/orgs/microsoft/projects/2017)**
+**[Documentation](https://microsoft.github.io/brainsmith/latest)** • **[Discussions](https://github.com/microsoft/brainsmith/discussions)** • **[Roadmap](https://github.com/orgs/microsoft/projects/2017)**
 
 
 ## Quick Start
@@ -45,7 +45,7 @@ source .venv/bin/activate && source .brainsmith/env.sh
 brainsmith project info
 ```
 
-[Detailed installation options and alternative Docker setup →](https://microsoft.github.io/Brainsmith/latest/getting-started/)
+[Detailed installation options and alternative Docker setup →](https://microsoft.github.io/brainsmith/latest/getting-started/)
 
 ### Run Your First Build
 
@@ -57,7 +57,7 @@ cd examples/bert
 ./quicktest.sh
 ```
 
-This generates a single-layer BERT accelerator with RTL simulation. [See example walkthrough →](https://microsoft.github.io/Brainsmith/latest/getting-started/#run-your-first-dse)
+This generates a single-layer BERT accelerator with RTL simulation. [See example walkthrough →](https://microsoft.github.io/brainsmith/latest/getting-started/#run-your-first-dse)
 
 ### Create Custom Accelerators
 
@@ -92,7 +92,7 @@ design_space:
     - "dataflow_partition"
 ```
 
-[Blueprint schema reference →](https://microsoft.github.io/Brainsmith/latest/developer-guide/blueprint-schema/)
+[Blueprint schema reference →](https://microsoft.github.io/brainsmith/latest/developer-guide/blueprint-schema/)
 
 
 ## CLI Overview
@@ -111,7 +111,7 @@ brainsmith setup cppsim                 # Setup C++ simulation
 brainsmith project info                 # Show configuration
 ```
 
-[Complete CLI reference →](https://microsoft.github.io/Brainsmith/latest/api/cli/)
+[Complete CLI reference →](https://microsoft.github.io/brainsmith/latest/api/cli/)
 
 ## Contributing
 
