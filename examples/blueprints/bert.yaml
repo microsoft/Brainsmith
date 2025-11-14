@@ -29,10 +29,10 @@ design_space:
     - "infer_computational_kernels"        # Infer pattern-based kernels (MVAU, LayerNorm, etc.)
     - "insert_infrastructure_kernels"      # Insert topology-based kernels (DuplicateStreams, etc.)
     - "specialize_kernel_backends"         # Select HLS/RTL backends + create dataflow partition
+    - "minimize_bit_width"
     - "loop_rolling"
     - "brainsmith:target_fps_parallelization"
     - "apply_parallelization_config"
-    - "minimize_bit_width"
     - "transpose_decomposition"
     - "generate_estimate_reports"
     - "hw_codegen"
