@@ -12,8 +12,7 @@ Brainsmith transforms ONNX neural networks into optimized dataflow accelerators 
 - **Schema-Driven Kernels** - Declarative hardware semantics with automatic validation
 - **Component Registry** - Plugin architecture for custom kernels and pipeline steps
 
-**[Documentation](https://microsoft.github.io/brainsmith/)** • **[Discussions](https://github.com/microsoft/brainsmith/discussions)** • **[Roadmap](https://github.com/orgs/microsoft/projects/2017)**
-
+**[Documentation](https://microsoft.github.io/brainsmith/latest)** • **[Discussions](https://github.com/microsoft/brainsmith/discussions)** • **[Roadmap](https://github.com/orgs/microsoft/projects/2017)**
 
 ## Quick Start
 
@@ -45,7 +44,7 @@ source .venv/bin/activate && source .brainsmith/env.sh
 brainsmith project info
 ```
 
-[Detailed installation options and alternative Docker setup →](https://microsoft.github.io/brainsmith/getting-started/)
+[Detailed installation options and alternative Docker setup →](https://microsoft.github.io/brainsmith/latest/getting-started/)
 
 ### Run Your First Build
 
@@ -57,7 +56,7 @@ cd examples/bert
 ./quicktest.sh
 ```
 
-This generates a single-layer BERT accelerator with RTL simulation. [See example walkthrough →](https://microsoft.github.io/brainsmith/getting-started/#run-your-first-dse)
+This generates a single-layer BERT accelerator with RTL simulation. [See example walkthrough →](https://microsoft.github.io/brainsmith/latest/getting-started/#run-your-first-dse)
 
 ### Create Custom Accelerators
 
@@ -92,8 +91,7 @@ design_space:
     - "dataflow_partition"
 ```
 
-[Blueprint schema reference →](https://microsoft.github.io/brainsmith/developer-guide/blueprint-schema/)
-
+[Blueprint schema reference →](https://microsoft.github.io/brainsmith/latest/developer-guide/blueprint-schema/)
 
 ## CLI Overview
 
@@ -111,7 +109,15 @@ brainsmith setup cppsim                 # Setup C++ simulation
 brainsmith project info                 # Show configuration
 ```
 
-[Complete CLI reference →](https://microsoft.github.io/brainsmith/api/cli/)
+[Complete CLI reference →](https://microsoft.github.io/brainsmith/latest/api/cli/)
+
+## Contributing
+
+We welcome contributions from the community! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our development process and how to submit pull requests.
+
+**Note on CI/CD**: Our continuous integration uses self-hosted runners with Xilinx Vivado tooling and license servers. For security, **external pull requests require manual approval** from a maintainer before CI tests run. A maintainer will review your PR and add the `safe-to-test` label to trigger the test suite.
+
+This ensures our infrastructure remains secure while still providing thorough automated testing for all contributions.
 
 ## Acknowledgments
 
