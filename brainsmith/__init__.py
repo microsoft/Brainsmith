@@ -34,18 +34,11 @@ Modules are loaded on-demand when attributes are accessed.
 
 __version__ = "0.1.0"
 
-# Eager imports for decorators (needed at import time for deferred registration)
-# Registry decorators must be imported first
-# Lazy import mappings - using shared LazyModuleLoader for performance
+# Lazy import infrastructure
 from ._internal.lazy_imports import LazyModuleLoader
-from .registry import backend, kernel, source_context, step
 
-# Eager import of core components to trigger decorator registration
-# These imports must happen AFTER decorator imports but BEFORE any registry lookups
-# Use source_context to ensure they're registered under 'brainsmith' namespace
-with source_context("brainsmith"):
-    import brainsmith.kernels  # noqa: F401 - Registers built-in kernels via @kernel decorator
-    import brainsmith.steps  # noqa: F401 - Registers built-in steps via @step decorator
+# Component registration happens lazily via discover_components() in brainsmith.registry
+# This allows CLI commands like 'project init' to run without loading heavy dependencies
 
 _LAZY_MODULES = {
     # DSE module
