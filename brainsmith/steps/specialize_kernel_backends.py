@@ -1,14 +1,14 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Build hardware graph step combining partitioning and specialization.
+"""Specialize kernel backends step (hardware graph construction).
 
 This step combines two critical phases of the dataflow compilation pipeline:
 1. Dataflow partitioning: Separates hardware-accelerated nodes into isolated subgraphs
 2. Backend specialization: Converts generic kernel nodes to HLS/RTL implementations
 
-The combined step simplifies the blueprint configuration and ensures proper
-sequencing of these tightly-coupled transformations.
+The step provides both the new name (specialize_kernel_backends) and legacy name
+(build_hw_graph) for backward compatibility.
 """
 
 import logging
@@ -32,9 +32,9 @@ from brainsmith.registry import step
 logger = logging.getLogger(__name__)
 
 
-@step(name="build_hw_graph")
-def build_hw_graph(model: Any, cfg: Any) -> Any:
-    """Build complete hardware dataflow graph via partitioning + specialization.
+@step(name='specialize_kernel_backends')
+def specialize_kernel_backends(model: Any, cfg: Any) -> Any:
+    """Specialize kernel backends via partitioning + backend selection.
 
     This step combines create_dataflow_partition and specialize_layers into a
     unified transformation that:
@@ -62,9 +62,9 @@ def build_hw_graph(model: Any, cfg: Any) -> Any:
 
     Blueprint usage:
         steps:
-          - build_dataflow_graph      # Infer kernels first
-          - build_hw_graph            # Combined partitioning + specialization
-          - apply_folding_config      # Then apply parallelization
+          - build_dataflow_graph         # Infer kernels first
+          - specialize_kernel_backends   # Combined partitioning + specialization
+          - apply_folding_config         # Then apply parallelization
 
     Implementation notes:
         - Creates template_specialize_layers_config.json for user reference
@@ -154,11 +154,38 @@ def build_hw_graph(model: Any, cfg: Any) -> Any:
 
     # Run registry-based backend specialization
     logger.debug("Running registry-based backend specialization...")
-    model = model.transform(SpecializeKernels(cfg))
+    model = model.transform(
+        SpecializeKernels(cfg),
+        apply_to_subgraphs=True  # Support MLO: specialize kernels in FINNLoop bodies
+    )
 
     # Clean up and infer properties
     logger.debug("Running cleanup transformations...")
-    for transform in [GiveUniqueNodeNames(), InferShapes(), InferDataTypes()]:
-        model = model.transform(transform)
+    for transform in [
+        GiveUniqueNodeNames(),
+        InferShapes(),
+        InferDataTypes()
+    ]:
+        model = model.transform(transform, apply_to_subgraphs=True)
 
     return model
+
+
+# Backward compatibility alias
+@step(name='build_hw_graph')
+def build_hw_graph(model: Any, cfg: Any) -> Any:
+    """Legacy alias for specialize_kernel_backends (backward compatibility).
+
+    DEPRECATED: Use 'specialize_kernel_backends' instead.
+
+    This alias maintains compatibility with existing blueprints that use
+    the old 'build_hw_graph' step name. New blueprints should use the
+    clearer 'specialize_kernel_backends' name.
+
+    See specialize_kernel_backends() for full documentation.
+    """
+    logger.warning(
+        "Step 'build_hw_graph' is deprecated. "
+        "Use 'specialize_kernel_backends' instead for clarity."
+    )
+    return specialize_kernel_backends(model, cfg)

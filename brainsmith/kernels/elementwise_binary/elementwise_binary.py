@@ -484,6 +484,14 @@ class ElementwiseBinaryOp(KernelOp):
                     f"BitShift node {node.name} missing required 'direction' attribute"
                 )
 
+        # Copy metadata_props (e.g., PyTorch name scopes for loop rolling)
+        # metadata_props is a protobuf RepeatedCompositeFieldContainer
+        if hasattr(node, 'metadata_props') and len(node.metadata_props) > 0:
+            for entry in node.metadata_props:
+                new_entry = hw_node.metadata_props.add()
+                new_entry.key = entry.key
+                new_entry.value = entry.value
+
         # Return transformation result
         return TransformationResult(
             nodes_to_remove=[node],
@@ -790,6 +798,31 @@ class ElementwiseBinaryOp(KernelOp):
 
         # Store result (as float32 container, QONNX convention)
         context[node.output[0]] = out.astype(np.float32)
+
+    # ================================================================
+    # MLO Loop Body Adaptation
+    # ================================================================
+
+    def adapt_for_loop_body(self, loop_signature):
+        """Adapt ElementwiseBinaryOp for use in FINNLoop body.
+
+        When used in MLO context, RHS parameters are streamed instead of being
+        constant initializers. This requires switching from dynamic_static to
+        dynamic_dynamic pattern.
+
+        Args:
+            loop_signature: Loop signature describing streaming parameters
+        """
+        current_pattern = self.get_nodeattr("input_pattern")
+
+        # If currently dynamic_static, switch to dynamic_dynamic for loop body
+        # (RHS becomes a streaming input instead of constant initializer)
+        if current_pattern == "dynamic_static":
+            logger.debug(
+                f"{self.onnx_node.name}: Adapting for loop body - "
+                f"switching input_pattern from 'dynamic_static' to 'dynamic_dynamic'"
+            )
+            self.set_nodeattr("input_pattern", "dynamic_dynamic")
 
     # ================================================================
     # ONNX Shape Compatibility
