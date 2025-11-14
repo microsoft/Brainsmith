@@ -74,8 +74,9 @@ Found a vulnerability? Report through [Microsoft Security Response Center](https
 ## Help
 
 - Questions: [GitHub Discussions](https://github.com/microsoft/brainsmith/discussions)
-- Bugs: [GitHub Issues](https://github.com/microsoft/Brainsmith/issues)
-- Docs: [microsoft.github.io/brainsmith](https://microsoft.github.io/Brainsmith/)
+
+- Bugs: [GitHub Issues](https://github.com/microsoft/brainsmith/issues)
+- Docs: [microsoft.github.io/brainsmith](https://microsoft.github.io/brainsmith/latest)
 
 ## Code of Conduct
 
@@ -83,4 +84,4 @@ Found a vulnerability? Report through [Microsoft Security Response Center](https
 
 ---
 
-Thanks for contributing!
+Thank you for contributing!
