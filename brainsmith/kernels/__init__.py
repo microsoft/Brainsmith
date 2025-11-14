@@ -1,13 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""
-Brainsmith Kernels
+"""Brainsmith kernel implementations.
 
-Plugin-based hardware kernel implementations.
+Hardware kernels and backends for dataflow accelerators. Loaded during component
+discovery to trigger @kernel and @backend decorator registration.
+
+Access via registry:
+    from brainsmith import get_kernel
+    AddStreams = get_kernel('AddStreams')
 """
 
-# Import all Kernels and Backends to trigger registration
+# Eager imports trigger decorator registration during discovery
+# Each submodule defines __all__ to control exports
 from .addstreams import *  # noqa: F403
 from .channelwise import *  # noqa: F403
 from .crop import *  # noqa: F403

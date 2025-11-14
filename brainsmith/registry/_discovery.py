@@ -457,7 +457,8 @@ def discover_components(use_cache: bool = True, force_refresh: bool = False):
         # Decorators fire during import and auto-populate registry + index
         _discovered_sources.add(SOURCE_BRAINSMITH)
         with source_context(SOURCE_BRAINSMITH):
-            pass  # noqa: E402
+            import brainsmith.kernels  # noqa: F401 - Registers built-in kernels
+            import brainsmith.steps  # noqa: F401 - Registers built-in steps
 
         logger.debug("Loaded core brainsmith components")
 

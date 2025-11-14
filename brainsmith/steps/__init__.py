@@ -3,15 +3,12 @@
 
 """Brainsmith transformation steps.
 
-Step functions for model transformation pipelines. All steps are eagerly
-imported for simplicity. Manifest caching provides performance.
+Model transformation pipeline functions (ONNX/QONNX → dataflow). Loaded during
+component discovery to trigger @step decorator registration.
 
-All step functions are available through the registry:
-
-    from brainsmith.registry import get_step
-
-    step_fn = get_step("shell_metadata_handover")
-    model = step_fn(model, cfg)
+Access via registry:
+    from brainsmith import get_step
+    step_fn = get_step("qonnx_to_finn_step")
 """
 
 # Core FINN-compatible steps
