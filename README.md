@@ -14,7 +14,6 @@ Brainsmith transforms ONNX neural networks into optimized dataflow accelerators 
 
 **[Documentation](https://microsoft.github.io/brainsmith/latest)** • **[Discussions](https://github.com/microsoft/brainsmith/discussions)** • **[Roadmap](https://github.com/orgs/microsoft/projects/2017)**
 
-
 ## Quick Start
 
 ### Prerequisites
@@ -93,7 +92,6 @@ design_space:
 ```
 
 [Blueprint schema reference →](https://microsoft.github.io/brainsmith/latest/developer-guide/blueprint-schema/)
-
 
 ## CLI Overview
 

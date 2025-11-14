@@ -74,8 +74,16 @@ Found a vulnerability? Report through [Microsoft Security Response Center](https
 ## Help
 
 - Questions: [GitHub Discussions](https://github.com/microsoft/brainsmith/discussions)
+<<<<<<< HEAD
 - Bugs: [GitHub Issues](https://github.com/microsoft/Brainsmith/issues)
 - Docs: [microsoft.github.io/brainsmith](https://microsoft.github.io/brainsmith/)
+||||||| 655cd8e0
+- Bugs: [GitHub Issues](https://github.com/microsoft/brainsmith/issues)
+- Docs: [microsoft.github.io/brainsmith](https://microsoft.github.io/brainsmith/)
+=======
+- Bugs: [GitHub Issues](https://github.com/microsoft/Brainsmith/issues)
+- Docs: [microsoft.github.io/brainsmith](https://microsoft.github.io/Brainsmith/)
+>>>>>>> develop
 
 ## Code of Conduct
 
